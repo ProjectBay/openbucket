@@ -29,7 +29,7 @@
     "@openbucket/nestjs": "0.1.0",
     "argon2": "^0.41.1",
     "express": "5.2.1",
-    "fast-xml-parser": "^4.5.6",
+    "fast-xml-parser": "^5.9.3",
     "helmet": "^8.2.0",
     "nestjs-pino": "^4.6.1",
     "nestjs-zod": "^5.4.0",
