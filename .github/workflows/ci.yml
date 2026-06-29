@@ -31,10 +31,10 @@ jobs:
     name: lint + unit
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -42,7 +42,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
 
       - name: Derive nx affected base
-        uses: nrwl/nx-set-shas@v4
+        uses: nrwl/nx-set-shas@v5
 
       - name: Lint
         run: npx nx run-many --target=lint --all --parallel=4
@@ -55,7 +55,7 @@ jobs:
         # Requires Java 11+ on the runner for openapi-generator-cli.
         run: npx nx run api-client:check
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage
@@ -66,8 +66,8 @@ jobs:
     runs-on: ubuntu-22.04
     needs: lint-and-test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -87,8 +87,8 @@ jobs:
     outputs:
       image-tag: ${{ steps.meta.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
 
       - id: meta
         name: Compute image tag
@@ -102,7 +102,7 @@ jobs:
           fi
 
       - name: Build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
@@ -115,7 +115,7 @@ jobs:
       - name: Save image
         run: docker save openbucket:${{ steps.meta.outputs.tag }} -o /tmp/openbucket.tar
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: docker-image
           path: /tmp/openbucket.tar
@@ -127,8 +127,8 @@ jobs:
     runs-on: ubuntu-22.04
     needs: build-image
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -140,7 +140,7 @@ jobs:
           curl -sSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
           chmod +x /usr/local/bin/mc
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: docker-image
           path: /tmp
