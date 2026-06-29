@@ -91,7 +91,7 @@
     "@nestjs/testing": "^11.0.0",
     "@nx/angular": "22.7.2",
     "@nx/eslint": "22.7.2",
-    "@nx/eslint-plugin": "22.7.2",
+    "@nx/eslint-plugin": "23.0.1",
     "@nx/jest": "22.7.2",
     "@nx/js": "22.7.2",
     "@nx/node": "21.6.11",
