@@ -103,6 +103,13 @@ describe('initial migration (TEST-0205)', () => {
 
   it('case 3: fk_objects_bucket rejects an object with a non-existent bucket', async () => {
     const conn = orm.em.getConnection();
+    // FK enforcement is per-connection and OFF by default in SQLite. The pool
+    // `afterCreate` turns it ON, but the migrator's `up()` (with the default
+    // `disableForeignKeys: true`) toggles it OFF/ON around the run, and the final
+    // state after that toggle varies across better-sqlite3 prebuilds (enforced on
+    // some platforms, not others). Assert the constraint deterministically by
+    // ensuring enforcement is ON on this connection right before the insert.
+    await conn.execute('PRAGMA foreign_keys = ON');
     await expect(
       conn.execute(
         `insert into objects (id, bucket_name, key, etag, created_at, modified_at)
