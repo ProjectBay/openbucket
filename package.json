@@ -94,7 +94,7 @@
     "@nx/eslint-plugin": "22.7.2",
     "@nx/jest": "22.7.2",
     "@nx/js": "22.7.2",
-    "@nx/node": "21.6.11",
+    "@nx/node": "23.0.1",
     "@nx/web": "22.7.2",
     "@nx/webpack": "22.7.2",
     "@nx/workspace": "22.7.2",
