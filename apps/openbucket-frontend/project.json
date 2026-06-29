@@ -1,0 +1,132 @@
+{
+  "name": "openbucket-frontend",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "prefix": "ob",
+  "sourceRoot": "apps/openbucket-frontend/src",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@angular-devkit/build-angular:application",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/apps/openbucket-frontend",
+        "baseHref": "/admin/",
+        "index": "apps/openbucket-frontend/src/index.html",
+        "browser": "apps/openbucket-frontend/src/main.ts",
+        "polyfills": ["zone.js"],
+        "tsConfig": "apps/openbucket-frontend/tsconfig.app.json",
+        "inlineStyleLanguage": "scss",
+        "assets": [
+          {
+            "glob": "**/*",
+            "input": "apps/openbucket-frontend/public"
+          }
+        ],
+        "styles": [
+          "apps/openbucket-frontend/src/styles.scss",
+          {
+            "input": "apps/openbucket-frontend/src/styles/themes/slate.css",
+            "inject": false,
+            "bundleName": "slate"
+          },
+          {
+            "input": "apps/openbucket-frontend/src/styles/themes/neutral.css",
+            "inject": false,
+            "bundleName": "neutral"
+          },
+          {
+            "input": "apps/openbucket-frontend/src/styles/themes/gray.css",
+            "inject": false,
+            "bundleName": "gray"
+          },
+          {
+            "input": "apps/openbucket-frontend/src/styles/themes/zinc.css",
+            "inject": false,
+            "bundleName": "zinc"
+          },
+          {
+            "input": "apps/openbucket-frontend/src/styles/themes/stone.css",
+            "inject": false,
+            "bundleName": "stone"
+          },
+          {
+            "input": "apps/openbucket-frontend/src/styles/themes/violet.css",
+            "inject": false,
+            "bundleName": "violet"
+          },
+          {
+            "input": "apps/openbucket-frontend/src/styles/themes/blue.css",
+            "inject": false,
+            "bundleName": "blue"
+          },
+          {
+            "input": "apps/openbucket-frontend/src/styles/themes/green.css",
+            "inject": false,
+            "bundleName": "green"
+          },
+          {
+            "input": "apps/openbucket-frontend/src/styles/themes/orange.css",
+            "inject": false,
+            "bundleName": "orange"
+          },
+          {
+            "input": "apps/openbucket-frontend/src/styles/themes/red.css",
+            "inject": false,
+            "bundleName": "red"
+          },
+          {
+            "input": "apps/openbucket-frontend/src/styles/themes/rose.css",
+            "inject": false,
+            "bundleName": "rose"
+          },
+          {
+            "input": "apps/openbucket-frontend/src/styles/themes/yellow.css",
+            "inject": false,
+            "bundleName": "yellow"
+          }
+        ],
+        "scripts": []
+      },
+      "configurations": {
+        "production": {
+          "budgets": [
+            {
+              "type": "initial",
+              "maximumWarning": "2mb",
+              "maximumError": "5mb"
+            },
+            {
+              "type": "anyComponentStyle",
+              "maximumWarning": "4kb",
+              "maximumError": "8kb"
+            }
+          ],
+          "outputHashing": "all"
+        },
+        "development": {
+          "optimization": false,
+          "extractLicenses": false,
+          "sourceMap": true
+        }
+      },
+      "defaultConfiguration": "development"
+    },
+    "serve": {
+      "executor": "@angular-devkit/build-angular:dev-server",
+      "options": {
+        "port": 4200
+      },
+      "configurations": {
+        "production": {
+          "buildTarget": "openbucket-frontend:build:production"
+        },
+        "development": {
+          "buildTarget": "openbucket-frontend:build:development"
+        }
+      },
+      "defaultConfiguration": "development",
+      "continuous": true
+    }
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "es2022",
+    "module": "esnext",
+    "lib": ["es2022", "dom"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@openbucket/api-client": ["libs/api-client/src/index.ts"],
+      "@openbucket/nestjs": ["libs/nestjs/src/index.ts"],
+      "@openbucket/spartan-ui/accordion": [
+        "libs/ui/spartan/accordion/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/alert": ["libs/ui/spartan/alert/src/index.ts"],
+      "@openbucket/spartan-ui/alert-dialog": [
+        "libs/ui/spartan/alert-dialog/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/aspect-ratio": [
+        "libs/ui/spartan/aspect-ratio/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/autocomplete": [
+        "libs/ui/spartan/autocomplete/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/avatar": ["libs/ui/spartan/avatar/src/index.ts"],
+      "@openbucket/spartan-ui/badge": ["libs/ui/spartan/badge/src/index.ts"],
+      "@openbucket/spartan-ui/breadcrumb": [
+        "libs/ui/spartan/breadcrumb/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/button": ["libs/ui/spartan/button/src/index.ts"],
+      "@openbucket/spartan-ui/button-group": [
+        "libs/ui/spartan/button-group/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/calendar": [
+        "libs/ui/spartan/calendar/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/card": ["libs/ui/spartan/card/src/index.ts"],
+      "@openbucket/spartan-ui/carousel": [
+        "libs/ui/spartan/carousel/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/checkbox": [
+        "libs/ui/spartan/checkbox/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/collapsible": [
+        "libs/ui/spartan/collapsible/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/command": [
+        "libs/ui/spartan/command/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/context-menu": [
+        "libs/ui/spartan/context-menu/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/date-picker": [
+        "libs/ui/spartan/date-picker/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/dialog": ["libs/ui/spartan/dialog/src/index.ts"],
+      "@openbucket/spartan-ui/dropdown-menu": [
+        "libs/ui/spartan/dropdown-menu/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/empty": ["libs/ui/spartan/empty/src/index.ts"],
+      "@openbucket/spartan-ui/field": ["libs/ui/spartan/field/src/index.ts"],
+      "@openbucket/spartan-ui/form-field": [
+        "libs/ui/spartan/form-field/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/formly": ["libs/ui/spartan-formly/src/index.ts"],
+      "@openbucket/spartan-ui/hover-card": [
+        "libs/ui/spartan/hover-card/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/icon": ["libs/ui/spartan/icon/src/index.ts"],
+      "@openbucket/spartan-ui/image-upload": [
+        "libs/ui/spartan/image-upload/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/input": ["libs/ui/spartan/input/src/index.ts"],
+      "@openbucket/spartan-ui/input-group": [
+        "libs/ui/spartan/input-group/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/input-otp": [
+        "libs/ui/spartan/input-otp/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/item": ["libs/ui/spartan/item/src/index.ts"],
+      "@openbucket/spartan-ui/kbd": ["libs/ui/spartan/kbd/src/index.ts"],
+      "@openbucket/spartan-ui/label": ["libs/ui/spartan/label/src/index.ts"],
+      "@openbucket/spartan-ui/menubar": [
+        "libs/ui/spartan/menubar/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/multiselect": [
+        "libs/ui/spartan/multiselect/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/navigation-menu": [
+        "libs/ui/spartan/navigation-menu/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/pagination": [
+        "libs/ui/spartan/pagination/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/popover": [
+        "libs/ui/spartan/popover/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/profile-image-upload": [
+        "libs/ui/spartan/profile-image-upload/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/progress": [
+        "libs/ui/spartan/progress/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/radio-group": [
+        "libs/ui/spartan/radio-group/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/resizable": [
+        "libs/ui/spartan/resizable/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/scroll-area": [
+        "libs/ui/spartan/scroll-area/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/select": ["libs/ui/spartan/select/src/index.ts"],
+      "@openbucket/spartan-ui/separator": [
+        "libs/ui/spartan/separator/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/sheet": ["libs/ui/spartan/sheet/src/index.ts"],
+      "@openbucket/spartan-ui/sidebar": [
+        "libs/ui/spartan/sidebar/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/single-image-upload": [
+        "libs/ui/spartan/single-image-upload/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/skeleton": [
+        "libs/ui/spartan/skeleton/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/slider": ["libs/ui/spartan/slider/src/index.ts"],
+      "@openbucket/spartan-ui/sonner": ["libs/ui/spartan/sonner/src/index.ts"],
+      "@openbucket/spartan-ui/spinner": [
+        "libs/ui/spartan/spinner/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/switch": ["libs/ui/spartan/switch/src/index.ts"],
+      "@openbucket/spartan-ui/table": ["libs/ui/spartan/table/src/index.ts"],
+      "@openbucket/spartan-ui/tabs": ["libs/ui/spartan/tabs/src/index.ts"],
+      "@openbucket/spartan-ui/textarea": [
+        "libs/ui/spartan/textarea/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/toggle": ["libs/ui/spartan/toggle/src/index.ts"],
+      "@openbucket/spartan-ui/toggle-group": [
+        "libs/ui/spartan/toggle-group/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/tooltip": [
+        "libs/ui/spartan/tooltip/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/typography": [
+        "libs/ui/spartan/typography/src/index.ts"
+      ],
+      "@openbucket/spartan-ui/utils": ["libs/ui/spartan/utils/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}

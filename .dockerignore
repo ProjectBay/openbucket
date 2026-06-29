@@ -1,0 +1,47 @@
+# Source control
+.git
+.gitignore
+.gitattributes
+
+# Editor / OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Nx / TS / build caches and outputs (the build stage produces its own dist)
+.nx
+.angular
+dist
+tmp
+coverage
+.cache
+
+# Docs (not needed in the image)
+docs
+docs.zip
+*.md
+!README.md
+
+# CI metadata
+.github
+
+# Node — reinstalled deterministically via `npm ci` in the build stage
+node_modules
+npm-debug.log*
+yarn-debug.log*
+
+# Tests — never needed in a runtime image
+**/*.spec.ts
+**/*.e2e-spec.ts
+**/__tests__
+**/__fixtures__
+
+# Local env (never bake env files into images)
+.env
+.env.*
+!.env.example
+
+# Local data dirs accidentally created
+data
+local-data

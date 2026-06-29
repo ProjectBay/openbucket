@@ -1,0 +1,156 @@
+# .github/workflows/ci.yml
+# OpenBucket CI (WHITEPAPER §5.19). One workflow, four jobs:
+#   lint-and-test (STORY-0502) → e2e (STORY-0502) + build-image (STORY-0503)
+#   → conformance (STORY-0504, gated to PRs-to-main and tags).
+#
+# NOTE: authored but NOT executed in the dev environment (no GitHub Actions
+# runner). Job/step shapes follow §5.19, adapted to this repo's real Nx project
+# names (openbucket-backend, openbucket-frontend, openbucket-backend-e2e,
+# conformance). TASK-1523 (verify nrwl/nx-set-shas derives the correct affected
+# base on PRs) remains open — to confirm on the first real PR.
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Node 22: glibc better-sqlite3 prebuilds resolve on a clean `npm ci`, and
+  # 22.x (>=22.12) satisfies Angular's require(ESM). Matches the Docker base.
+  NODE_VERSION: '22'
+
+jobs:
+  lint-and-test:
+    name: lint + unit
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Derive nx affected base
+        uses: nrwl/nx-set-shas@v4
+
+      - name: Lint
+        run: npx nx run-many --target=lint --all --parallel=4
+
+      - name: Unit tests
+        run: npx nx run-many --target=test --all --parallel=4 --ci --coverage
+
+      - name: api-client freshness check
+        # Regenerates the client from the exported spec and fails if it drifted.
+        # Requires Java 11+ on the runner for openapi-generator-cli.
+        run: npx nx run api-client:check
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+
+  e2e:
+    name: backend e2e (real sqlite)
+    runs-on: ubuntu-22.04
+    needs: lint-and-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # The e2e harness (spawn-app.ts) spawns the built app with its own valid
+      # env per suite, so no app secrets are needed at the job level.
+      - name: Run e2e
+        run: npx nx run openbucket-backend-e2e:e2e --ci
+
+  build-image:
+    name: build docker image
+    runs-on: ubuntu-22.04
+    needs: lint-and-test
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - id: meta
+        name: Compute image tag
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "tag=pr-${{ github.event.pull_request.number }}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=main-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          load: true
+          tags: openbucket:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Save image
+        run: docker save openbucket:${{ steps.meta.outputs.tag }} -o /tmp/openbucket.tar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/openbucket.tar
+          retention-days: 7
+
+  conformance:
+    name: s3 conformance suite
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    needs: build-image
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install client matrix (aws-cli, mc, s3cmd)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends awscli s3cmd
+          curl -sSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
+          chmod +x /usr/local/bin/mc
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+
+      - name: Load image
+        run: docker load -i /tmp/openbucket.tar
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Run conformance suite
+        env:
+          OPENBUCKET_IMAGE: openbucket:${{ needs.build-image.outputs.image-tag }}
+        run: npx nx run conformance:e2e --ci

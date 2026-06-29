@@ -1,0 +1,30 @@
+{
+  "name": "api-client",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/api-client/src",
+  "tags": [],
+  "targets": {
+    "generate": {
+      "executor": "nx:run-commands",
+      "dependsOn": [{ "projects": ["openbucket-backend"], "target": "openapi:export" }],
+      "outputs": ["{workspaceRoot}/libs/api-client/src/lib"],
+      "options": {
+        "commands": [
+          "rimraf libs/api-client/src/lib",
+          "openapi-generator-cli generate -i dist/apps/openbucket-backend/openapi.json -g typescript-angular -o libs/api-client/src/lib --additional-properties=ngVersion=21.0.0,providedIn=root,withInterfaces=true,fileNaming=kebab-case,stringEnums=true,supportsES6=true"
+        ],
+        "parallel": false
+      }
+    },
+    "check": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["generate"],
+      "options": {
+        "commands": [
+          "git diff --exit-code -- libs/api-client/src/lib || (echo 'api-client is stale — run: nx run api-client:generate && commit' && exit 1)"
+        ]
+      }
+    }
+  }
+}
