@@ -82,7 +82,7 @@
     "@angular-devkit/build-angular": "21.2.9",
     "@angular-devkit/core": "21.2.9",
     "@angular-devkit/schematics": "21.2.9",
-    "@angular/cli": "21.2.11",
+    "@angular/cli": "22.0.4",
     "@angular/compiler-cli": "21.2.9",
     "@angular/language-service": "21.2.9",
     "@aws-sdk/client-s3": "^3.1068.0",
