@@ -89,7 +89,7 @@
     "@mikro-orm/cli": "^6.6.14",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.0",
-    "@nx/angular": "22.7.2",
+    "@nx/angular": "23.0.1",
     "@nx/eslint": "22.7.2",
     "@nx/eslint-plugin": "22.7.2",
     "@nx/jest": "22.7.2",
