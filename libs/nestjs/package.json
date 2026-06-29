@@ -40,7 +40,7 @@
     "nestjs-pino": "^4.6.1",
     "nestjs-zod": "^5.4.0",
     "passport-jwt": "^4.0.1",
-    "uuid": "^10.0.0",
+    "uuid": "^14.0.1",
     "zod": "^4.3.6"
   },
   "keywords": ["nestjs", "s3", "object-storage", "minio", "aws-s3"],

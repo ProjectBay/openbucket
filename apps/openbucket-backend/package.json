@@ -36,7 +36,7 @@
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.1.13",
     "rxjs": "~7.8.0",
-    "uuid": "^10.0.0",
+    "uuid": "^14.0.1",
     "zod": "4.3.6"
   }
 }
