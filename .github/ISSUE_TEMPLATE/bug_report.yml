@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a problem with OpenBucket
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! Please **do not** report
+        security vulnerabilities here — see [SECURITY.md](https://github.com/ProjectBay/openbucket/blob/main/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including what you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps (or a small repo / S3 request) that reproduce the issue.
+      placeholder: |
+        1. Start OpenBucket with ...
+        2. Run `aws --endpoint-url ... s3 ...`
+        3. See error ...
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Deployment mode
+      options:
+        - Standalone (Docker / Node app)
+        - Embedded library (@openbucket/nestjs)
+        - From source (dev)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: OpenBucket image tag, `@openbucket/nestjs` version, or commit SHA.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node.js version, and the S3 client/SDK (if relevant).
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste any relevant log output. **Redact secrets** (keys, tokens, hashes).
+      render: shell

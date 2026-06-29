@@ -1,0 +1,15 @@
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
+@import 'tailwindcss/utilities.css';
+@import '@spartan-ng/brain/hlm-tailwind-preset.css';
+
+/* CDK overlay structural styles — positions/backdrops every brain overlay
+   (dialog, sheet, dropdown, select, popover, command palette). Without this,
+   overlays render unpositioned at the top-left with no backdrop. */
+@import '@angular/cdk/overlay-prebuilt.css';
+
+@source "../**/*.{html,ts}";
+@source "../../../libs/ui/spartan/**/*.{html,ts}";
+@source "../../../libs/ui/spartan-formly/**/*.{html,ts}";

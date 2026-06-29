@@ -1,0 +1,64 @@
+{
+  "name": "@openbucket/nestjs",
+  "version": "0.1.0",
+  "description": "Embeddable S3-compatible object store + admin console for NestJS applications.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["src", "assets", "README.md"],
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "express": "^5.0.0",
+    "reflect-metadata": "^0.1.13 || ^0.2.0",
+    "rxjs": "^7.8.0"
+  },
+  "dependencies": {
+    "@mikro-orm/better-sqlite": "^6.6.14",
+    "@mikro-orm/core": "^6.6.14",
+    "@mikro-orm/migrations": "^6.6.14",
+    "@mikro-orm/nestjs": "^6.1.2",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/swagger": "^11.0.0",
+    "@nestjs/throttler": "^6.5.0",
+    "argon2": "^0.41.1",
+    "fast-xml-parser": "^4.5.6",
+    "helmet": "^8.2.0",
+    "nestjs-pino": "^4.6.1",
+    "nestjs-zod": "^5.4.0",
+    "passport-jwt": "^4.0.1",
+    "uuid": "^10.0.0",
+    "zod": "^4.3.6"
+  },
+  "keywords": ["nestjs", "s3", "object-storage", "minio", "aws-s3"],
+  "author": "OpenBucket contributors",
+  "homepage": "https://github.com/ProjectBay/openbucket/tree/main/libs/nestjs#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ProjectBay/openbucket.git",
+    "directory": "libs/nestjs"
+  },
+  "bugs": {
+    "url": "https://github.com/ProjectBay/openbucket/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "comments": {
+    "persistence": "The persistence entities + repositories are bundled into this package at src/lib/persistence (formerly the @openbucket/persistence workspace lib). There is no separate package to publish.",
+    "build": "`nx build nestjs` compiles clean (the persistence fold-in removed the lib->lib TS6059 error). For a publishable artifact build the frontend first (Node 23: `nx build openbucket-frontend`), then `nx bundle-spa nestjs` (Node 20) runs the lib tsc build and copies the SPA into assets/spa. Publish from dist/libs/nestjs."
+  }
+}

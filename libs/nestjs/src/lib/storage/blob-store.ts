@@ -1,0 +1,320 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream, createWriteStream, promises as fs, ReadStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
+import { Readable } from 'node:stream';
+import { dirname, join } from 'node:path';
+
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+
+import { PathResolver } from './paths';
+import type { TrashManifest } from './trash';
+
+export interface PutResult {
+  /** Bytes written, post-flush. */
+  size: bigint;
+  /** Hex MD5 — the canonical S3 ETag for single-part objects. */
+  etag: string;
+  /** Hex SHA-256 — for x-amz-content-sha256 verification. */
+  sha256: string;
+  /** Final on-disk path after rename. */
+  finalPath: string;
+}
+
+export interface RangeSpec {
+  /** Inclusive byte offset. */
+  start: number;
+  /** Inclusive byte offset, or undefined to read through EOF. */
+  end?: number;
+}
+
+export interface HeadResult {
+  size: bigint;
+  mtime: Date;
+}
+
+export interface BlobRef {
+  path: string;
+  size: bigint;
+}
+
+@Injectable()
+export class BlobStore {
+  private readonly log = new Logger(BlobStore.name);
+  readonly paths: PathResolver;
+
+  constructor(config: ConfigService) {
+    this.paths = new PathResolver(config.getOrThrow<string>('DATA_DIR'));
+  }
+
+  /**
+   * Shutdown flush seam (§4.12 step 4). Today every write opens and closes its
+   * own file handle inside {@link putBlob}/{@link putPart} (two-phase
+   * tmp→fsync→rename), so there are no pooled descriptors to flush and this is
+   * a no-op. It exists so {@link ShutdownService} can `await blobs.close()`
+   * before the EM/SQLite close, and so a future pooled-handle optimisation has
+   * a place to drain without touching the shutdown ordering.
+   */
+  async close(): Promise<void> {
+    // No pooled handles to flush — intentional no-op (see doc comment).
+  }
+
+  /**
+   * Stage a blob in tmp/, compute its hashes while streaming, then atomically
+   * rename to its final destination. Returns size + hashes + final path.
+   *
+   * Stream lifecycle (abort, backpressure) is the caller's responsibility — the
+   * streaming agent wires AbortSignal handling around this method.
+   */
+  async putBlob(
+    bucket: string,
+    key: string,
+    source: Readable | string,
+    cipher?: import('node:crypto').Cipher,
+  ): Promise<PutResult> {
+    await this.ensureDir(this.paths.tmpDir());
+    const tmpName = `put-${randomUUID()}`;
+    const tmpPath = this.paths.tmpPath(tmpName);
+    const finalPath = this.paths.blobPath(bucket, key);
+
+    const md5 = createHash('md5');
+    const sha = createHash('sha256');
+    let bytesWritten = 0n;
+
+    const sink = createWriteStream(tmpPath, { flags: 'wx' });
+    const input: Readable = typeof source === 'string' ? createReadStream(source) : source;
+
+    try {
+      // Hash + count the PLAINTEXT input so ETag/size stay over plaintext; the
+      // optional cipher (SSE-S3, STORY-0122) only transforms what hits the disk.
+      input.on('data', (chunk: Buffer) => {
+        md5.update(chunk);
+        sha.update(chunk);
+        bytesWritten += BigInt(chunk.length);
+      });
+      if (cipher) await pipeline(input, cipher, sink);
+      else await pipeline(input, sink);
+      await this.fsyncFile(tmpPath);
+    } catch (err) {
+      await this.unlinkQuiet(tmpPath);
+      throw err;
+    }
+
+    await this.ensureDir(dirname(finalPath));
+    await this.atomicRename(tmpPath, finalPath);
+
+    return {
+      size: bytesWritten,
+      etag: md5.digest('hex'),
+      sha256: sha.digest('hex'),
+      finalPath,
+    };
+  }
+
+  /**
+   * Stage a multipart part to `multipart/<uploadId>/<N>.part` (§4.4.2). The tmp
+   * file carries a `randomUUID()` suffix so two concurrent same-partNumber
+   * uploads never collide on the `'wx'` (O_EXCL) open — both write to distinct
+   * tmp files and the last `rename(2)` wins atomically (§4.8). Returns the part
+   * MD5 (its ETag) and byte count.
+   */
+  async putPart(
+    uploadId: string,
+    partNumber: number,
+    source: Readable,
+  ): Promise<{ etag: string; size: bigint }> {
+    const finalPath = this.paths.multipartPartPath(uploadId, partNumber);
+    await this.ensureDir(dirname(finalPath));
+    const tmpPath = `${finalPath}.${randomUUID()}.tmp`;
+
+    const md5 = createHash('md5');
+    let bytesWritten = 0n;
+
+    const sink = createWriteStream(tmpPath, { flags: 'wx', highWaterMark: 256 * 1024, mode: 0o600 });
+    try {
+      source.on('data', (chunk: Buffer) => {
+        md5.update(chunk);
+        bytesWritten += BigInt(chunk.length);
+      });
+      await pipeline(source, sink);
+      await this.fsyncFile(tmpPath);
+    } catch (err) {
+      await this.unlinkQuiet(tmpPath);
+      throw err;
+    }
+
+    await this.atomicRename(tmpPath, finalPath); // last-rename-wins
+    return { etag: md5.digest('hex'), size: bytesWritten };
+  }
+
+  /**
+   * Open a read stream for the blob at (bucket, key), optionally constrained
+   * to a byte range. Throws ENOENT if the blob is missing — caller maps to
+   * `NoSuchKey`.
+   */
+  async getBlob(
+    bucket: string,
+    key: string,
+    range?: RangeSpec,
+  ): Promise<{ stream: ReadStream; size: bigint }> {
+    const path = this.paths.blobPath(bucket, key);
+    const stat = await fs.stat(path);
+    // 256 KB highWaterMark (§4.7): matches Linux readahead / page-cache stride,
+    // halving syscall round-trips for files that don't fit in cache.
+    const opts: { start?: number; end?: number; highWaterMark: number } = {
+      highWaterMark: 256 * 1024,
+    };
+    if (range) {
+      opts.start = range.start;
+      if (range.end !== undefined) opts.end = range.end;
+    }
+    const stream = createReadStream(path, opts);
+    return { stream, size: BigInt(stat.size) };
+  }
+
+  /** Stat-only — returns null on ENOENT so HEAD callers don't have to catch. */
+  async headBlob(bucket: string, key: string): Promise<HeadResult | null> {
+    try {
+      const stat = await fs.stat(this.paths.blobPath(bucket, key));
+      return { size: BigInt(stat.size), mtime: stat.mtime };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw err;
+    }
+  }
+
+  /**
+   * Soft-delete: move the blob into trash/ with a manifest entry. The actual
+   * unlink happens in the trash purge background tick (streaming agent).
+   */
+  async deleteBlob(bucket: string, key: string): Promise<void> {
+    const src = this.paths.blobPath(bucket, key);
+    await this.ensureDir(this.paths.trashDir());
+
+    const entryId = randomUUID();
+    const dst = join(this.paths.trashDir(), entryId);
+
+    try {
+      await this.atomicRename(src, dst);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        // Already gone — idempotent.
+        return;
+      }
+      throw err;
+    }
+
+    // STORY-0211: explicit interface — keeps the on-disk shape stable for the
+    // EPIC-04 trash-purge tick.
+    const manifest: TrashManifest = {
+      entryId,
+      bucket,
+      key,
+      originalPath: src,
+      deletedAt: new Date().toISOString(),
+    };
+    await fs.writeFile(`${dst}.manifest.json`, JSON.stringify(manifest, null, 2));
+  }
+
+  /**
+   * Concatenate `parts` into a single blob at (destBucket, destKey). The
+   * composed file is staged in tmp/ and renamed, preserving putBlob's atomicity.
+   */
+  async composeBlobs(
+    parts: BlobRef[],
+    destBucket: string,
+    destKey: string,
+  ): Promise<PutResult> {
+    await this.ensureDir(this.paths.tmpDir());
+    const tmpName = `compose-${randomUUID()}`;
+    const tmpPath = this.paths.tmpPath(tmpName);
+    const finalPath = this.paths.blobPath(destBucket, destKey);
+
+    const md5 = createHash('md5');
+    const sha = createHash('sha256');
+    let bytesWritten = 0n;
+
+    const sink = createWriteStream(tmpPath, { flags: 'wx' });
+    try {
+      for (const part of parts) {
+        const partStream = createReadStream(part.path);
+        partStream.on('data', (chunk: Buffer) => {
+          md5.update(chunk);
+          sha.update(chunk);
+          bytesWritten += BigInt(chunk.length);
+        });
+        await new Promise<void>((resolve, reject) => {
+          partStream.on('error', reject);
+          partStream.on('end', resolve);
+          partStream.pipe(sink, { end: false });
+        });
+      }
+      await new Promise<void>((resolve, reject) => {
+        sink.end((err?: Error | null) => (err ? reject(err) : resolve()));
+      });
+      await this.fsyncFile(tmpPath);
+    } catch (err) {
+      // Close the sink before unlinking — on Windows an open writable handle
+      // makes the file undeletable. Wait for the `close` event so the
+      // subsequent unlink isn't racing the OS handle release.
+      await new Promise<void>((resolve) => {
+        sink.once('close', () => resolve());
+        sink.destroy();
+      });
+      await this.unlinkQuiet(tmpPath);
+      throw err;
+    }
+
+    await this.ensureDir(dirname(finalPath));
+    await this.atomicRename(tmpPath, finalPath);
+    return {
+      size: bytesWritten,
+      etag: md5.digest('hex'),
+      sha256: sha.digest('hex'),
+      finalPath,
+    };
+  }
+
+  // ----- internals -------------------------------------------------------
+
+  private async ensureDir(path: string): Promise<void> {
+    await fs.mkdir(path, { recursive: true });
+  }
+
+  private async unlinkQuiet(path: string): Promise<void> {
+    try {
+      await fs.unlink(path);
+    } catch {
+      /* ignore — best-effort cleanup */
+    }
+  }
+
+  private async fsyncFile(path: string): Promise<void> {
+    const fh = await fs.open(path, 'r+');
+    try {
+      await fh.sync();
+    } finally {
+      await fh.close();
+    }
+  }
+
+  /**
+   * `rename(2)` is atomic only on the same filesystem. If `tmp/` and the
+   * destination live on different mounts (containerised-volume misconfig),
+   * Node returns `EXDEV` — fall back to copy + unlink (not atomic, but correct
+   * under the constraint, and noisy in the log so the operator notices).
+   */
+  private async atomicRename(src: string, dst: string): Promise<void> {
+    try {
+      await fs.rename(src, dst);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
+      this.log.warn(
+        `EXDEV: ${src} -> ${dst} is cross-device. Falling back to copy+unlink. ` +
+          'Check that DATA_DIR/tmp and DATA_DIR/blobs share a mount.',
+      );
+      await fs.copyFile(src, dst);
+      await this.unlinkQuiet(src);
+    }
+  }
+}

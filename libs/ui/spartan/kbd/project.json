@@ -1,0 +1,13 @@
+{
+  "name": "kbd",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/ui/spartan/kbd/src",
+  "prefix": "hlm",
+  "projectType": "library",
+  "tags": [],
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

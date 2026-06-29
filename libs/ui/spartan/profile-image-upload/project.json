@@ -1,0 +1,9 @@
+{
+  "name": "hlm-profile-image-upload",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/ui/spartan/profile-image-upload/src",
+  "prefix": "lib",
+  "tags": [],
+  "projectType": "library",
+  "targets": {}
+}

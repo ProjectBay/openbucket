@@ -1,0 +1,24 @@
+# Normalize line endings: store text as LF in the repo, check out native.
+* text=auto eol=lf
+
+# Explicitly treat common binaries as binary (no EOL/encoding munging).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.avif binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.pdf binary
+
+# Keep shell scripts LF even on Windows checkouts (they run under bash).
+*.sh text eol=lf
+
+# Collapse generated/vendored noise in diffs and language stats.
+package-lock.json -diff linguist-generated
+libs/api-client/** linguist-generated

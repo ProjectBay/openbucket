@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "include": [],
+  "compilerOptions": {
+    "module": "preserve",
+    "moduleResolution": "bundler"
+  }
+}

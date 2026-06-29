@@ -1,0 +1,79 @@
+# .github/workflows/release-nestjs.yml
+# Publish @openbucket/nestjs to npm (packaging plan, phase 6).
+#
+# Trigger: push a tag `nestjs-v<version>` (e.g. nestjs-v0.1.0), or run manually
+# via workflow_dispatch. The job gates on deterministic checks (lint + a clean
+# lib/SPA build = tsc typecheck), assembles the publishable dist (lib build +
+# bundled admin SPA), then `npm publish` from dist/libs/nestjs.
+#
+# The publish gate deliberately does NOT re-run the unit suite: the lib's
+# concurrency / blob-store specs are known-flaky (race, not parallelism — they
+# fail intermittently even with --runInBand). Functional unit/e2e validation is
+# ci.yml's job; cut the release tag from a commit whose ci.yml is green.
+#
+# Requires repo secret NPM_TOKEN — an npm automation token with publish rights
+# to the @openbucket scope.
+#
+# NOTE: authored but NOT executed in the dev environment (no GitHub Actions
+# runner). Mirrors ci.yml's runner + setup conventions.
+name: release-nestjs
+
+on:
+  push:
+    tags: ['nestjs-v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-nestjs-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Node 22 on Linux satisfies BOTH better-sqlite3 prebuilds and Angular's
+  # require(ESM) — see ci.yml. (The Node 20 backend / Node 23 frontend split is
+  # a Windows-dev quirk only and does not apply on the Linux runner.)
+  NODE_VERSION: '22'
+
+jobs:
+  publish:
+    name: build + publish to npm
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag_version="${GITHUB_REF_NAME#nestjs-v}"
+          pkg_version="$(node -p "require('./libs/nestjs/package.json').version")"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME ($tag_version) != libs/nestjs/package.json version $pkg_version"
+            exit 1
+          fi
+          echo "Publishing @openbucket/nestjs@$pkg_version"
+
+      - name: Lint
+        run: npx nx lint nestjs
+
+      - name: Build admin SPA (frontend)
+        run: npx nx build openbucket-frontend
+
+      - name: Build lib + bundle SPA
+        # bundle-spa dependsOn the lib's tsc build, then copies the SPA from the
+        # frontend build above into dist/libs/nestjs/assets/spa.
+        run: npx nx bundle-spa nestjs
+
+      - name: Publish to npm
+        run: npm publish ./dist/libs/nestjs --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
