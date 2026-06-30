@@ -43,6 +43,13 @@ describe('initial migration (TEST-0205)', () => {
         migrationsList: [
           { name: 'Migration20260520000001_initial', class: Migration20260520000001_initial },
         ],
+        // Match production (mikro-orm.config.ts): do NOT let the migrator toggle
+        // `foreign_keys` OFF around up(). The default (`true`) leaves FK
+        // enforcement in a platform-dependent state across better-sqlite3
+        // prebuilds (enforced on Windows, NOT on the Linux CI runner) — so the
+        // `fk_objects_bucket` assertion (case 3) flaked between dev and CI. With
+        // this false, the pool `afterCreate` `foreign_keys = ON` stays in effect.
+        disableForeignKeys: false,
       },
       pool: {
         afterCreate: (conn: any, done: (err?: Error) => void) => {
@@ -102,14 +109,9 @@ describe('initial migration (TEST-0205)', () => {
   });
 
   it('case 3: fk_objects_bucket rejects an object with a non-existent bucket', async () => {
+    // FK enforcement (foreign_keys = ON) is applied by the pool afterCreate and,
+    // with `disableForeignKeys: false` above, left intact by the migrator.
     const conn = orm.em.getConnection();
-    // FK enforcement is per-connection and OFF by default in SQLite. The pool
-    // `afterCreate` turns it ON, but the migrator's `up()` (with the default
-    // `disableForeignKeys: true`) toggles it OFF/ON around the run, and the final
-    // state after that toggle varies across better-sqlite3 prebuilds (enforced on
-    // some platforms, not others). Assert the constraint deterministically by
-    // ensuring enforcement is ON on this connection right before the insert.
-    await conn.execute('PRAGMA foreign_keys = ON');
     await expect(
       conn.execute(
         `insert into objects (id, bucket_name, key, etag, created_at, modified_at)
