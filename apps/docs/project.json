@@ -1,0 +1,40 @@
+{
+  "name": "docs",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/docs/src",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/build"],
+      "options": {
+        "command": "npm run build",
+        "cwd": "apps/docs"
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "command": "npm run start",
+        "cwd": "apps/docs"
+      }
+    },
+    "serve-static": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "command": "npm run serve",
+        "cwd": "apps/docs"
+      }
+    },
+    "clear": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run clear",
+        "cwd": "apps/docs"
+      }
+    }
+  }
+}

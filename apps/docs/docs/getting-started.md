@@ -66,5 +66,4 @@ nx serve openbucket-backend      # backend (S3 + admin API)
 nx serve openbucket-frontend     # Angular admin console
 ```
 
-See [`CONTRIBUTING.md`](https://github.com/ProjectBay/openbucket/blob/main/CONTRIBUTING.md)
-for the full contributor workflow.
+See [Contributing](./contributing.md) for the full contributor workflow.

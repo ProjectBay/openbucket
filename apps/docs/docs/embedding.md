@@ -119,5 +119,5 @@ await s3.send(
 );
 ```
 
-The full option list lives in the
-[`@openbucket/nestjs` README](https://github.com/ProjectBay/openbucket/blob/main/libs/nestjs/README.md).
+The full option list, async configuration, and coexistence/caveats live in the
+[NestJS module reference](./nestjs-module.md).

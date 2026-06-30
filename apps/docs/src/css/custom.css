@@ -1,0 +1,90 @@
+/**
+ * OpenBucket docs theme. Palette matches the brand logo: a royal-blue primary
+ * with a teal accent, the Inter typeface, and softened surfaces.
+ */
+
+:root {
+  /* Brand: royal-blue primary (light mode), matching the logo. */
+  --ifm-color-primary: #2563eb;
+  --ifm-color-primary-dark: #1d4ed8;
+  --ifm-color-primary-darker: #1e47cb;
+  --ifm-color-primary-darkest: #193aa7;
+  --ifm-color-primary-light: #4178ef;
+  --ifm-color-primary-lighter: #5084f0;
+  --ifm-color-primary-lightest: #7ba3f4;
+
+  /* Teal accent (the object-cubes in the logo) + the hero gradient. */
+  --ob-accent: #14b8a6;
+  --ob-hero-gradient: linear-gradient(
+    135deg,
+    #1e3a8a 0%,
+    #2563eb 48%,
+    #14b8a6 100%
+  );
+
+  /* Typography. */
+  --ifm-font-family-base: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  --ifm-heading-font-weight: 700;
+  --ifm-font-weight-semibold: 600;
+
+  /* Softened surfaces. */
+  --ifm-global-radius: 0.6rem;
+  --ifm-button-border-radius: 0.6rem;
+  --ifm-code-font-size: 92%;
+  --ifm-code-border-radius: 0.4rem;
+  --docusaurus-highlighted-code-line-bg: rgba(37, 99, 235, 0.12);
+}
+
+/* Lighter, higher-contrast blue for dark mode + a deep navy canvas (logo navy). */
+[data-theme='dark'] {
+  --ifm-color-primary: #60a5fa;
+  --ifm-color-primary-dark: #4090f9;
+  --ifm-color-primary-darker: #3086f8;
+  --ifm-color-primary-darkest: #0a67f5;
+  --ifm-color-primary-light: #80bafb;
+  --ifm-color-primary-lighter: #90c4fc;
+  --ifm-color-primary-lightest: #c0ddfd;
+
+  --ifm-background-color: #0b1020;
+  --ifm-background-surface-color: #121a31;
+  --ifm-navbar-background-color: #0e1530;
+  --ifm-footer-background-color: #080c1a;
+  --docusaurus-highlighted-code-line-bg: rgba(96, 165, 250, 0.16);
+}
+
+/* Navbar: subtle bottom hairline + blur for depth. */
+.navbar {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+  backdrop-filter: saturate(140%) blur(8px);
+}
+[data-theme='dark'] .navbar {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Give the wordmark logo a touch more height than the Infima default. */
+.navbar__logo {
+  height: 2rem;
+}
+.navbar__logo img {
+  height: 100%;
+}
+
+/* Primary button: gradient fill to echo the hero. */
+.button.button--primary {
+  background: var(--ob-hero-gradient);
+  border: none;
+}
+
+.footer--dark {
+  --ifm-footer-background-color: #080c1a;
+}
+
+/* Tighten heading rhythm a touch. */
+.markdown h1:first-child {
+  --ifm-h1-font-size: 2.4rem;
+  letter-spacing: -0.02em;
+}
+.markdown > h2 {
+  letter-spacing: -0.01em;
+}

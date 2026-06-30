@@ -19,6 +19,12 @@ export default [
       // and the api-client:check target gates its freshness instead. Excluded
       // from lint during the M6 CI hardening pass (STORY-0500/0502).
       'libs/api-client/src/lib/**',
+      // The Docusaurus docs site (apps/docs) is a self-contained app with its
+      // own toolchain (Docusaurus/MDX, React 19) and its own deps outside the
+      // npm workspaces; it isn't part of OpenBucket's TS lint scope. Docusaurus
+      // builds it. (The inferred Nx `lint` target then no-ops via
+      // errorOnUnmatchedPattern:false.)
+      'apps/docs/**',
     ],
   },
   {

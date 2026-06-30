@@ -12,6 +12,11 @@ const config = {
     'A self-hosted, S3-compatible object store you can run as a container — or embed in a NestJS app.',
   favicon: 'img/favicon.ico',
 
+  // Load Inter (set as --ifm-font-family-base in src/css/custom.css).
+  stylesheets: [
+    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
+  ],
+
   future: {
     v4: true, // forward-compat with Docusaurus v4
   },
@@ -22,9 +27,15 @@ const config = {
   organizationName: 'ProjectBay',
   projectName: 'openbucket',
 
-  onBrokenLinks: 'throw',
+  // 'warn' (not 'throw') because the ported whitepaper carries repo-relative
+  // links (source paths, sibling design docs) that don't all resolve in-site.
+  onBrokenLinks: 'warn',
 
   markdown: {
+    // 'detect' → `.md` is parsed as CommonMark and `.mdx` as MDX. The ported
+    // whitepaper/README markdown contains `<...>`/`{...}` (type signatures,
+    // generics) that would break the MDX parser; CommonMark passes it through.
+    format: 'detect',
     hooks: {
       onBrokenMarkdownLinks: 'warn',
     },
@@ -43,7 +54,7 @@ const config = {
         docs: {
           sidebarPath: './sidebars.js',
           editUrl:
-            'https://github.com/ProjectBay/openbucket/tree/main/website/',
+            'https://github.com/ProjectBay/openbucket/tree/main/apps/docs/',
         },
         blog: false, // docs-only site
         theme: {
@@ -61,10 +72,11 @@ const config = {
         respectPrefersColorScheme: true,
       },
       navbar: {
-        title: 'OpenBucket',
+        // No `title`: the logo is a full wordmark (icon + "OpenBucket").
+        title: '',
         logo: {
-          alt: 'OpenBucket logo',
-          src: 'img/logo.svg',
+          alt: 'OpenBucket',
+          src: 'img/openbucketlogo.png',
         },
         items: [
           {

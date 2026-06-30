@@ -1,4 +1,4 @@
-# Builds the Docusaurus site in website/ and deploys it to GitHub Pages.
+# Builds the Docusaurus site in apps/docs/ and deploys it to GitHub Pages.
 # Pages must be configured with "Build and deployment → Source: GitHub Actions".
 name: deploy-docs
 
@@ -6,7 +6,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "website/**"
+      - "apps/docs/**"
       - ".github/workflows/deploy-docs.yml"
   workflow_dispatch:
 
@@ -27,20 +27,20 @@ jobs:
     runs-on: ubuntu-22.04
     defaults:
       run:
-        working-directory: website
+        working-directory: apps/docs
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: website/package-lock.json
+          cache-dependency-path: apps/docs/package-lock.json
       - run: npm ci
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: website/build
+          path: apps/docs/build
 
   deploy:
     name: deploy to Pages
