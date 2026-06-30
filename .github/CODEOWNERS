@@ -1,6 +1,6 @@
 # Code owners — automatically requested for review on matching paths.
-# Replace the handle below with your GitHub username or an org team
-# (e.g. @ProjectBay/openbucket-maintainers). See:
-# https://docs.github.com/articles/about-code-owners
+# Currently the sole maintainer; switch this to an org team
+# (e.g. @ProjectBay/openbucket-maintainers) once the project moves under an org.
+# See: https://docs.github.com/articles/about-code-owners
 
-* @ProjectBay/openbucket-maintainers
+* @ProjectBay

@@ -97,6 +97,14 @@ export async function spawnApp(
   let exited: { code: number | null } | undefined;
   proc.on('exit', (code) => (exited = { code }));
 
+  // `close` fires only after the child's stdout/stderr pipes have been fully
+  // drained into `buffer` — unlike `exit`, which can fire while the final writes
+  // (e.g. the graceful-shutdown sequence) are still in flight in the OS pipe.
+  // waitForExit() resolves on `close` so callers that read `log()` immediately
+  // afterwards see the complete output.
+  let closed: { code: number | null } | undefined;
+  proc.on('close', (code) => (closed = { code }));
+
   const api: SpawnedApp = {
     proc,
     baseUrl: `http://127.0.0.1:${port}`,
@@ -105,8 +113,8 @@ export async function spawnApp(
     kill: (signal) => proc.kill(signal),
     waitForExit: () =>
       new Promise((resolve) => {
-        if (exited) return resolve(exited.code);
-        proc.on('exit', (code) => resolve(code));
+        if (closed) return resolve(closed.code);
+        proc.on('close', (code) => resolve(code));
       }),
   };
 
