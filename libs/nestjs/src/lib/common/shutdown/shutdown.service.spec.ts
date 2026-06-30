@@ -2,11 +2,18 @@ import { EventEmitter } from 'node:events';
 import { Logger } from '@nestjs/common';
 import type { HttpAdapterHost } from '@nestjs/core';
 import type { MikroORM } from '@mikro-orm/core';
+import type { PinoLogger } from 'nestjs-pino';
 
 import { ShutdownService } from './shutdown.service';
 import { ShutdownState } from '../shutdown-state.service';
 import type { BackgroundService } from '../background/background.service';
 import type { BlobStore } from '../../storage/blob-store';
+
+/** A fake nestjs-pino logger exposing the `.logger.flush(cb)` seam the service
+ *  calls to flush pino's async buffer on shutdown. */
+function fakePino(): PinoLogger {
+  return { logger: { flush: (cb?: () => void) => cb?.() } } as unknown as PinoLogger;
+}
 
 /**
  * TEST-0326 — ShutdownService 5-step ordering (§4.12). Pure unit: the http
@@ -80,7 +87,7 @@ function build(): Harness {
     order.push('state');
   });
 
-  const svc = new ShutdownService(adapterHost, background, blobs, orm, state);
+  const svc = new ShutdownService(adapterHost, background, blobs, orm, state, fakePino());
   return { svc, server, order, background, blobs, orm, state };
 }
 
@@ -175,7 +182,7 @@ describe('ShutdownService (TEST-0326)', () => {
     const orm = { close: jest.fn(async () => order.push('orm')) } as unknown as MikroORM;
     const state = new ShutdownState();
 
-    const svc = new ShutdownService(adapterHost, background, blobs, orm, state);
+    const svc = new ShutdownService(adapterHost, background, blobs, orm, state, fakePino());
     await svc.onApplicationShutdown(undefined);
 
     expect(order).toEqual(['background', 'blobs', 'orm']);
