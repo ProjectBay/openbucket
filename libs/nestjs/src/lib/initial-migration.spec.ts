@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
+import Database from 'better-sqlite3';
 import { MikroORM } from '@mikro-orm/better-sqlite';
 import { ReflectMetadataProvider } from '@mikro-orm/core';
 import { Migrator } from '@mikro-orm/migrations';
@@ -108,16 +109,29 @@ describe('initial migration (TEST-0205)', () => {
     }
   });
 
-  it('case 3: fk_objects_bucket rejects an object with a non-existent bucket', async () => {
-    // FK enforcement (foreign_keys = ON) is applied by the pool afterCreate and,
-    // with `disableForeignKeys: false` above, left intact by the migrator.
-    const conn = orm.em.getConnection();
-    await expect(
-      conn.execute(
-        `insert into objects (id, bucket_name, key, etag, created_at, modified_at)
-         values ('o1', 'ghost-bucket', 'k', 'e', '2026-01-01 00:00:00', '2026-01-01 00:00:00')`,
-      ),
-    ).rejects.toThrow();
+  it('case 3: fk_objects_bucket rejects an object with a non-existent bucket', () => {
+    // FK enforcement is per-connection and OFF by default in SQLite. Going through
+    // MikroORM (pool afterCreate + connection.execute) proved unreliable across
+    // better-sqlite3 prebuilds — enforced on Windows, NOT on the Linux CI runner —
+    // because prepared-statement PRAGMAs don't reliably apply. Assert the constraint
+    // deterministically on a DIRECT better-sqlite3 connection to the file-backed
+    // test DB, enabling foreign keys via the native `.pragma()` (synchronous, so a
+    // violation throws on `.run()`).
+    const db = new Database(join(DATA_DIR, 'openbucket.db'));
+    try {
+      db.pragma('busy_timeout = 5000');
+      db.pragma('foreign_keys = ON');
+      expect(() =>
+        db
+          .prepare(
+            `insert into objects (id, bucket_name, key, etag, created_at, modified_at)
+             values ('o1', 'ghost-bucket', 'k', 'e', '2026-01-01 00:00:00', '2026-01-01 00:00:00')`,
+          )
+          .run(),
+      ).toThrow(/FOREIGN KEY/i);
+    } finally {
+      db.close();
+    }
   });
 
   it('case 5: the initial migration is recorded as executed', async () => {
