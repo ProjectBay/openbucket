@@ -10,7 +10,7 @@ const config = {
   title: 'OpenBucket',
   tagline:
     'A self-hosted, S3-compatible object store you can run as a container — or embed in a NestJS app.',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/logo-icon.png',
 
   // Load Inter (set as --ifm-font-family-base in src/css/custom.css).
   stylesheets: [
@@ -72,11 +72,10 @@ const config = {
         respectPrefersColorScheme: true,
       },
       navbar: {
-        // No `title`: the logo is a full wordmark (icon + "OpenBucket").
-        title: '',
+        title: 'OpenBucket',
         logo: {
           alt: 'OpenBucket',
-          src: 'img/openbucketlogo.png',
+          src: 'img/logo-icon.png',
         },
         items: [
           {
