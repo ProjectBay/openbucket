@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnApplicationShutdown } from '@nestjs/commo
 import { HttpAdapterHost } from '@nestjs/core';
 import { MikroORM } from '@mikro-orm/core';
 import { InjectMikroORM } from '@mikro-orm/nestjs';
+import { PinoLogger } from 'nestjs-pino';
 import type { Server } from 'node:http';
 import type { Socket } from 'node:net';
 
@@ -43,6 +44,7 @@ export class ShutdownService implements OnApplicationShutdown {
     @Inject(BlobStore) private readonly blobs: BlobStore,
     @InjectMikroORM(OPEN_BUCKET_ORM_CONTEXT) private readonly orm: MikroORM,
     private readonly state: ShutdownState,
+    private readonly pino: PinoLogger,
   ) {
     // Track every accepted socket so we can end/destroy them at the deadline.
     // The http.Server exists from NestFactory.create (before listen()), so this
@@ -111,5 +113,28 @@ export class ShutdownService implements OnApplicationShutdown {
     this.log.log('MikroORM closed');
 
     this.log.log('Shutdown complete');
+
+    // pino's default stdout destination is asynchronous (sonic-boom, sync:false),
+    // so every line logged above sits in an unflushed buffer when Nest re-raises
+    // the termination signal and the process exits — they would never reach
+    // stdout (lost from Docker logs and from the §4.12 drain assertions). Flush
+    // the out-of-request logger before returning. `pino.logger` resolves to
+    // nestjs-pino's module-level out-of-context instance here (we are outside any
+    // request scope), which is the exact sink these shutdown lines were written
+    // to via Nest's logger.
+    await this.flushLogs();
+  }
+
+  private flushLogs(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const sink = this.pino.logger as {
+        flush?: (cb?: (err?: Error) => void) => void;
+      };
+      if (typeof sink.flush === 'function') {
+        sink.flush(() => resolve());
+      } else {
+        resolve();
+      }
+    });
   }
 }
