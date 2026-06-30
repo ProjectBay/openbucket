@@ -74,6 +74,13 @@ jobs:
         run: npx nx bundle-spa nestjs
 
       - name: Publish to npm
-        run: npm publish ./dist/libs/nestjs --access public
+        # Pre-release versions (those with a `-`, e.g. 0.1.0-alpha.1) publish to
+        # the `next` dist-tag so `npm install @openbucket/nestjs` keeps resolving
+        # to the latest STABLE release; stable versions go to `latest`.
+        run: |
+          version="$(node -p "require('./dist/libs/nestjs/package.json').version")"
+          if [[ "$version" == *-* ]]; then dist_tag=next; else dist_tag=latest; fi
+          echo "Publishing @openbucket/nestjs@$version to dist-tag '$dist_tag'"
+          npm publish ./dist/libs/nestjs --access public --tag "$dist_tag"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
