@@ -6,7 +6,23 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 10
     groups:
-      # Batch low-risk updates into a single PR to cut review noise.
+      # Angular packages pin EXACT peer versions (e.g. @angular/compiler-cli@X
+      # requires @angular/compiler@X), so bumping one in isolation makes `npm ci`
+      # fail with ERESOLVE. Keep the whole framework + its tooling in one PR so
+      # they move together. (Major upgrades are still best driven by `ng update`.)
+      angular:
+        patterns:
+          - "@angular*"
+          - "@schematics/angular"
+          - "@ngtools/*"
+          - "angular-eslint"
+      # Nx packages must all match the `nx` version — bump them as one unit
+      # (a coordinated upgrade is otherwise an `nx migrate`).
+      nx:
+        patterns:
+          - "nx"
+          - "@nx/*"
+      # Everything else: batch low-risk minor/patch updates into a single PR.
       minor-and-patch:
         update-types:
           - "minor"
