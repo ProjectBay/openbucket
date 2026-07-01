@@ -148,8 +148,12 @@ export class MultipartService {
     }
 
     const sorted = [...declared].sort((a, b) => a.partNumber - b.partNumber);
+    // Part numbers must be in [1, 10000] and unique; they need NOT be contiguous
+    // (real S3 permits sparse part numbers, e.g. [1, 2, 4]) — F10.
     for (let i = 0; i < sorted.length; i++) {
-      if (sorted[i].partNumber !== i + 1) throw new InvalidPartOrderError();
+      const pn = sorted[i].partNumber;
+      if (!Number.isInteger(pn) || pn < 1 || pn > 10_000) throw new InvalidPartError(pn);
+      if (i > 0 && pn === sorted[i - 1].partNumber) throw new InvalidPartOrderError();
     }
 
     const recorded = new Map(

@@ -15,6 +15,8 @@ import { BlobStore } from './blob-store';
 
 export interface OrphanReport {
   orphanBlobs: { path: string; bucket: string; key: string }[];
+  /** Orphan blobs actually deleted (0 if the misconfiguration guard tripped). */
+  deletedOrphans: number;
   removedMultipartDirs: string[];
   /** Overwrite backups reconciled after a crash: restored (old kept) or discarded. */
   reconciledBackups: { restored: number; discarded: number };
@@ -53,7 +55,8 @@ export class RecoveryService implements OnApplicationBootstrap {
     const report = await this.runScan();
     this.log.log(
       `recovery scan: ${report.scanned.blobs} blobs, ${report.scanned.multipart} multipart dirs ` +
-        `in ${Date.now() - t0}ms; ${report.orphanBlobs.length} orphan blobs, ` +
+        `in ${Date.now() - t0}ms; ${report.orphanBlobs.length} orphan blobs ` +
+        `(${report.deletedOrphans} deleted), ` +
         `${report.removedMultipartDirs.length} stale multipart dirs cleaned, ` +
         `${report.reconciledBackups.restored} overwrite(s) restored / ` +
         `${report.reconciledBackups.discarded} backup(s) discarded`,
@@ -71,6 +74,8 @@ export class RecoveryService implements OnApplicationBootstrap {
     const removedMultipartDirs: string[] = [];
     const reconciledBackups = { restored: 0, discarded: 0 };
     let blobsScanned = 0;
+    let candidateBlobs = 0; // real object-blob files considered (excludes .v/ + backups)
+    let deletedOrphans = 0;
     let multipartScanned = 0;
 
     // The scan runs at bootstrap, outside any request context; fork a
@@ -101,6 +106,7 @@ export class RecoveryService implements OnApplicationBootstrap {
             continue;
           }
 
+          candidateBlobs++;
           const decoded = decodeKey(rel.replaceAll('\\', '/'));
           const row = await em.findOne(
             ObjectEntity,
@@ -111,6 +117,23 @@ export class RecoveryService implements OnApplicationBootstrap {
             orphanBlobs.push({ path: filePath, bucket, key: decoded });
           }
         }
+      }
+    }
+
+    // F9: delete orphan blobs — no row references them, and recovery runs before
+    // the HTTP listener so nothing is mid-write. Safety guard: if EVERY candidate
+    // blob is orphaned, this is almost certainly a misconfigured DATA_DIR (wrong
+    // volume), so refuse and warn rather than nuke real data.
+    if (orphanBlobs.length > 0 && candidateBlobs > 0 && orphanBlobs.length >= candidateBlobs) {
+      this.log.error(
+        `refusing to delete ${orphanBlobs.length} orphan blob(s): every candidate blob ` +
+          `(${candidateBlobs}) is orphaned — this looks like a misconfigured DATA_DIR, not ` +
+          `real orphans. Leaving them in place.`,
+      );
+    } else {
+      for (const o of orphanBlobs) {
+        await fs.rm(o.path, { force: true });
+        deletedOrphans++;
       }
     }
 
@@ -137,6 +160,7 @@ export class RecoveryService implements OnApplicationBootstrap {
 
     return {
       orphanBlobs,
+      deletedOrphans,
       removedMultipartDirs,
       reconciledBackups,
       scanned: { blobs: blobsScanned, multipart: multipartScanned },
