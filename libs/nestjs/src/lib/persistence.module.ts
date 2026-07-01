@@ -12,6 +12,7 @@ import { Migration20260603000001_admin_must_change_password } from './migrations
 import { Migration20260603000002_refresh_token_redesign } from './migrations/Migration20260603000002_refresh_token_redesign';
 import { Migration20260609000001_access_key_admin_fields } from './migrations/Migration20260609000001_access_key_admin_fields';
 import { Migration20260625000001_object_encryption } from './migrations/Migration20260625000001_object_encryption';
+import { Migration20260701000001_object_content_sha256 } from './migrations/Migration20260701000001_object_content_sha256';
 import {
   Bucket,
   ObjectEntity,
@@ -99,6 +100,10 @@ const ENTITIES = [
             {
               name: 'Migration20260625000001_object_encryption',
               class: Migration20260625000001_object_encryption,
+            },
+            {
+              name: 'Migration20260701000001_object_content_sha256',
+              class: Migration20260701000001_object_content_sha256,
             },
           ],
           transactional: true,

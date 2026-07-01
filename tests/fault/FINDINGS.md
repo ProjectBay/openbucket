@@ -47,10 +47,15 @@ Two deliberate approach choices:
 
 - **F1 uses read-time hash verification, not AES-GCM.** The corruption repro is on
   a *non-encrypted* bucket, so GCM alone wouldn't close it; read-verify covers
-  encrypted *and* plaintext objects, preserves Range GETs, and needs no migration.
-  It detects corruption on full GETs of single-part objects (Range and
-  multipart-ETag reads remain a documented gap — whole-object verification can't
-  cover a partial read). SSE stays AES-256-CTR.
+  encrypted *and* plaintext objects, preserves Range GETs, and SSE stays
+  AES-256-CTR. **Update:** getObject now stores a whole-object plaintext SHA-256
+  (`contentSha256`, migration `Migration20260701000001`) and verifies it before
+  sending, so corruption is caught for **full GETs of any object (single-part AND
+  multipart)** and for **Range GETs up to 64 MiB** (`RANGE_VERIFY_MAX_BYTES` — a
+  range read must re-read the whole object to verify). The only remaining gap is a
+  range read of an object *larger* than that cap, which is served unverified; the
+  scalable fix is per-block checksums. Covered by
+  `tests/fault/attack-corruption-range-multipart.mjs`.
 - **F2/F3 use backup-aside + recovery reconcile, not content-addressed paths.** It
   achieves the same crash-atomic-overwrite guarantee (a failed or half-written
   overwrite never loses the prior object) with no entity change or DB migration.
