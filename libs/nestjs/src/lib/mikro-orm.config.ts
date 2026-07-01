@@ -76,7 +76,9 @@ export default defineConfig({
         // .pragma() is better-sqlite3 native; avoids prepared-statement
         // caching of one-shot PRAGMAs.
         conn.pragma('journal_mode = WAL');
-        conn.pragma('synchronous = NORMAL');
+        // FULL: fsync the WAL per commit so committed metadata survives power
+        // loss (matches the blob fsync); NORMAL can drop the last commit(s).
+        conn.pragma('synchronous = FULL');
         conn.pragma('foreign_keys = ON');
         conn.pragma('busy_timeout = 5000');
         conn.pragma('temp_store = MEMORY');

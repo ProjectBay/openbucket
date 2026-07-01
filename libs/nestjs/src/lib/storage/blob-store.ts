@@ -102,6 +102,7 @@ export class BlobStore {
 
     await this.ensureDir(dirname(finalPath));
     await this.atomicRename(tmpPath, finalPath);
+    await this.fsyncDir(dirname(finalPath));
 
     return {
       size: bytesWritten,
@@ -144,6 +145,7 @@ export class BlobStore {
     }
 
     await this.atomicRename(tmpPath, finalPath); // last-rename-wins
+    await this.fsyncDir(dirname(finalPath));
     return { etag: md5.digest('hex'), size: bytesWritten };
   }
 
@@ -267,6 +269,7 @@ export class BlobStore {
 
     await this.ensureDir(dirname(finalPath));
     await this.atomicRename(tmpPath, finalPath);
+    await this.fsyncDir(dirname(finalPath));
     return {
       size: bytesWritten,
       etag: md5.digest('hex'),
@@ -299,6 +302,25 @@ export class BlobStore {
   }
 
   /**
+   * fsync a directory so a rename into it is durable across power loss (a
+   * `rename(2)` alone syncs neither the entry nor the parent dir). Best-effort:
+   * some platforms (notably Windows) can't open/fsync a directory handle — the
+   * file's data blocks are already fsync'd, so we tolerate that.
+   */
+  private async fsyncDir(dir: string): Promise<void> {
+    try {
+      const fh = await fs.open(dir, 'r');
+      try {
+        await fh.sync();
+      } finally {
+        await fh.close();
+      }
+    } catch {
+      /* directory fsync unsupported on this platform — best effort */
+    }
+  }
+
+  /**
    * `rename(2)` is atomic only on the same filesystem. If `tmp/` and the
    * destination live on different mounts (containerised-volume misconfig),
    * Node returns `EXDEV` — fall back to copy + unlink (not atomic, but correct
@@ -314,6 +336,8 @@ export class BlobStore {
           'Check that DATA_DIR/tmp and DATA_DIR/blobs share a mount.',
       );
       await fs.copyFile(src, dst);
+      await this.fsyncFile(dst);
+      await this.fsyncDir(dirname(dst));
       await this.unlinkQuiet(src);
     }
   }

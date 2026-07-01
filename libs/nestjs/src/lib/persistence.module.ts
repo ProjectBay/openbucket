@@ -109,7 +109,11 @@ const ENTITIES = [
           afterCreate: (conn: any, done: (err?: Error) => void) => {
             try {
               conn.pragma('journal_mode = WAL');
-              conn.pragma('synchronous = NORMAL');
+              // FULL (not NORMAL): fsync the WAL on every commit so a committed
+              // object-metadata transaction survives power loss, matching the
+              // blob's per-write fsync. NORMAL can silently drop the last
+              // commit(s) on power loss — a durability gap vs. the fsync'd blob.
+              conn.pragma('synchronous = FULL');
               conn.pragma('foreign_keys = ON');
               conn.pragma('busy_timeout = 5000');
               conn.pragma('temp_store = MEMORY');
