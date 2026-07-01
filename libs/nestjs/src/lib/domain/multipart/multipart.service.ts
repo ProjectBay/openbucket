@@ -58,6 +58,27 @@ export class MultipartService {
     private readonly serializer: XmlSerializer,
   ) {}
 
+  // Serialize Complete/Abort per uploadId (F7): otherwise two concurrent
+  // completes (or a complete racing an abort) both validate + compose, and one's
+  // staging cleanup can ENOENT the other mid-compose (spurious 500), or a
+  // completed upload gets re-completed. Keyed promise-chain mutex.
+  private readonly uploadLocks = new Map<string, Promise<void>>();
+
+  private async withUploadLock<T>(uploadId: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.uploadLocks.get(uploadId) ?? Promise.resolve();
+    let release!: () => void;
+    const mine = new Promise<void>((r) => (release = r));
+    const newTail = prev.then(() => mine);
+    this.uploadLocks.set(uploadId, newTail);
+    await prev.catch(() => undefined);
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (this.uploadLocks.get(uploadId) === newTail) this.uploadLocks.delete(uploadId);
+    }
+  }
+
   /**
    * GET /:bucket?uploads → `<ListMultipartUploadsResult>` (§2.8.2). Lists every
    * pending upload in the bucket, ordered by (key, initiated).
@@ -133,6 +154,19 @@ export class MultipartService {
    * area. Returns `<CompleteMultipartUploadResult>`.
    */
   async completeUpload(
+    req: Request,
+    res: Response,
+    bucket: string,
+    key: string,
+    uploadId: string,
+    declared: CompletePart[],
+  ): Promise<unknown> {
+    return this.withUploadLock(uploadId, () =>
+      this.completeUploadLocked(req, res, bucket, key, uploadId, declared),
+    );
+  }
+
+  private async completeUploadLocked(
     _req: Request,
     res: Response,
     bucket: string,
@@ -202,6 +236,18 @@ export class MultipartService {
    * success; NoSuchUpload when the session is unknown.
    */
   async abortUpload(
+    req: Request,
+    res: Response,
+    bucket: string,
+    key: string,
+    uploadId: string,
+  ): Promise<undefined> {
+    return this.withUploadLock(uploadId, () =>
+      this.abortUploadLocked(req, res, bucket, key, uploadId),
+    );
+  }
+
+  private async abortUploadLocked(
     _req: Request,
     res: Response,
     _bucket: string,
