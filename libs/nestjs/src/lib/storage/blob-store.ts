@@ -221,11 +221,14 @@ export class BlobStore {
   /**
    * Concatenate `parts` into a single blob at (destBucket, destKey). The
    * composed file is staged in tmp/ and renamed, preserving putBlob's atomicity.
+   * When `cipher` is supplied (SSE-S3), the composed bytes are encrypted on the
+   * way to disk while the ETag/SHA-256/size stay over the plaintext (F5).
    */
   async composeBlobs(
     parts: BlobRef[],
     destBucket: string,
     destKey: string,
+    cipher?: import('node:crypto').Cipher,
   ): Promise<PutResult> {
     await this.ensureDir(this.paths.tmpDir());
     const tmpName = `compose-${randomUUID()}`;
@@ -236,33 +239,27 @@ export class BlobStore {
     const sha = createHash('sha256');
     let bytesWritten = 0n;
 
+    // Concatenate the parts as one plaintext stream, tapping it for the hashes
+    // and byte count before the optional cipher transforms what hits disk.
+    const source = Readable.from(
+      (async function* () {
+        for (const part of parts) {
+          for await (const chunk of createReadStream(part.path) as AsyncIterable<Buffer>) {
+            md5.update(chunk);
+            sha.update(chunk);
+            bytesWritten += BigInt(chunk.length);
+            yield chunk;
+          }
+        }
+      })(),
+    );
+
     const sink = createWriteStream(tmpPath, { flags: 'wx' });
     try {
-      for (const part of parts) {
-        const partStream = createReadStream(part.path);
-        partStream.on('data', (chunk: Buffer) => {
-          md5.update(chunk);
-          sha.update(chunk);
-          bytesWritten += BigInt(chunk.length);
-        });
-        await new Promise<void>((resolve, reject) => {
-          partStream.on('error', reject);
-          partStream.on('end', resolve);
-          partStream.pipe(sink, { end: false });
-        });
-      }
-      await new Promise<void>((resolve, reject) => {
-        sink.end((err?: Error | null) => (err ? reject(err) : resolve()));
-      });
+      if (cipher) await pipeline(source, cipher, sink);
+      else await pipeline(source, sink);
       await this.fsyncFile(tmpPath);
     } catch (err) {
-      // Close the sink before unlinking — on Windows an open writable handle
-      // makes the file undeletable. Wait for the `close` event so the
-      // subsequent unlink isn't racing the OS handle release.
-      await new Promise<void>((resolve) => {
-        sink.once('close', () => resolve());
-        sink.destroy();
-      });
       await this.unlinkQuiet(tmpPath);
       throw err;
     }

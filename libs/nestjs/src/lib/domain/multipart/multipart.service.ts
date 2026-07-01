@@ -369,7 +369,13 @@ function parseCopySource(header: string): { srcBucket: string; srcKey: string } 
   return { srcBucket: s.slice(0, slash), srcKey: s.slice(slash + 1) };
 }
 
-/** Strip the surrounding quotes S3 clients wrap around ETags. */
+/**
+ * Strip the surrounding quotes S3 clients wrap around ETags. Handles the
+ * XML entity form too (`&quot;`/`&#34;`): the request XML parser runs with
+ * processEntities:false for XXE safety, so an SDK that escapes the quotes in the
+ * CompleteMultipartUpload body (AWS SDK v3 does) would otherwise fail part
+ * matching. Decoding the quote entity here is safe (etag-only, no XXE surface).
+ */
 function dequote(etag: string): string {
-  return etag.replace(/^"|"$/g, '');
+  return etag.replace(/&quot;|&#34;/g, '"').replace(/^"|"$/g, '');
 }
