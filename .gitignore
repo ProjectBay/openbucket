@@ -11,6 +11,11 @@ temp
 # Local dev data (DATA_DIR): SQLite DB + blob payloads + sse.key. Never commit.
 /.dev-data
 
+# Local environment / secrets. Never commit (the template is .env.example).
+.env
+.env.local
+.env.*.local
+
 # Angular CLI build cache
 /.angular/cache
 
