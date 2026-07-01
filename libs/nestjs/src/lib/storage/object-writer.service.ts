@@ -19,6 +19,7 @@ import { OPEN_BUCKET_ORM_CONTEXT } from '../persistence/orm-context';
 import { BlobRef, BlobStore } from './blob-store';
 import { createSseCipher, generateIv } from './sse-cipher';
 import { SseKeyService } from './sse-key.service';
+import { faultpoint } from '../common/faultpoint';
 import type { ObjectEncryptionState } from '../persistence/index';
 
 export interface PutObjectCmd {
@@ -89,6 +90,11 @@ export class ObjectWriterService {
 
       const put = await this.blobs.putBlob(cmd.bucket, cmd.key, cmd.body, cipher);
       finalPath = put.finalPath;
+
+      // TEST-ONLY crash-consistency failpoint: the blob has been renamed into
+      // its final path but the metadata row is NOT yet committed. No-op unless
+      // OB_FAULT=after-rename (never set in prod/CI). See tests/fault/.
+      await faultpoint('after-rename');
 
       if (!row) {
         row = new ObjectEntity();
