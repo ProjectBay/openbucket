@@ -44,7 +44,7 @@ const STORAGE_KEY = 'appearance-settings';
 
 const defaultState: AppearanceState = {
   theme: 'system',
-  shellVariant: 'inset',
+  shellVariant: 'compact',
   tabsVariant: 'default',
   contentAlignment: 'center',
   contentMaxWidth: '4xl',

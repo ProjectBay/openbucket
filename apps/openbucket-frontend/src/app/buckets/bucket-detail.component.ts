@@ -10,7 +10,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucidePlus, lucideTrash2 } from '@ng-icons/lucide';
@@ -34,6 +34,7 @@ import {
 import { BucketLifecycleEditorComponent } from './bucket-lifecycle-editor.component';
 import { BucketCorsEditorComponent } from './bucket-cors-editor.component';
 import { BucketPolicyEditorComponent } from './bucket-policy-editor.component';
+import { ObjectBrowserComponent } from '../objects/object-browser.component';
 import { RelativeTimePipe } from '../shared/ui/relative-time.pipe';
 import { ByteSizePipe } from '../shared/ui/byte-size.pipe';
 import { notify } from '../shared/ui/notify';
@@ -51,7 +52,6 @@ import { PageHeaderService } from '../layout/shell/services';
   imports: [
     FormsModule,
     TranslateModule,
-    RouterLink,
     NgIcon,
     HlmTabsImports,
     HlmButton,
@@ -66,6 +66,7 @@ import { PageHeaderService } from '../layout/shell/services';
     BucketLifecycleEditorComponent,
     BucketCorsEditorComponent,
     BucketPolicyEditorComponent,
+    ObjectBrowserComponent,
   ],
   providers: [provideIcons({ lucidePlus, lucideTrash2 })],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -88,7 +89,9 @@ import { PageHeaderService } from '../layout/shell/services';
         </hlm-tabs-list>
 
         <div hlmTabsContent="objects" class="pt-4">
-          <a hlmBtn variant="outline" [routerLink]="['/buckets', name(), 'browse']">Open object browser</a>
+          @if (activeTab() === 'objects') {
+            <ob-object-browser [padded]="false" />
+          }
         </div>
 
         <div hlmTabsContent="properties" class="pt-4">
@@ -258,7 +261,7 @@ export class BucketDetailComponent implements OnInit, OnDestroy {
   private readonly pageHeader = inject(PageHeaderService);
 
   readonly name = signal('');
-  readonly activeTab = signal('properties');
+  readonly activeTab = signal('objects');
   readonly summary = signal<BucketSummaryDto | null>(null);
   readonly encryptionEnabled = signal(false);
   readonly tagRows = signal<{ key: string; value: string }[]>([]);
@@ -287,7 +290,7 @@ export class BucketDetailComponent implements OnInit, OnDestroy {
     // Lazy-load each tab's config only when it becomes active, so unconfigured
     // features aren't all probed (and 404'd) on every page open.
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((q) => {
-      const tab = q.get('tab') ?? 'properties';
+      const tab = q.get('tab') ?? 'objects';
       this.activeTab.set(tab);
       this.loadTab(tab);
     });

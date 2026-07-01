@@ -6,6 +6,7 @@ import {
   OnInit,
   computed,
   inject,
+  input,
   DestroyRef,
   signal,
   viewChild,
@@ -125,7 +126,7 @@ import { ObjectUploadComponent } from './object-upload.component';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="space-y-4 p-6">
+    <section class="space-y-4" [class.p-6]="padded()">
       <ob-object-breadcrumb
         [bucket]="bucket()"
         [prefix]="prefix()"
@@ -806,6 +807,9 @@ export class ObjectBrowserComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
   private readonly sanitizer = inject(DomSanitizer);
+
+  /** When false (embedded in a tab), drop the outer p-6 so the host can pad. */
+  readonly padded = input(true);
 
   readonly bucket = signal('');
   readonly prefix = signal('');
