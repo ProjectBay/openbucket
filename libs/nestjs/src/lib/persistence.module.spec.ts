@@ -70,7 +70,7 @@ describe('PersistenceModule (TEST-0200)', () => {
     expect(Number(await pragma('temp_store'))).toBe(2); // MEMORY
     expect(Number(await pragma('mmap_size'))).toBeGreaterThanOrEqual(268_435_456);
     expect(Number(await pragma('cache_size'))).toBe(-65_536);
-    expect(Number(await pragma('synchronous'))).toBe(1); // NORMAL
+    expect(Number(await pragma('synchronous'))).toBe(2); // FULL (power-loss durable; was NORMAL)
   });
 
   it('case 3: a forked EM connection executes a trivial query', async () => {

@@ -102,6 +102,7 @@ export class BlobStore {
 
     await this.ensureDir(dirname(finalPath));
     await this.atomicRename(tmpPath, finalPath);
+    await this.fsyncDir(dirname(finalPath));
 
     return {
       size: bytesWritten,
@@ -144,6 +145,7 @@ export class BlobStore {
     }
 
     await this.atomicRename(tmpPath, finalPath); // last-rename-wins
+    await this.fsyncDir(dirname(finalPath));
     return { etag: md5.digest('hex'), size: bytesWritten };
   }
 
@@ -219,11 +221,14 @@ export class BlobStore {
   /**
    * Concatenate `parts` into a single blob at (destBucket, destKey). The
    * composed file is staged in tmp/ and renamed, preserving putBlob's atomicity.
+   * When `cipher` is supplied (SSE-S3), the composed bytes are encrypted on the
+   * way to disk while the ETag/SHA-256/size stay over the plaintext (F5).
    */
   async composeBlobs(
     parts: BlobRef[],
     destBucket: string,
     destKey: string,
+    cipher?: import('node:crypto').Cipher,
   ): Promise<PutResult> {
     await this.ensureDir(this.paths.tmpDir());
     const tmpName = `compose-${randomUUID()}`;
@@ -234,45 +239,81 @@ export class BlobStore {
     const sha = createHash('sha256');
     let bytesWritten = 0n;
 
+    // Concatenate the parts as one plaintext stream, tapping it for the hashes
+    // and byte count before the optional cipher transforms what hits disk.
+    const source = Readable.from(
+      (async function* () {
+        for (const part of parts) {
+          for await (const chunk of createReadStream(part.path) as AsyncIterable<Buffer>) {
+            md5.update(chunk);
+            sha.update(chunk);
+            bytesWritten += BigInt(chunk.length);
+            yield chunk;
+          }
+        }
+      })(),
+    );
+
     const sink = createWriteStream(tmpPath, { flags: 'wx' });
     try {
-      for (const part of parts) {
-        const partStream = createReadStream(part.path);
-        partStream.on('data', (chunk: Buffer) => {
-          md5.update(chunk);
-          sha.update(chunk);
-          bytesWritten += BigInt(chunk.length);
-        });
-        await new Promise<void>((resolve, reject) => {
-          partStream.on('error', reject);
-          partStream.on('end', resolve);
-          partStream.pipe(sink, { end: false });
-        });
-      }
-      await new Promise<void>((resolve, reject) => {
-        sink.end((err?: Error | null) => (err ? reject(err) : resolve()));
-      });
+      if (cipher) await pipeline(source, cipher, sink);
+      else await pipeline(source, sink);
       await this.fsyncFile(tmpPath);
     } catch (err) {
-      // Close the sink before unlinking — on Windows an open writable handle
-      // makes the file undeletable. Wait for the `close` event so the
-      // subsequent unlink isn't racing the OS handle release.
-      await new Promise<void>((resolve) => {
-        sink.once('close', () => resolve());
-        sink.destroy();
-      });
       await this.unlinkQuiet(tmpPath);
       throw err;
     }
 
     await this.ensureDir(dirname(finalPath));
     await this.atomicRename(tmpPath, finalPath);
+    await this.fsyncDir(dirname(finalPath));
     return {
       size: bytesWritten,
       etag: md5.digest('hex'),
       sha256: sha.digest('hex'),
       finalPath,
     };
+  }
+
+  // ----- overwrite crash-safety (F2/F3) ----------------------------------
+
+  /** Suffix marking an overwrite backup. Recovery treats these specially. */
+  static readonly BACKUP_MARK = '.ob-bak.';
+
+  /**
+   * Before an overwrite, hard-link the current blob aside so a failure or crash
+   * before the metadata commit can restore it (the overwrite is otherwise
+   * destructive-in-place). Returns the backup path, or null when there is no
+   * current blob (first write of this key). Hard-link (not copy): the old inode
+   * survives the subsequent rename-over, at zero I/O cost.
+   */
+  async backupCurrentBlob(bucket: string, key: string): Promise<string | null> {
+    const finalPath = this.paths.blobPath(bucket, key);
+    const backupPath = `${finalPath}${BlobStore.BACKUP_MARK}${randomUUID()}`;
+    try {
+      await fs.link(finalPath, backupPath);
+      return backupPath;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw err;
+    }
+  }
+
+  /**
+   * Restore a backup over the current blob, undoing a failed overwrite. Callers
+   * hold the per-key write lock, so dropping the failed new blob first (required
+   * because Windows rename won't replace an existing file) is safe.
+   */
+  async restoreBackupBlob(bucket: string, key: string, backupPath: string): Promise<void> {
+    const finalPath = this.paths.blobPath(bucket, key);
+    await this.unlinkQuiet(finalPath);
+    await this.atomicRename(backupPath, finalPath);
+    await this.fsyncDir(dirname(finalPath));
+  }
+
+  /** Drop a backup after a successful overwrite (best-effort). */
+  async discardBackupBlob(backupPath: string): Promise<void> {
+    await this.unlinkQuiet(backupPath);
   }
 
   // ----- internals -------------------------------------------------------
@@ -299,6 +340,25 @@ export class BlobStore {
   }
 
   /**
+   * fsync a directory so a rename into it is durable across power loss (a
+   * `rename(2)` alone syncs neither the entry nor the parent dir). Best-effort:
+   * some platforms (notably Windows) can't open/fsync a directory handle — the
+   * file's data blocks are already fsync'd, so we tolerate that.
+   */
+  private async fsyncDir(dir: string): Promise<void> {
+    try {
+      const fh = await fs.open(dir, 'r');
+      try {
+        await fh.sync();
+      } finally {
+        await fh.close();
+      }
+    } catch {
+      /* directory fsync unsupported on this platform — best effort */
+    }
+  }
+
+  /**
    * `rename(2)` is atomic only on the same filesystem. If `tmp/` and the
    * destination live on different mounts (containerised-volume misconfig),
    * Node returns `EXDEV` — fall back to copy + unlink (not atomic, but correct
@@ -314,6 +374,8 @@ export class BlobStore {
           'Check that DATA_DIR/tmp and DATA_DIR/blobs share a mount.',
       );
       await fs.copyFile(src, dst);
+      await this.fsyncFile(dst);
+      await this.fsyncDir(dirname(dst));
       await this.unlinkQuiet(src);
     }
   }

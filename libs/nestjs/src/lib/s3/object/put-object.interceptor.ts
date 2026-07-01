@@ -15,6 +15,7 @@ import {
 } from '../errors/s3-error';
 import type { ChunkSigningContext } from '../sigv4/chunk-signing';
 import { ChunkedDecoder } from './chunked-decoder';
+import { declaredChecksum, makeChecksummer, type Checksummer } from './checksums';
 
 /** Hashes and byte count, settled when the verified stream ends. */
 export interface PutObjectHashes {
@@ -151,6 +152,11 @@ export class PutObjectInterceptor implements NestInterceptor {
 
     const md5 = createHash('md5');
     const sha256 = createHash('sha256');
+    // S3 flexible checksum (x-amz-checksum-*): verify the declared digest against
+    // the received body and reject a mismatch with BadDigest (was previously
+    // ignored for regular PUTs — silent ingest corruption).
+    const checksum = declaredChecksum(req.headers as Record<string, string | string[] | undefined>);
+    const checksummer: Checksummer | undefined = checksum ? makeChecksummer(checksum.algo) : undefined;
     let bytes = 0;
     let aborted = false;
 
@@ -177,6 +183,7 @@ export class PutObjectInterceptor implements NestInterceptor {
         }
         md5.update(chunk);
         sha256.update(chunk);
+        checksummer?.update(chunk);
         cb(null, chunk);
       },
       flush(cb: TransformCallback) {
@@ -190,6 +197,9 @@ export class PutObjectInterceptor implements NestInterceptor {
         }
         if (verifySha && expectedSha256.toLowerCase() !== sha256Hex) {
           return cb(new XAmzContentSHA256MismatchError());
+        }
+        if (checksum && checksummer && checksummer.digestBase64() !== checksum.expected) {
+          return cb(new BadDigestError());
         }
         resolveHashes({ md5Hex, md5Base64, sha256Hex });
         resolveSize(bytes);

@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { raw, type EntityManager } from '@mikro-orm/core';
 import type { Request, Response } from 'express';
 import type { IncomingHttpHeaders } from 'node:http';
@@ -396,6 +397,16 @@ export class ObjectService {
     const readRange =
       obj.encryption && range ? { start: alignedStart(range.start), end: range.end } : range;
 
+    // F1: on a full GET of a single-part object, re-read the blob and verify its
+    // content matches the stored ETag BEFORE sending any bytes, so corruption at
+    // rest (bit-rot / tampering) is turned into a 500 instead of being served
+    // silently. Streaming can't retract bytes once sent under Content-Length, so
+    // this is a pre-read pass. (Range and multipart-ETag objects can't be
+    // whole-object verified this way — documented gap.)
+    if (!range && !obj.etag.includes('-')) {
+      await this.verifyBlobIntegrity(bucket, key, obj.etag, obj.encryption ?? undefined);
+    }
+
     let blob: { stream: import('node:fs').ReadStream };
     try {
       blob = await this.blobs.getBlob(bucket, key, readRange);
@@ -446,6 +457,45 @@ export class ObjectService {
     outStream.pipe(res);
     return undefined;
   }
+
+  /**
+   * Re-read a blob (decrypting if needed), recompute its MD5 ETag, and throw if
+   * it no longer matches the stored ETag — i.e. the bytes were corrupted at
+   * rest. getObject calls this as a pre-send integrity gate (F1) so corruption
+   * becomes a 500 rather than silently-served bytes.
+   */
+  private async verifyBlobIntegrity(
+    bucket: string,
+    key: string,
+    etag: string,
+    encryption?: { iv: string },
+  ): Promise<void> {
+    let stream: import('node:fs').ReadStream;
+    try {
+      ({ stream } = await this.blobs.getBlob(bucket, key));
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') throw new NoSuchKeyError(key);
+      throw err;
+    }
+    const md5 = createHash('md5');
+    const plaintext: NodeJS.ReadableStream = encryption
+      ? stream.pipe(createSseDecipher(this.sseKey.key(), Buffer.from(encryption.iv, 'base64')))
+      : stream;
+    await new Promise<void>((resolve, reject) => {
+      plaintext.on('data', (c: Buffer) => md5.update(c));
+      plaintext.on('end', () => resolve());
+      plaintext.on('error', reject);
+      if (plaintext !== stream) stream.on('error', reject);
+    });
+    const actual = md5.digest('hex');
+    if (actual !== etag) {
+      new Logger('ObjectService').error(
+        `integrity check FAILED for ${bucket}/${key}: on-disk md5=${actual} != stored ETag ${etag} (corrupted at rest)`,
+      );
+      throw new InternalError();
+    }
+  }
+
   /**
    * HEAD /:bucket/:key — metadata headers only, never a body (§2.8.3). Mirrors
    * GetObject's headers without streaming. NoSuchKey when absent/soft-deleted

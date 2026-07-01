@@ -86,21 +86,32 @@ describe('RecoveryService (TEST-0210)', () => {
     await fs.rm(dataDir, { recursive: true, force: true });
   });
 
-  it('case 1: an orphan blob (file with no objects row) is reported, not deleted', async () => {
+  it('case 1: an orphan blob is reported and deleted (a coexisting valid blob confirms DATA_DIR)', async () => {
     const em = orm.em.fork();
-    em.create(Bucket, { name: 'b' });
+    const bucket = em.create(Bucket, { name: 'b' });
+    // A valid object (row + blob) so the misconfiguration guard doesn't trip.
+    em.create(ObjectEntity, {
+      id: randomUUID(),
+      bucket,
+      key: 'valid-key',
+      size: 5n,
+      etag: 'a'.repeat(32),
+      createdAt: new Date(),
+      modifiedAt: new Date(),
+    });
     await em.flush();
+    await fs.mkdir(paths.bucketDir('b'), { recursive: true });
+    await fs.writeFile(paths.blobPath('b', 'valid-key'), 'valid');
 
     const orphanPath = paths.blobPath('b', 'orphan-key');
-    await fs.mkdir(paths.bucketDir('b'), { recursive: true });
     await fs.writeFile(orphanPath, 'orphan-bytes');
 
     const report = await svc.runScan();
-    expect(report.scanned.blobs).toBe(1);
     expect(report.orphanBlobs).toHaveLength(1);
     expect(report.orphanBlobs[0]).toMatchObject({ bucket: 'b', key: 'orphan-key' });
-    // case 4: not unlinked
-    expect(existsSync(orphanPath)).toBe(true);
+    expect(report.deletedOrphans).toBe(1);
+    expect(existsSync(orphanPath)).toBe(false); // F9: orphan removed
+    expect(existsSync(paths.blobPath('b', 'valid-key'))).toBe(true); // valid kept
   });
 
   it('case 2: a stale multipart directory is removed', async () => {
@@ -134,11 +145,13 @@ describe('RecoveryService (TEST-0210)', () => {
     expect(existsSync(liveDir)).toBe(true);
   });
 
-  it('case 4 (composed): orphan blob is preserved while stale mp is removed in the same scan', async () => {
+  it('case 4 (guard): every-blob-orphaned is treated as misconfiguration — kept, not deleted; stale mp still removed', async () => {
     const em = orm.em.fork();
     em.create(Bucket, { name: 'b' });
     await em.flush();
 
+    // The ONLY blob is an orphan → the misconfiguration guard refuses to delete
+    // (this looks like a wrong DATA_DIR, not a real crash orphan).
     const orphanPath = paths.blobPath('b', 'orphan');
     await fs.mkdir(paths.bucketDir('b'), { recursive: true });
     await fs.writeFile(orphanPath, 'data');
@@ -148,6 +161,7 @@ describe('RecoveryService (TEST-0210)', () => {
 
     const report = await svc.runScan();
     expect(report.orphanBlobs.map((o) => o.key)).toEqual(['orphan']);
+    expect(report.deletedOrphans).toBe(0);
     expect(report.removedMultipartDirs).toContain(staleDir);
     expect(existsSync(orphanPath)).toBe(true);
     expect(existsSync(staleDir)).toBe(false);

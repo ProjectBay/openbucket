@@ -58,6 +58,27 @@ export class MultipartService {
     private readonly serializer: XmlSerializer,
   ) {}
 
+  // Serialize Complete/Abort per uploadId (F7): otherwise two concurrent
+  // completes (or a complete racing an abort) both validate + compose, and one's
+  // staging cleanup can ENOENT the other mid-compose (spurious 500), or a
+  // completed upload gets re-completed. Keyed promise-chain mutex.
+  private readonly uploadLocks = new Map<string, Promise<void>>();
+
+  private async withUploadLock<T>(uploadId: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.uploadLocks.get(uploadId) ?? Promise.resolve();
+    let release!: () => void;
+    const mine = new Promise<void>((r) => (release = r));
+    const newTail = prev.then(() => mine);
+    this.uploadLocks.set(uploadId, newTail);
+    await prev.catch(() => undefined);
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (this.uploadLocks.get(uploadId) === newTail) this.uploadLocks.delete(uploadId);
+    }
+  }
+
   /**
    * GET /:bucket?uploads → `<ListMultipartUploadsResult>` (§2.8.2). Lists every
    * pending upload in the bucket, ordered by (key, initiated).
@@ -133,6 +154,19 @@ export class MultipartService {
    * area. Returns `<CompleteMultipartUploadResult>`.
    */
   async completeUpload(
+    req: Request,
+    res: Response,
+    bucket: string,
+    key: string,
+    uploadId: string,
+    declared: CompletePart[],
+  ): Promise<unknown> {
+    return this.withUploadLock(uploadId, () =>
+      this.completeUploadLocked(req, res, bucket, key, uploadId, declared),
+    );
+  }
+
+  private async completeUploadLocked(
     _req: Request,
     res: Response,
     bucket: string,
@@ -148,8 +182,12 @@ export class MultipartService {
     }
 
     const sorted = [...declared].sort((a, b) => a.partNumber - b.partNumber);
+    // Part numbers must be in [1, 10000] and unique; they need NOT be contiguous
+    // (real S3 permits sparse part numbers, e.g. [1, 2, 4]) — F10.
     for (let i = 0; i < sorted.length; i++) {
-      if (sorted[i].partNumber !== i + 1) throw new InvalidPartOrderError();
+      const pn = sorted[i].partNumber;
+      if (!Number.isInteger(pn) || pn < 1 || pn > 10_000) throw new InvalidPartError(pn);
+      if (i > 0 && pn === sorted[i - 1].partNumber) throw new InvalidPartOrderError();
     }
 
     const recorded = new Map(
@@ -198,6 +236,18 @@ export class MultipartService {
    * success; NoSuchUpload when the session is unknown.
    */
   async abortUpload(
+    req: Request,
+    res: Response,
+    bucket: string,
+    key: string,
+    uploadId: string,
+  ): Promise<undefined> {
+    return this.withUploadLock(uploadId, () =>
+      this.abortUploadLocked(req, res, bucket, key, uploadId),
+    );
+  }
+
+  private async abortUploadLocked(
     _req: Request,
     res: Response,
     _bucket: string,
@@ -369,7 +419,13 @@ function parseCopySource(header: string): { srcBucket: string; srcKey: string } 
   return { srcBucket: s.slice(0, slash), srcKey: s.slice(slash + 1) };
 }
 
-/** Strip the surrounding quotes S3 clients wrap around ETags. */
+/**
+ * Strip the surrounding quotes S3 clients wrap around ETags. Handles the
+ * XML entity form too (`&quot;`/`&#34;`): the request XML parser runs with
+ * processEntities:false for XXE safety, so an SDK that escapes the quotes in the
+ * CompleteMultipartUpload body (AWS SDK v3 does) would otherwise fail part
+ * matching. Decoding the quote entity here is safe (etag-only, no XXE surface).
+ */
 function dequote(etag: string): string {
-  return etag.replace(/^"|"$/g, '');
+  return etag.replace(/&quot;|&#34;/g, '"').replace(/^"|"$/g, '');
 }
