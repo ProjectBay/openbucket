@@ -22,6 +22,44 @@ env-limited where relevant.
 
 ---
 
+## 0. Remediation status — ALL FINDINGS FIXED
+
+Every finding was fixed on branch `fault-hardening`. The full nestjs unit suite
+(523 passing, 3 pre-existing skips) and the fault-audit suite
+(`node tests/fault/run-all.mjs`, **0 violations**) are green.
+
+| # | Finding | Fix | Commit |
+|---|---|---|---|
+| F1 | Silent corruption at rest | getObject re-reads + verifies blob hash vs. stored ETag before sending; 500 on mismatch | cd16d9e |
+| F2 | Failed overwrite destroys object | hard-link the old blob aside; restore inline on error | cd16d9e |
+| F3 | Crash → row↔content mismatch | backup-aside + recovery reconcile; per-key write lock | cd16d9e |
+| F4 | `x-amz-checksum-*` ignored | verify every declared checksum (crc32/crc32c/sha1/sha256) on ingest | 45f2c36 |
+| F5 | Multipart bypasses SSE | composeBlobs/putComposed encrypt + store per-object IV | 814da5c |
+| F6 | Concurrent same-key tear | per-(bucket,key) write mutex | cd16d9e |
+| F7 | Multipart Complete/Abort races | per-uploadId mutex | e83ce4c |
+| F8 | Power-loss barriers | directory fsync after rename + SQLite `synchronous=FULL` | 45f2c36 |
+| F9 | Orphan blobs never deleted | recovery reaps orphans (misconfiguration-guarded) | ad155e7 |
+| F10 | Non-contiguous parts rejected | accept sparse part numbers; reject duplicates | ad155e7 |
+| F11 | EXDEV copy not fsync'd | fsync dest + dir after the copy fallback | 45f2c36 |
+| bonus | Multipart Complete failed for AWS SDK v3 (XML-escaped `&quot;` ETag) | `dequote` decodes the quote entity | 814da5c |
+
+Two deliberate approach choices:
+
+- **F1 uses read-time hash verification, not AES-GCM.** The corruption repro is on
+  a *non-encrypted* bucket, so GCM alone wouldn't close it; read-verify covers
+  encrypted *and* plaintext objects, preserves Range GETs, and needs no migration.
+  It detects corruption on full GETs of single-part objects (Range and
+  multipart-ETag reads remain a documented gap — whole-object verification can't
+  cover a partial read). SSE stays AES-256-CTR.
+- **F2/F3 use backup-aside + recovery reconcile, not content-addressed paths.** It
+  achieves the same crash-atomic-overwrite guarantee (a failed or half-written
+  overwrite never loses the prior object) with no entity change or DB migration.
+
+The attack scripts now assert the FIXED behavior, so `node tests/fault/run-all.mjs`
+is a regression gate: it exits 0 today and non-zero if any fix regresses.
+
+---
+
 ## 1. Guarantee map (Phase 0)
 
 | # | Claimed guarantee (source) | Enforcing / violating code | Failure that breaks it | Status |
