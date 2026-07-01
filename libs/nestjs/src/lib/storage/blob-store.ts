@@ -278,6 +278,47 @@ export class BlobStore {
     };
   }
 
+  // ----- overwrite crash-safety (F2/F3) ----------------------------------
+
+  /** Suffix marking an overwrite backup. Recovery treats these specially. */
+  static readonly BACKUP_MARK = '.ob-bak.';
+
+  /**
+   * Before an overwrite, hard-link the current blob aside so a failure or crash
+   * before the metadata commit can restore it (the overwrite is otherwise
+   * destructive-in-place). Returns the backup path, or null when there is no
+   * current blob (first write of this key). Hard-link (not copy): the old inode
+   * survives the subsequent rename-over, at zero I/O cost.
+   */
+  async backupCurrentBlob(bucket: string, key: string): Promise<string | null> {
+    const finalPath = this.paths.blobPath(bucket, key);
+    const backupPath = `${finalPath}${BlobStore.BACKUP_MARK}${randomUUID()}`;
+    try {
+      await fs.link(finalPath, backupPath);
+      return backupPath;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw err;
+    }
+  }
+
+  /**
+   * Restore a backup over the current blob, undoing a failed overwrite. Callers
+   * hold the per-key write lock, so dropping the failed new blob first (required
+   * because Windows rename won't replace an existing file) is safe.
+   */
+  async restoreBackupBlob(bucket: string, key: string, backupPath: string): Promise<void> {
+    const finalPath = this.paths.blobPath(bucket, key);
+    await this.unlinkQuiet(finalPath);
+    await this.atomicRename(backupPath, finalPath);
+    await this.fsyncDir(dirname(finalPath));
+  }
+
+  /** Drop a backup after a successful overwrite (best-effort). */
+  async discardBackupBlob(backupPath: string): Promise<void> {
+    await this.unlinkQuiet(backupPath);
+  }
+
   // ----- internals -------------------------------------------------------
 
   private async ensureDir(path: string): Promise<void> {

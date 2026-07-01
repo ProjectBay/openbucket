@@ -11,10 +11,13 @@ import { OPEN_BUCKET_ORM_CONTEXT } from '../persistence/orm-context';
 
 import { PathResolver } from './paths';
 import { decodeKey } from './key-codec';
+import { BlobStore } from './blob-store';
 
 export interface OrphanReport {
   orphanBlobs: { path: string; bucket: string; key: string }[];
   removedMultipartDirs: string[];
+  /** Overwrite backups reconciled after a crash: restored (old kept) or discarded. */
+  reconciledBackups: { restored: number; discarded: number };
   scanned: { blobs: number; multipart: number };
 }
 
@@ -51,7 +54,9 @@ export class RecoveryService implements OnApplicationBootstrap {
     this.log.log(
       `recovery scan: ${report.scanned.blobs} blobs, ${report.scanned.multipart} multipart dirs ` +
         `in ${Date.now() - t0}ms; ${report.orphanBlobs.length} orphan blobs, ` +
-        `${report.removedMultipartDirs.length} stale multipart dirs cleaned`,
+        `${report.removedMultipartDirs.length} stale multipart dirs cleaned, ` +
+        `${report.reconciledBackups.restored} overwrite(s) restored / ` +
+        `${report.reconciledBackups.discarded} backup(s) discarded`,
     );
     if (report.orphanBlobs.length > 0) {
       // Log first 50 so the operator can investigate without grepping disk.
@@ -64,6 +69,7 @@ export class RecoveryService implements OnApplicationBootstrap {
   async runScan(): Promise<OrphanReport> {
     const orphanBlobs: OrphanReport['orphanBlobs'] = [];
     const removedMultipartDirs: string[] = [];
+    const reconciledBackups = { restored: 0, discarded: 0 };
     let blobsScanned = 0;
     let multipartScanned = 0;
 
@@ -85,6 +91,15 @@ export class RecoveryService implements OnApplicationBootstrap {
           // Skip version-store directories — reconciled via ObjectVersion rows.
           const rel = relative(bucketRoot, filePath);
           if (rel.includes('.v' + sep) || rel.includes('.v/')) continue;
+
+          // Overwrite backup left by a crash (F2/F3): reconcile against the row
+          // instead of treating it as an orphan/key.
+          if (rel.includes(BlobStore.BACKUP_MARK)) {
+            const outcome = await this.reconcileBackup(em, bucket, bucketRoot, filePath, rel);
+            if (outcome === 'restored') reconciledBackups.restored++;
+            else reconciledBackups.discarded++;
+            continue;
+          }
 
           const decoded = decodeKey(rel.replaceAll('\\', '/'));
           const row = await em.findOne(
@@ -123,8 +138,56 @@ export class RecoveryService implements OnApplicationBootstrap {
     return {
       orphanBlobs,
       removedMultipartDirs,
+      reconciledBackups,
       scanned: { blobs: blobsScanned, multipart: multipartScanned },
     };
+  }
+
+  /**
+   * Reconcile an overwrite backup (`<blob>.ob-bak.<uuid>`) left by a crash
+   * mid-overwrite. The committed row is the source of truth:
+   *  - no row → object gone; discard the backup.
+   *  - current blob missing, or its size ≠ the row's size (an uncommitted new
+   *    blob sitting where the committed old one should be) → restore the backup.
+   *  - sizes match → the overwrite committed (or a same-size overwrite that
+   *    getObject's read-time hash check backstops); discard the backup.
+   * Size (not hash) keeps recovery cheap and cipher-agnostic (stream ciphers
+   * preserve length); the read-time integrity check catches same-size mismatches.
+   */
+  private async reconcileBackup(
+    em: EntityManager,
+    bucket: string,
+    bucketRoot: string,
+    backupPath: string,
+    rel: string,
+  ): Promise<'restored' | 'discarded'> {
+    const finalRel = rel.slice(0, rel.lastIndexOf(BlobStore.BACKUP_MARK));
+    const key = decodeKey(finalRel.replaceAll('\\', '/'));
+    const finalPath = join(bucketRoot, finalRel);
+    const row = await em.findOne(
+      ObjectEntity,
+      { bucket: { name: bucket }, key },
+      { fields: ['id', 'size'] },
+    );
+    if (!row) {
+      await fs.rm(backupPath, { force: true });
+      return 'discarded';
+    }
+    let finalSize = -1;
+    try {
+      finalSize = (await fs.stat(finalPath)).size;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    }
+    if (finalSize === -1 || finalSize !== Number(row.size)) {
+      // Uncommitted overwrite — put the committed old blob back.
+      await fs.rm(finalPath, { force: true });
+      await fs.rename(backupPath, finalPath);
+      this.log.warn(`reconciled interrupted overwrite: restored ${bucket}/${key}`);
+      return 'restored';
+    }
+    await fs.rm(backupPath, { force: true });
+    return 'discarded';
   }
 
   private async *walk(root: string): AsyncIterable<string> {

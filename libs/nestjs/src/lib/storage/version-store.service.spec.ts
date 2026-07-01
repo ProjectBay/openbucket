@@ -235,7 +235,15 @@ describe('VersionStoreService + demote-on-write (TEST-0213)', () => {
     try {
       await writer.put({ bucket: 'b', key: 'z', body: Readable.from(['only']) });
       await writer.put({ bucket: 'b', key: 'z', body: Readable.from(['updated']) });
-      expect(linkSpy).not.toHaveBeenCalled();
+      // Demote hard-links the current pointer into the `.v/` version dir. A
+      // Disabled bucket must never do that. (The overwrite DOES hard-link the old
+      // blob aside as an `.ob-bak.` backup for crash-safety — F2/F3 — which is
+      // expected; assert only that no demote link into `.v/` happened.)
+      const demoteLinks = linkSpy.mock.calls.filter(([, dst]) => {
+        const d = String(dst);
+        return d.includes('.v/') || d.includes('.v\\');
+      });
+      expect(demoteLinks).toHaveLength(0);
     } finally {
       linkSpy.mockRestore();
     }
