@@ -9,7 +9,14 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **Admin console (default "compact" layout) showed no page title or primary
+  action button.** The compact shell rendered only the page *subtitle*, so page
+  titles (e.g. "Buckets") and the header's primary action (e.g. "Create bucket")
+  were invisible on the default layout. Compact now renders the full page header
+  like the inset/sticky variants. The `PageHeaderService` also resets on
+  navigation so header state never leaks between routes.
 
 ## [0.1.0-alpha.4] — 2026-07-02
 

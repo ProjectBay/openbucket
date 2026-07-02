@@ -46,7 +46,7 @@ import { SidebarConfig } from '../types';
     }),
   ],
   template: `
-    @for (group of config().groups; track group.id) {
+    @for (group of visibleGroups(); track group.id) {
       @if (group.collapsible) {
         <hlm-collapsible
           [expanded]="group.defaultOpen ?? false"
@@ -305,6 +305,14 @@ export class SidebarRendererComponent {
   private readonly _sidebarService = inject(HlmSidebarService);
 
   public readonly config = input.required<SidebarConfig>();
+
+  /**
+   * Drop groups that have no items so a conditionally-populated group never
+   * renders a bare section header/label. Static configs are unaffected.
+   */
+  protected readonly visibleGroups = computed(() =>
+    this.config().groups.filter((group) => group.items.length > 0),
+  );
 
   protected readonly Array = Array;
 
