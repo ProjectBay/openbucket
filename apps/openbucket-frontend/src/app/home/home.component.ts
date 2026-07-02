@@ -22,6 +22,7 @@ import { HlmEmptyImports } from '@openbucket/spartan-ui/empty';
 
 import { ByteSizePipe } from '../shared/ui/byte-size.pipe';
 import { RelativeTimePipe } from '../shared/ui/relative-time.pipe';
+import { StatCardComponent } from '../shared/ui/stat-card.component';
 import { BucketsSignalStore } from '../buckets/buckets.signal-store';
 import { PageHeaderService } from '../layout/shell/services';
 
@@ -42,6 +43,7 @@ import { PageHeaderService } from '../layout/shell/services';
     HlmEmptyImports,
     ByteSizePipe,
     RelativeTimePipe,
+    StatCardComponent,
   ],
   providers: [
     provideIcons({ lucideDatabase, lucideFile, lucideHardDrive, lucideKey, lucidePlus }),
@@ -63,51 +65,24 @@ import { PageHeaderService } from '../layout/shell/services';
         </div>
       } @else {
         <div class="grid gap-4 sm:grid-cols-3">
-          <div hlmCard>
-            <div
-              hlmCardHeader
-              class="flex-row items-center justify-between gap-2 pb-2"
-            >
-              <span hlmCardDescription>{{ 'dashboard.totalBuckets' | translate }}</span>
-              <ng-icon
-                name="lucideDatabase"
-                class="text-muted-foreground text-base"
-              />
-            </div>
-            <div hlmCardContent>
-              <p class="text-2xl font-semibold tabular-nums">{{ store.count() }}</p>
-            </div>
-          </div>
-          <div hlmCard>
-            <div
-              hlmCardHeader
-              class="flex-row items-center justify-between gap-2 pb-2"
-            >
-              <span hlmCardDescription>{{ 'dashboard.totalObjects' | translate }}</span>
-              <ng-icon
-                name="lucideFile"
-                class="text-muted-foreground text-base"
-              />
-            </div>
-            <div hlmCardContent>
-              <p class="text-2xl font-semibold tabular-nums">{{ totalObjects() }}</p>
-            </div>
-          </div>
-          <div hlmCard>
-            <div
-              hlmCardHeader
-              class="flex-row items-center justify-between gap-2 pb-2"
-            >
-              <span hlmCardDescription>{{ 'dashboard.totalSize' | translate }}</span>
-              <ng-icon
-                name="lucideHardDrive"
-                class="text-muted-foreground text-base"
-              />
-            </div>
-            <div hlmCardContent>
-              <p class="text-2xl font-semibold tabular-nums">{{ totalSize() | byteSize }}</p>
-            </div>
-          </div>
+          <ob-stat-card
+            label="dashboard.totalBuckets"
+            [value]="store.count()"
+            icon="lucideDatabase"
+            [loading]="store.loading()"
+          />
+          <ob-stat-card
+            label="dashboard.totalObjects"
+            [value]="totalObjects()"
+            icon="lucideFile"
+            [loading]="store.loading()"
+          />
+          <ob-stat-card
+            label="dashboard.totalSize"
+            [value]="totalSize() | byteSize"
+            icon="lucideHardDrive"
+            [loading]="store.loading()"
+          />
         </div>
 
         <div class="grid gap-4 md:grid-cols-2">
