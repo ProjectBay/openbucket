@@ -26,6 +26,7 @@ import { ObjectWriterService } from './object-writer.service';
 import { decryptBuffer } from './sse-cipher';
 import { Migration20260520000001_initial } from '../migrations/Migration20260520000001_initial';
 import { Migration20260625000001_object_encryption } from '../migrations/Migration20260625000001_object_encryption';
+import { Migration20260701000001_object_content_sha256 } from '../migrations/Migration20260701000001_object_content_sha256';
 
 const ENTITIES = [
   Bucket,
@@ -68,6 +69,7 @@ describe('ObjectWriterService (TEST-0209)', () => {
         migrationsList: [
           { name: 'Migration20260520000001_initial', class: Migration20260520000001_initial },
           { name: 'Migration20260625000001_object_encryption', class: Migration20260625000001_object_encryption },
+          { name: 'Migration20260701000001_object_content_sha256', class: Migration20260701000001_object_content_sha256 },
         ],
       },
       pool: {

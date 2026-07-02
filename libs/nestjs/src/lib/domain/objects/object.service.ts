@@ -116,6 +116,14 @@ function groupByDelimiter(
  */
 @Injectable()
 export class ObjectService {
+  /**
+   * Cap for read-time integrity verification of Range GETs: verifying a range
+   * requires reading the WHOLE object, so above this size a range read is served
+   * unverified rather than re-reading gigabytes per request (F1 documented
+   * trade-off; per-block checksums would lift it). Full GETs are always verified.
+   */
+  private static readonly RANGE_VERIFY_MAX_BYTES = 64 * 1024 * 1024;
+
   constructor(
     private readonly writer: ObjectWriterService,
     private readonly buckets: BucketRepository,
@@ -397,14 +405,19 @@ export class ObjectService {
     const readRange =
       obj.encryption && range ? { start: alignedStart(range.start), end: range.end } : range;
 
-    // F1: on a full GET of a single-part object, re-read the blob and verify its
-    // content matches the stored ETag BEFORE sending any bytes, so corruption at
-    // rest (bit-rot / tampering) is turned into a 500 instead of being served
-    // silently. Streaming can't retract bytes once sent under Content-Length, so
-    // this is a pre-read pass. (Range and multipart-ETag objects can't be
-    // whole-object verified this way — documented gap.)
-    if (!range && !obj.etag.includes('-')) {
-      await this.verifyBlobIntegrity(bucket, key, obj.etag, obj.encryption ?? undefined);
+    // F1 read-time integrity: recompute the whole-object SHA-256 and compare it
+    // to the stored contentSha256 BEFORE sending any bytes, so corruption at rest
+    // (bit-rot / tampering) becomes a 500 instead of silently-served data. The
+    // strong whole-object digest covers multipart objects too (whose ETag is
+    // md5-of-md5s and can't be recomputed on read). Streaming can't retract bytes
+    // once sent under Content-Length, so this is a pre-read pass. A Range read
+    // must read the WHOLE object to verify, so it's capped at
+    // RANGE_VERIFY_MAX_BYTES — above that a range GET is served unverified (a
+    // full re-read would defeat the point of a range request; per-block checksums
+    // are the scalable follow-up). Objects written before contentSha256 existed
+    // (nullable) are skipped.
+    if (obj.contentSha256 && (!range || size <= ObjectService.RANGE_VERIFY_MAX_BYTES)) {
+      await this.verifyBlobIntegrity(bucket, key, obj.contentSha256, obj.encryption ?? undefined);
     }
 
     let blob: { stream: import('node:fs').ReadStream };
@@ -459,15 +472,16 @@ export class ObjectService {
   }
 
   /**
-   * Re-read a blob (decrypting if needed), recompute its MD5 ETag, and throw if
-   * it no longer matches the stored ETag — i.e. the bytes were corrupted at
-   * rest. getObject calls this as a pre-send integrity gate (F1) so corruption
-   * becomes a 500 rather than silently-served bytes.
+   * Re-read a blob (decrypting if needed), recompute its whole-object SHA-256,
+   * and throw if it no longer matches the stored contentSha256 — i.e. the bytes
+   * were corrupted at rest. getObject calls this as a pre-send integrity gate
+   * (F1) so corruption becomes a 500 rather than silently-served bytes. Works
+   * for single-part and multipart objects alike (the digest is over plaintext).
    */
   private async verifyBlobIntegrity(
     bucket: string,
     key: string,
-    etag: string,
+    expectedSha256: string,
     encryption?: { iv: string },
   ): Promise<void> {
     let stream: import('node:fs').ReadStream;
@@ -477,20 +491,20 @@ export class ObjectService {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') throw new NoSuchKeyError(key);
       throw err;
     }
-    const md5 = createHash('md5');
+    const sha = createHash('sha256');
     const plaintext: NodeJS.ReadableStream = encryption
       ? stream.pipe(createSseDecipher(this.sseKey.key(), Buffer.from(encryption.iv, 'base64')))
       : stream;
     await new Promise<void>((resolve, reject) => {
-      plaintext.on('data', (c: Buffer) => md5.update(c));
+      plaintext.on('data', (c: Buffer) => sha.update(c));
       plaintext.on('end', () => resolve());
       plaintext.on('error', reject);
       if (plaintext !== stream) stream.on('error', reject);
     });
-    const actual = md5.digest('hex');
-    if (actual !== etag) {
+    const actual = sha.digest('hex');
+    if (actual !== expectedSha256) {
       new Logger('ObjectService').error(
-        `integrity check FAILED for ${bucket}/${key}: on-disk md5=${actual} != stored ETag ${etag} (corrupted at rest)`,
+        `integrity check FAILED for ${bucket}/${key}: on-disk sha256=${actual} != stored ${expectedSha256} (corrupted at rest)`,
       );
       throw new InternalError();
     }

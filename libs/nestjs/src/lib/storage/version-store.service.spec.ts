@@ -25,6 +25,7 @@ import { BlobStore } from './blob-store';
 import { ObjectWriterService } from './object-writer.service';
 import { VersionStoreService } from './version-store.service';
 import { Migration20260520000001_initial } from '../migrations/Migration20260520000001_initial';
+import { Migration20260701000001_object_content_sha256 } from '../migrations/Migration20260701000001_object_content_sha256';
 
 const ENTITIES = [
   Bucket,
@@ -67,7 +68,10 @@ describe('VersionStoreService + demote-on-write (TEST-0213)', () => {
       forceUtcTimezone: true,
       extensions: [Migrator],
       migrations: {
-        migrationsList: [{ name: 'Migration20260520000001_initial', class: Migration20260520000001_initial }],
+        migrationsList: [
+          { name: 'Migration20260520000001_initial', class: Migration20260520000001_initial },
+          { name: 'Migration20260701000001_object_content_sha256', class: Migration20260701000001_object_content_sha256 },
+        ],
       },
       pool: {
         afterCreate: (conn: any, done: (err?: Error) => void) => {

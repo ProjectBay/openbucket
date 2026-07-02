@@ -22,6 +22,10 @@ export class ObjectVersion {
   @Property({ type: 'string', length: 64 })
   etag!: string;
 
+  /** Hex SHA-256 of this version's plaintext bytes — read-time integrity (F1). */
+  @Property({ type: 'string', length: 64, nullable: true })
+  contentSha256?: string;
+
   @Property({ type: 'string', length: 255, default: 'application/octet-stream' })
   contentType = 'application/octet-stream';
 

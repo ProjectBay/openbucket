@@ -31,6 +31,16 @@ export class ObjectEntity {
   @Property({ type: 'string', length: 64 })
   etag!: string;
 
+  /**
+   * Hex SHA-256 of the object's PLAINTEXT bytes (whole object). Unlike `etag`
+   * (md5-of-md5s for multipart), this is a single strong digest over the entire
+   * content, so getObject can verify integrity on read for ANY object —
+   * single-part or multipart — the read-time integrity gate (F1). Nullable:
+   * objects written before this column existed are simply not read-verified.
+   */
+  @Property({ type: 'string', length: 64, nullable: true })
+  contentSha256?: string;
+
   @Property({ type: 'string', length: 255, default: 'application/octet-stream' })
   contentType = 'application/octet-stream';
 
