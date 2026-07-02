@@ -9,6 +9,10 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.1.0-alpha.4] — 2026-07-02
+
 ### Fixed
 
 - **Admin console was unusable under a non-root `mountPath`** (e.g.
@@ -104,7 +108,8 @@ feature-complete and tested; APIs may still change before 1.0.
 
 - Dropped a dead `objects.signal-store.ts` scaffold stub from the frontend.
 
-[Unreleased]: https://github.com/ProjectBay/openbucket/compare/nestjs-v0.1.0-alpha.3...HEAD
+[Unreleased]: https://github.com/ProjectBay/openbucket/compare/nestjs-v0.1.0-alpha.4...HEAD
+[0.1.0-alpha.4]: https://github.com/ProjectBay/openbucket/compare/nestjs-v0.1.0-alpha.3...nestjs-v0.1.0-alpha.4
 [0.1.0-alpha.3]: https://github.com/ProjectBay/openbucket/compare/nestjs-v0.1.0-alpha.2...nestjs-v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/ProjectBay/openbucket/compare/nestjs-v0.1.0-alpha.1...nestjs-v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/ProjectBay/openbucket/releases/tag/nestjs-v0.1.0-alpha.1
