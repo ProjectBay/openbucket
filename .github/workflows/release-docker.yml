@@ -10,7 +10,7 @@
 # set the GHCR package visibility to Public (repo → Packages → openbucket →
 # Package settings → Change visibility) so `docker pull` works unauthenticated.
 #
-# Multi-arch: linux/amd64 + linux/arm64 (buildx + QEMU). better-sqlite3 and
+# Multi-arch: linux/amd64 + linux/arm64 (buildx + QEMU). libsql (N-API) and
 # argon2 ship prebuilt binaries for both, so `npm ci` fetches them rather than
 # compiling under emulation; the Dockerfile's build toolchain is the fallback.
 #

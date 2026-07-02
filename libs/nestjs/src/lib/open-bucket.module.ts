@@ -11,6 +11,7 @@ import {
   OpenBucketModuleAsyncOptions,
   OpenBucketModuleOptions,
   resolveOptions,
+  validateSecurityCriticalOptions,
 } from './open-bucket-options';
 import { OpenBucketService } from './open-bucket.service';
 import { S3Module } from './s3/s3.module';
@@ -65,6 +66,9 @@ function mountUnder(
 export class OpenBucketModule {
   static forRoot(options: OpenBucketModuleOptions): DynamicModule {
     const resolved = resolveOptions(options);
+    // Fail fast on malformed secrets (bad hash, short jwt/secret) — see
+    // validateSecurityCriticalOptions; presence is already covered above.
+    validateSecurityCriticalOptions(resolved);
     // Admin is opt-in: present `admin` ⇒ the JSON API + JWT guard + bootstrap are
     // wired (OpenBucketCoreModule); absent ⇒ none of them are, the SPA is never
     // served, and the headless core is mounted instead.
@@ -111,6 +115,9 @@ export class OpenBucketModule {
               'to disable the admin surface.',
           );
         }
+        // Fail fast on malformed secrets (bad hash, short jwt/secret) — same
+        // guarantee as the standalone env schema. See validateSecurityCriticalOptions.
+        validateSecurityCriticalOptions(resolved);
         return resolved;
       },
       inject: options.inject ?? [],

@@ -8,7 +8,7 @@ const { join } = require('path');
 // `require('@openbucket/nestjs')` that resolves to the package's uncompiled
 // `src/index.js` (only `src/index.ts` exists in the source tree) and crashed the
 // standalone app at startup. Bundling it keeps `main.js` self-contained; native deps
-// (better-sqlite3, argon2, …) stay external because they remain in this list.
+// (libsql, argon2, …) stay external because they remain in this list.
 const externalDependencies = Object.keys(require('./package.json').dependencies).filter(
   (dep) => dep !== '@openbucket/nestjs',
 );

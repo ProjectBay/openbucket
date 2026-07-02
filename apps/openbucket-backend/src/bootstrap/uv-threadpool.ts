@@ -2,7 +2,7 @@
  * Side-effect module: size the libuv thread pool before anything that uses it.
  *
  * Imported FIRST in main.ts. ES module imports execute their side effects in
- * source order, so this runs before @nestjs/*, better-sqlite3, etc. are
+ * source order, so this runs before @nestjs/*, libsql, etc. are
  * evaluated — which is the only reliable way to set UV_THREADPOOL_SIZE from
  * inside the bundle (a literal "first line" can't precede hoisted imports).
  * The production Dockerfile also sets `ENV UV_THREADPOOL_SIZE=16` as the

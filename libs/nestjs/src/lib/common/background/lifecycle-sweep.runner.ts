@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 import { InjectEntityManager } from '@mikro-orm/nestjs';
 
 import { OPEN_BUCKET_ORM_CONTEXT } from '../../persistence/orm-context';

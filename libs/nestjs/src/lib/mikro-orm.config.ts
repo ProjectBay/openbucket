@@ -1,5 +1,5 @@
 import { ReflectMetadataProvider } from '@mikro-orm/core';
-import { defineConfig } from '@mikro-orm/better-sqlite';
+import { defineConfig } from '@mikro-orm/libsql';
 import { Migrator } from '@mikro-orm/migrations';
 import { join } from 'node:path';
 import {
@@ -25,7 +25,11 @@ import {
 const DATA_DIR = process.env.DATA_DIR ?? '/data';
 
 export default defineConfig({
-  // better-sqlite3 driver — synchronous binding, fastest for embedded use.
+  // libsql driver — a better-sqlite3-compatible synchronous binding, fastest for
+  // embedded use. Chosen over better-sqlite3 because libsql ships its native addon
+  // as N-API prebuilds via platform-specific optionalDependencies (@libsql/*): those
+  // install without a build/compile step (works under pnpm's default script blocking)
+  // and are ABI-stable across Node majors, so no per-Node-version prebuild is needed.
   dbName: join(DATA_DIR, 'openbucket.db'),
 
   // Entities discovered explicitly. No glob scan — startup must be deterministic
@@ -68,13 +72,13 @@ export default defineConfig({
     snapshot: true,
   },
 
-  // WAL + tuning PRAGMAs. Runs once per connection. better-sqlite3 opens a
-  // single connection per process so this fires exactly once at boot.
+  // WAL + tuning PRAGMAs. Runs once per connection. libsql opens a single
+  // connection per process so this fires exactly once at boot.
   pool: {
     afterCreate: (conn: any, done: (err?: Error) => void) => {
       try {
-        // .pragma() is better-sqlite3 native; avoids prepared-statement
-        // caching of one-shot PRAGMAs.
+        // .pragma() is the better-sqlite3-compatible native form libsql exposes;
+        // avoids prepared-statement caching of one-shot PRAGMAs.
         conn.pragma('journal_mode = WAL');
         // FULL: fsync the WAL per commit so committed metadata survives power
         // loss (matches the blob fsync); NORMAL can drop the last commit(s).

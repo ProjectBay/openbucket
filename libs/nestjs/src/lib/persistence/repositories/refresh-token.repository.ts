@@ -1,4 +1,4 @@
-import { EntityRepository } from '@mikro-orm/better-sqlite';
+import { EntityRepository } from '@mikro-orm/libsql';
 import { v7 as uuidv7 } from 'uuid';
 
 import { RefreshToken } from '../entities/refresh-token.entity';

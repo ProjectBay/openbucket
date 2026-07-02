@@ -1,4 +1,5 @@
 import type { ModuleMetadata, Type } from '@nestjs/common';
+import { z } from 'zod';
 
 /**
  * Configuration for {@link OpenBucketModule}. Replaces the standalone app's
@@ -152,6 +153,49 @@ export function resolveOptions(o: OpenBucketModuleOptions): ResolvedOpenBucketOp
       multipartTtlHours: o.limits?.multipartTtlHours ?? 24,
     },
   };
+}
+
+/**
+ * Fail-fast validation of the security-critical option **formats** (beyond the
+ * presence checks in {@link resolveOptions}). Mirrors the corresponding subset
+ * of `common/config/env.schema.ts` — the standalone app's refuse-to-boot schema
+ * — so an embedder gets the same guarantee at boot instead of a silent
+ * misconfiguration that only surfaces later: a non-argon2id `passwordHash` or a
+ * too-short `jwtSecret` at first admin login, a too-short secret key at the
+ * first signed S3 request.
+ *
+ * Intentionally does **not** enforce the AWS-shaped `ROOT_ACCESS_KEY_ID` regex
+ * (`^[A-Z0-9]{16,32}$`): library callers may use arbitrary access-key strings
+ * (the SigV4 verifier compares them literally), so requiring the AWS format
+ * would be a needless breaking constraint on host apps. See `config-source.ts`.
+ */
+export function validateSecurityCriticalOptions(o: ResolvedOpenBucketOptions): void {
+  const schema = z.object({
+    rootCredentials: z.object({
+      secretAccessKey: z
+        .string()
+        .min(32, 'rootCredentials.secretAccessKey must be at least 32 characters'),
+    }),
+    sseKey: z
+      .string()
+      .refine((v) => Buffer.from(v, 'base64').length === 32, 'sseKey must be base64 of 32 bytes')
+      .optional(),
+    admin: z
+      .object({
+        jwtSecret: z.string().min(32, 'admin.jwtSecret must be at least 32 characters'),
+        passwordHash: z
+          .string()
+          .regex(/^\$argon2id\$/, 'admin.passwordHash must be an argon2id hash'),
+      })
+      .optional(),
+  });
+  const result = schema.safeParse(o);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
+      .join('\n');
+    throw new Error(`OpenBucketModule: invalid configuration (fix before boot):\n${issues}`);
+  }
 }
 
 /** Leading slash, no trailing slash; `''` (root) allowed. */

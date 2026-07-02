@@ -1,4 +1,4 @@
-import { EntityRepository } from '@mikro-orm/better-sqlite';
+import { EntityRepository } from '@mikro-orm/libsql';
 
 import { AdminUser } from '../entities/admin-user.entity';
 

@@ -28,13 +28,13 @@ Each section is implementable from the code it contains. Cross-references betwee
 |---|---|
 | HTTP platform | Express adapter |
 | Module topology | One Nest app, two controller trees (S3 + Admin) sharing services |
-| ORM | MikroORM + `better-sqlite3` |
+| ORM | MikroORM + `libsql` (SQLite) |
 | Validation | `nestjs-zod` (Zod-derived DTOs, swagger-integrated) |
 | Logging | `nestjs-pino` |
 | Admin auth | JWT access (15 m) + refresh in HttpOnly cookie scoped to `/api/admin/auth` |
 | S3 auth | SigV4 reverse-verify via `aws4`; chunked-payload signing rejected in v1 |
 | Frontend contract | OpenAPI 3 → generated Angular client |
-| Image base | `node:22-bookworm-slim` (not alpine — `better-sqlite3` glibc dependency) |
+| Image base | `node:22-bookworm-slim` (not alpine — `argon2` glibc dependency; `libsql` has both glibc/musl N-API prebuilds) |
 | Testing | Unit + e2e (supertest) + S3 conformance (aws-cli, mc, s3cmd) |
 
 ---
@@ -925,7 +925,7 @@ A clean SIGTERM is the difference between zero-downtime deploys and corrupted mu
 2. Tell the HTTP server to stop accepting new connections (`server.close()` callback resolves when in-flight requests finish).
 3. Wait up to `SHUTDOWN_DRAIN_MS` (default 30 s) for in-flight requests to complete. The `ShutdownTrackerInterceptor` keeps a counter; when it hits zero we proceed immediately.
 4. Cancel background tasks (lifecycle tick, multipart sweep — owned by the streaming agent [see §4]) by emitting on an `AbortController` they observe.
-5. Close MikroORM (flush WAL, close better-sqlite3).
+5. Close MikroORM (flush WAL, close libsql).
 6. `process.exit(0)`. If step 3 times out, exit with a clear log line and code 1 — the orchestrator will restart us.
 
 ```ts
@@ -2834,7 +2834,7 @@ The config is the single source of truth for the driver, entity discovery, migra
 `apps/openbucket-backend/src/mikro-orm.config.ts`
 
 ```ts
-import { defineConfig } from '@mikro-orm/better-sqlite';
+import { defineConfig } from '@mikro-orm/libsql';
 import { Migrator } from '@mikro-orm/migrations';
 import { TsMorphMetadataProvider } from '@mikro-orm/reflection';
 import { join } from 'node:path';
@@ -2857,7 +2857,7 @@ import {
 const DATA_DIR = process.env.DATA_DIR ?? '/data';
 
 export default defineConfig({
-  // better-sqlite3 driver — synchronous binding, fastest for embedded use.
+  // libsql driver — a better-sqlite3-compatible synchronous binding, fastest for embedded use.
   dbName: join(DATA_DIR, 'openbucket.db'),
 
   // Entities discovered explicitly. No glob scan — startup must be deterministic
@@ -2892,12 +2892,12 @@ export default defineConfig({
     snapshot: true,
   },
 
-  // WAL + tuning PRAGMAs. Runs once per connection. better-sqlite3 opens a
+  // WAL + tuning PRAGMAs. Runs once per connection. libsql opens a
   // single connection per process so this fires exactly once at boot.
   pool: {
     afterCreate: (conn: any, done: (err?: Error) => void) => {
       try {
-        // The .pragma() form is better-sqlite3 native; .prepare()/.run() also
+        // The .pragma() form is the better-sqlite3-compatible native form libsql exposes; .prepare()/.run() also
         // works but pragma() avoids prepared-statement caching of one-shots.
         conn.pragma('journal_mode = WAL');
         conn.pragma('synchronous = NORMAL');
@@ -2932,7 +2932,7 @@ export default defineConfig({
 import { Module, Global } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
-import { BetterSqliteDriver } from '@mikro-orm/better-sqlite';
+import { LibSqlDriver } from '@mikro-orm/libsql';
 import { TsMorphMetadataProvider } from '@mikro-orm/reflection';
 import { Migrator } from '@mikro-orm/migrations';
 import { join } from 'node:path';
@@ -2968,7 +2968,7 @@ const ENTITIES = [
     MikroOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        driver: BetterSqliteDriver,
+        driver: LibSqlDriver,
         dbName: join(config.getOrThrow<string>('DATA_DIR'), 'openbucket.db'),
         entities: ENTITIES,
         metadataProvider: TsMorphMetadataProvider,
@@ -3696,7 +3696,7 @@ MikroORM gives every entity a default `EntityRepository<T>`. Custom repositories
 `libs/persistence/src/repositories/bucket.repository.ts`
 
 ```ts
-import { EntityRepository } from '@mikro-orm/better-sqlite';
+import { EntityRepository } from '@mikro-orm/libsql';
 import { Bucket } from '../entities/bucket.entity';
 import { VersioningState } from '../entities/types';
 
@@ -3738,7 +3738,7 @@ The `listByPrefix` method backs `ListObjectsV2`. It deliberately uses raw SQL vi
 `libs/persistence/src/repositories/object.repository.ts`
 
 ```ts
-import { EntityRepository } from '@mikro-orm/better-sqlite';
+import { EntityRepository } from '@mikro-orm/libsql';
 import { ObjectEntity } from '../entities/object.entity';
 import { ObjectVersion } from '../entities/object-version.entity';
 
@@ -4516,7 +4516,7 @@ Client                Service              BlobStore           EM/SQLite       F
 
 ```ts
 import { Injectable, Logger } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 import { Readable } from 'node:stream';
 import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -4656,7 +4656,7 @@ Runs once at startup, before the HTTP server begins accepting requests. Two pass
 
 ```ts
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 import { promises as fs } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ConfigService } from '@nestjs/config';
@@ -4834,7 +4834,7 @@ The SigV4 guard owned by the S3 agent needs to recover the plaintext secret for 
 
 ```ts
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 import { ConfigService } from '@nestjs/config';
 import { AccessKey } from '@openbucket/persistence';
 
@@ -4980,7 +4980,7 @@ Delete-markers are versions with no blob: an `ObjectVersion` row with `isDeleteM
 
 ```ts
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 import { promises as fs } from 'node:fs';
 import { ConfigService } from '@nestjs/config';
 import { BlobStore } from './blob-store';
@@ -6183,7 +6183,7 @@ Because OpenBucket is single-process and single-threaded on the JS side, "concur
 | Multipart UploadPart same `uploadId`, different `partNumber` | Yes | Distinct `<N>.part.tmp` paths, distinct rename targets, distinct SQLite rows in `multipart_parts`. |
 | Multipart UploadPart same `uploadId` and same `partNumber` from two clients | Yes (last-rename-wins) | Both stage to `<N>.part.tmp` — but `flags: 'wx'` (O_EXCL) means the second creates a *different* tmp file (we suffix a random nonce when we detect the collision; see code). Both rename to `<N>.part`. The second rename atomically replaces the first. The `multipart_parts` row is updated in a SQLite transaction; the later update wins per AWS semantics. |
 | CompleteMultipartUpload while a UploadPart is in flight for the same upload | Tolerated | `CompleteMultipartUpload` reads the `multipart_parts` rows it cares about at the start of its transaction. If a part appears between then and the compose, it's ignored — the client gets the upload list it sent in the XML body. The orphan part file will be removed by the multipart-cleanup tick. |
-| Concurrent SQLite writes | Serialized | `better-sqlite3` is synchronous; the driver enforces one writer at a time. WAL mode allows readers to proceed in parallel. Long transactions (the lifecycle sweep in particular) commit in batches to avoid blocking writers. |
+| Concurrent SQLite writes | Serialized | `libsql` is synchronous; the driver enforces one writer at a time. WAL mode allows readers to proceed in parallel. Long transactions (the lifecycle sweep in particular) commit in batches to avoid blocking writers. |
 | Concurrent SQLite reads | Yes | WAL readers don't block writers and aren't blocked by them, modulo the brief WAL-checkpoint window. |
 | GET while DELETE happens | Yes | The reader has an open fd. `unlink(2)` removes the directory entry but the inode persists until the last fd closes. The GET drains successfully; the next GET gets 404. |
 | Multipart compose while a part file is being read | N/A | Parts are not exposed via S3 GET. Only internal code paths read them, and the compose path is the only such reader. |
@@ -6636,7 +6636,7 @@ export class ShutdownService implements OnApplicationShutdown {
     await this.blobs.close?.();
     this.log.log('BlobStore closed');
 
-    // (5) Close MikroORM (also checkpoints WAL on better-sqlite3).
+    // (5) Close MikroORM (also checkpoints WAL on libsql).
     await this.orm.close(true);
     this.log.log('MikroORM closed');
 
@@ -8457,12 +8457,12 @@ A tsconfig path alias (`@openbucket/api-client`) points to `libs/api-client/src/
 
 # ---------- stage 1 : build ----------
 FROM node:22-bookworm-slim AS build
-# bookworm-slim (glibc) — alpine (musl) breaks better-sqlite3 prebuilt bindings.
+# bookworm-slim (glibc) — argon2's glibc prebuilt binding needs it (libsql ships glibc + musl).
 # Rebuilding from source on alpine works but adds ~30s and a python toolchain.
 
 WORKDIR /workspace
 
-# System deps for native modules (better-sqlite3 prebuild headers, argon2).
+# System deps for native modules (argon2; libsql ships N-API prebuilds).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       python3 make g++ ca-certificates \
@@ -8522,7 +8522,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 ENTRYPOINT ["node", "dist/main.js"]
 ```
 
-**Why `bookworm-slim`, not `alpine`.** `better-sqlite3` ships prebuilt native bindings linked against glibc. On alpine (musl) those bindings are silently incompatible — npm falls back to building from source, which requires `python3`, `make`, and `g++` on both build *and* runtime stages, costs 30+ seconds, and produces an image only marginally smaller than `bookworm-slim`. `bookworm-slim` is ~85 MB; `alpine` with the toolchain ends up around 110 MB. The slim Debian base is the boring, correct choice. Do not change this without a benchmarked reason.
+**Why `bookworm-slim`, not `alpine`.** `argon2` ships prebuilt native bindings linked against glibc. On alpine (musl) those bindings are silently incompatible — npm falls back to building from source, which requires `python3`, `make`, and `g++` on both build *and* runtime stages, costs 30+ seconds, and produces an image only marginally smaller than `bookworm-slim`. (The SQLite driver, `libsql`, is not the constraint here: it ships N-API prebuilds for both glibc and musl.) `bookworm-slim` is ~85 MB; `alpine` with the toolchain ends up around 110 MB. The slim Debian base is the boring, correct choice. Do not change this without a benchmarked reason.
 
 The healthcheck pings a tiny `GET /api/admin/health` endpoint (returns `{ status: 'ok' }`, public, no auth) — its implementation lives in a `HealthController` exported by `AdminModule` but marked `@Public()`.
 
@@ -8746,7 +8746,7 @@ The principle [see §7.1 of `BACKEND-DESIGN.md`]: do not mock the EntityManager.
 import { Test } from '@nestjs/testing';
 import { MikroORM } from '@mikro-orm/core';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
-import { BetterSqliteDriver } from '@mikro-orm/better-sqlite';
+import { LibSqlDriver } from '@mikro-orm/libsql';
 
 import { BucketService } from './bucket.service';
 import { BucketEntity } from '../../persistence/entities/bucket.entity';
@@ -8759,7 +8759,7 @@ describe('BucketService', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [
         MikroOrmModule.forRoot({
-          driver: BetterSqliteDriver,
+          driver: LibSqlDriver,
           dbName: ':memory:',
           entities: [BucketEntity],
           allowGlobalContext: true,

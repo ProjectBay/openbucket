@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 import { InjectEntityManager } from '@mikro-orm/nestjs';
 import type { Request, Response } from 'express';
 import { createHash, randomUUID } from 'node:crypto';

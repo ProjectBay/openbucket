@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import type { EntityManager } from '@mikro-orm/better-sqlite';
+import type { EntityManager } from '@mikro-orm/libsql';
 import type { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
 

@@ -1,8 +1,8 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-import Database from 'better-sqlite3';
-import { MikroORM } from '@mikro-orm/better-sqlite';
+import Database from 'libsql';
+import { MikroORM } from '@mikro-orm/libsql';
 import { ReflectMetadataProvider } from '@mikro-orm/core';
 import { Migrator } from '@mikro-orm/migrations';
 import {
@@ -46,9 +46,9 @@ describe('initial migration (TEST-0205)', () => {
         ],
         // Match production (mikro-orm.config.ts): do NOT let the migrator toggle
         // `foreign_keys` OFF around up(). The default (`true`) leaves FK
-        // enforcement in a platform-dependent state across better-sqlite3
-        // prebuilds (enforced on Windows, NOT on the Linux CI runner) — so the
-        // `fk_objects_bucket` assertion (case 3) flaked between dev and CI. With
+        // enforcement in a platform-dependent state (SQLite FK enforcement is
+        // per-connection and prepared-statement PRAGMAs don't reliably apply) — so
+        // the `fk_objects_bucket` assertion (case 3) flaked between dev and CI. With
         // this false, the pool `afterCreate` `foreign_keys = ON` stays in effect.
         disableForeignKeys: false,
       },
@@ -111,11 +111,10 @@ describe('initial migration (TEST-0205)', () => {
 
   it('case 3: fk_objects_bucket rejects an object with a non-existent bucket', () => {
     // FK enforcement is per-connection and OFF by default in SQLite. Going through
-    // MikroORM (pool afterCreate + connection.execute) proved unreliable across
-    // better-sqlite3 prebuilds — enforced on Windows, NOT on the Linux CI runner —
-    // because prepared-statement PRAGMAs don't reliably apply. Assert the constraint
-    // deterministically on a DIRECT better-sqlite3 connection to the file-backed
-    // test DB, enabling foreign keys via the native `.pragma()` (synchronous, so a
+    // MikroORM (pool afterCreate + connection.execute) proved unreliable because
+    // prepared-statement PRAGMAs don't reliably apply. Assert the constraint
+    // deterministically on a DIRECT libsql connection to the file-backed test DB,
+    // enabling foreign keys via the native `.pragma()` (synchronous, so a
     // violation throws on `.run()`).
     const db = new Database(join(DATA_DIR, 'openbucket.db'));
     try {

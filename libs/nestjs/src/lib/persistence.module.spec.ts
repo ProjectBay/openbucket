@@ -13,7 +13,7 @@ import { OPEN_BUCKET_ORM_CONTEXT } from './persistence/orm-context';
 /**
  * TEST-0200 — PRAGMA hook and config wiring.
  *
- * Uses a real file-backed better-sqlite3 DB (not :memory:) since WAL mode is
+ * Uses a real file-backed libsql (SQLite) DB (not :memory:) since WAL mode is
  * only meaningful on a file. Boots a minimal Nest module importing
  * PersistenceModule with DATA_DIR pointing at a temp dir.
  */

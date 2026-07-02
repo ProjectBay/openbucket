@@ -877,7 +877,7 @@ A clean SIGTERM is the difference between zero-downtime deploys and corrupted mu
 2. Tell the HTTP server to stop accepting new connections (`server.close()` callback resolves when in-flight requests finish).
 3. Wait up to `SHUTDOWN_DRAIN_MS` (default 30 s) for in-flight requests to complete. The `ShutdownTrackerInterceptor` keeps a counter; when it hits zero we proceed immediately.
 4. Cancel background tasks (lifecycle tick, multipart sweep — owned by the streaming agent [see §4]) by emitting on an `AbortController` they observe.
-5. Close MikroORM (flush WAL, close better-sqlite3).
+5. Close MikroORM (flush WAL, close libsql).
 6. `process.exit(0)`. If step 3 times out, exit with a clear log line and code 1 — the orchestrator will restart us.
 
 ```ts

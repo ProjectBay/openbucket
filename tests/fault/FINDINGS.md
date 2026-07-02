@@ -1,7 +1,7 @@
 # OpenBucket — Correctness-Under-Failure Audit
 
 Scope: durability & consistency guarantees vs. S3 expectations. **Single-node**
-architecture (NestJS + MikroORM/**better-sqlite3** for metadata + **local
+architecture (NestJS + MikroORM/**libsql** (SQLite) for metadata + **local
 filesystem** for blob payloads); there is no replication / erasure coding /
 quorum layer, so the *distributed* attack classes (split-brain, node loss,
 partition) do not apply and are out of scope.
@@ -297,7 +297,7 @@ Tried and could **not** break (with the evidence):
 ## 4. Running the harness
 
 Prereqs: a built backend (`npx nx build openbucket-backend`) and installed deps
-(`@aws-sdk/client-s3`, `aws4`, `better-sqlite3` — all present).
+(`@aws-sdk/client-s3`, `aws4`, `libsql` — all present).
 
 ```bash
 # individual attacks (each spawns a disposable app in a scratch DATA_DIR):
