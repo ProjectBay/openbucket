@@ -1,7 +1,7 @@
 import { Controller, Get, Inject, Optional, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { readFileSync } from 'node:fs';
-import { extname } from 'node:path';
+import { extname, relative } from 'node:path';
 
 import { OPEN_BUCKET_OPTIONS, type ResolvedOpenBucketOptions } from '../open-bucket-options';
 import { Public } from '../common/auth/public.decorator';
@@ -43,7 +43,14 @@ export class SpaController {
       const file = safeAssetPath(this.spaRoot, rel);
       if (file) {
         res.setHeader('Cache-Control', cacheControlFor(file));
-        res.sendFile(file);
+        // Serve root-relative, NOT as an absolute path. Express 5's `res.sendFile`
+        // delegates to `send@1.x`, whose default `dotfiles: 'ignore'` rejects any
+        // path containing a dot-prefixed segment. Under pnpm the package's real
+        // files live under a `.pnpm/` store directory, so the absolute `file` has a
+        // dot segment and every asset 404s (surfacing as a 500). `send` exempts the
+        // `root` prefix from the dotfile check, and `safeAssetPath` has already
+        // validated `file` stays within `spaRoot`, so the relative remainder is safe.
+        res.sendFile(relative(this.spaRoot, file), { root: this.spaRoot });
         return;
       }
     }

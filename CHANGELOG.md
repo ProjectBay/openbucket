@@ -9,7 +9,17 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **Admin SPA served 500 for every static asset under pnpm.** With
+  `admin.serveUi: true`, the bundled console's hashed assets (`main-*.js`,
+  `chunk-*.js`, `styles.css`, …) all failed under pnpm's default isolated layout.
+  Express 5's `res.sendFile(absolutePath)` delegates to `send@1.x`, whose default
+  `dotfiles: 'ignore'` rejects any path with a dot-prefixed segment — and pnpm
+  stores the package under a `.pnpm/` directory, so every absolute asset path
+  contained one. The SPA controller now serves root-relative
+  (`res.sendFile(relative(spaRoot, file), { root: spaRoot })`), which exempts the
+  root prefix from the dotfile check. npm/yarn's flat layout masked this.
 
 ## [0.1.0-alpha.2] — 2026-07-02
 

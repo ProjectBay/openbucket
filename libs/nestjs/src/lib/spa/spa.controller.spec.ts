@@ -1,6 +1,6 @@
 import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
@@ -73,6 +73,62 @@ describe('SpaController (fixture SPA, mountPath "")', () => {
 
   it('falls back to the shell for client-side routes', async () => {
     const res = await request(app.getHttpServer()).get('/admin/buckets/my-bucket');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('OPENBUCKET_SHELL');
+  });
+});
+
+// Regression (pnpm): under pnpm's default isolated layout the package's real
+// files live under a `.pnpm/` directory, so the resolved SPA root — and every
+// absolute asset path derived from it — contains a DOT-PREFIXED path segment.
+// Express 5's `res.sendFile(absolutePath)` delegates to `send@1.x`, whose default
+// `dotfiles: 'ignore'` 404s any path with a dot segment, turning every hashed
+// asset into an (empty-bodied) 500. Serving root-relative (`{ root: spaRoot }`)
+// exempts the root prefix from that check. A dot-free `tmpdir` fixture (the other
+// suites above) masks this entirely.
+describe('SpaController (pnpm `.pnpm`-store layout — dotfile-segment regression)', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    const base = mkdtempSync(join(tmpdir(), 'ob-spa-pnpm-'));
+    const root = join(
+      base,
+      '.pnpm',
+      '@openbucket+nestjs@0.0.0',
+      'node_modules',
+      '@openbucket',
+      'nestjs',
+      'assets',
+      'spa',
+    );
+    mkdirSync(root, { recursive: true });
+    writeFileSync(
+      join(root, 'index.html'),
+      '<html><head><base href="/admin/"></head><body>OPENBUCKET_SHELL</body></html>',
+    );
+    writeFileSync(join(root, 'main-UZ7C7DZ3.js'), 'console.log("ob")');
+
+    const ref = await Test.createTestingModule({
+      controllers: [SpaController],
+      providers: [{ provide: SPA_ROOT, useValue: root }],
+    }).compile();
+    app = ref.createNestApplication();
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  it('serves a hashed asset even when the SPA root contains a `.pnpm` segment', async () => {
+    const res = await request(app.getHttpServer()).get('/admin/main-UZ7C7DZ3.js');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('console.log');
+    expect(res.headers['cache-control']).toContain('immutable');
+  });
+
+  it('still serves the shell under a `.pnpm` root', async () => {
+    const res = await request(app.getHttpServer()).get('/admin');
     expect(res.status).toBe(200);
     expect(res.text).toContain('OPENBUCKET_SHELL');
   });
