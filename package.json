@@ -153,6 +153,7 @@
     "hono": "^4.12.27",
     "launch-editor": "^2.14.1",
     "@babel/core": "^7.29.1",
+    "yaml": "^2.8.3",
     "fast-xml-parser": "$fast-xml-parser",
     "uuid": "$uuid"
   },
