@@ -47,6 +47,7 @@ import {
 } from '@openbucket/api-client';
 import { firstValueFrom } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
+import { resolveMountPrefix } from '../shared/api/mount-prefix';
 import { HlmTableImports } from '@openbucket/spartan-ui/table';
 import { HlmBadge } from '@openbucket/spartan-ui/badge';
 import { HlmButton } from '@openbucket/spartan-ui/button';
@@ -986,7 +987,9 @@ export class ObjectBrowserComponent implements OnInit {
   }
 
   async copyUrl(o: ObjectListItem): Promise<void> {
-    const url = `${window.location.origin}/${this.bucket()}/${o.key}`;
+    // Path-style S3 URL. The store is mounted under `<mountPath>` too, so the
+    // shareable URL must carry the same prefix (e.g. `<origin>/storage/<bucket>/<key>`).
+    const url = `${window.location.origin}${resolveMountPrefix()}/${this.bucket()}/${o.key}`;
     try {
       await navigator.clipboard.writeText(url);
       notify.success('URL copied');
