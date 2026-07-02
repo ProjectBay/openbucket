@@ -1,7 +1,7 @@
 import { BadRequestException, HttpException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createWriteStream, promises as fs } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -214,24 +214,34 @@ export class BackupService {
   private static readonly BUCKET_RE = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
 
   private assertSafeBucket(name: string): void {
-    if (!BackupService.BUCKET_RE.test(name) || name.includes('..')) {
+    const norm = posix.normalize(name);
+    if (
+      !BackupService.BUCKET_RE.test(name) ||
+      name.includes('/') ||
+      posix.isAbsolute(norm) ||
+      norm === '..' ||
+      norm.startsWith('../')
+    ) {
       throw new BadRequestException(`unsafe bucket name in backup archive: ${JSON.stringify(name)}`);
     }
   }
 
   /**
    * Reject object keys from an uploaded archive that could escape the bucket
-   * directory when written (Zip Slip): absolute paths, '.'/'..' path segments,
-   * backslashes, or NUL. encodeKey already neutralises these on disk, but this
-   * is an explicit, auditable barrier at the untrusted-input boundary.
+   * directory when written (path traversal / Zip Slip). Uses path.normalize +
+   * an isAbsolute / '..'-prefix containment check (the standard barrier) so a
+   * hostile "a/../../etc" is rejected while a benign "my..file" is allowed.
+   * encodeKey also neutralises these on disk — this is the explicit boundary.
    */
   private assertSafeKey(key: string): void {
+    const norm = posix.normalize(key);
     if (
       key.length === 0 ||
-      key.startsWith('/') ||
       key.includes('\0') ||
       key.includes('\\') ||
-      key.split('/').some((seg) => seg === '.' || seg === '..')
+      posix.isAbsolute(norm) ||
+      norm === '..' ||
+      norm.startsWith('../')
     ) {
       throw new BadRequestException(`unsafe object key in backup archive: ${JSON.stringify(key)}`);
     }
@@ -270,6 +280,9 @@ export class BackupService {
     stream: Readable,
     manifest: BackupManifest,
   ): Promise<void> {
+    // Sink-adjacent barrier: never hand an unvalidated path to the writer.
+    this.assertSafeBucket(bucket);
+    this.assertSafeKey(key);
     const meta = manifest.objects.find((o) => o.bucket === bucket && o.key === key);
     await this.writer.put({
       bucket,
