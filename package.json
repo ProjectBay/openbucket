@@ -149,13 +149,7 @@
     "ws": "^8.21.0",
     "axios": "^1.18.1",
     "hono": "^4.12.27",
-    "undici": "^8.5.0",
-    "http-proxy-middleware": "^3.0.7",
-    "picomatch": "^4.0.4",
-    "minimatch": "^9.0.7",
-    "yaml": "^2.9.0",
     "launch-editor": "^2.14.1",
-    "esbuild": "^0.28.1",
     "@babel/core": "^7.29.1",
     "fast-xml-parser": "$fast-xml-parser",
     "uuid": "$uuid"
