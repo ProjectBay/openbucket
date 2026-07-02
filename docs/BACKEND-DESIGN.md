@@ -68,7 +68,7 @@ apps/backend/src/
 
 **Setup notes**
 
-- Use `@mikro-orm/nestjs` with `MikroOrmModule.forRoot({ driver: BetterSqliteDriver, ... })`.
+- Use `@mikro-orm/nestjs` with `MikroOrmModule.forRoot({ driver: LibSqlDriver, ... })`.
 - Wrap each request in `RequestContext` via the provided middleware so `EntityManager` instances are per-request — entities never leak across requests.
 - Place entities in an Nx lib (`libs/persistence`) so admin and S3 services can import them, but do **not** expose entities directly to controllers. Map to DTOs in services.
 - Migrations live with the backend app, not in a lib — they need runtime config.

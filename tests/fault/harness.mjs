@@ -1,6 +1,6 @@
 // OpenBucket fault-injection harness (shared).
 //
-// Single-node store: NestJS + MikroORM/better-sqlite3 (metadata) + local
+// Single-node store: NestJS + MikroORM/libsql (SQLite metadata) + local
 // filesystem (blob payloads). This harness spawns the *built* backend
 // (dist/apps/openbucket-backend/main.js) against a disposable DATA_DIR, drives
 // it over the real S3 wire protocol (@aws-sdk/client-s3, SigV4 with the root
@@ -181,7 +181,8 @@ export function truncateTo(path, size) {
 // ---- metadata DB inspection (read-only) ------------------------------------
 
 export function openDb(dataDir) {
-  const Database = require('better-sqlite3');
+  // libsql exposes a better-sqlite3-compatible synchronous API (.prepare/.all).
+  const Database = require('libsql');
   return new Database(join(dataDir, 'openbucket.db'), { readonly: true, fileMustExist: true });
 }
 

@@ -28,13 +28,13 @@ Each section is implementable from the code it contains. Cross-references betwee
 |---|---|
 | HTTP platform | Express adapter |
 | Module topology | One Nest app, two controller trees (S3 + Admin) sharing services |
-| ORM | MikroORM + `better-sqlite3` |
+| ORM | MikroORM + `libsql` (SQLite) |
 | Validation | `nestjs-zod` (Zod-derived DTOs, swagger-integrated) |
 | Logging | `nestjs-pino` |
 | Admin auth | JWT access (15 m) + refresh in HttpOnly cookie scoped to `/api/admin/auth` |
 | S3 auth | SigV4 reverse-verify via `aws4`; chunked-payload signing rejected in v1 |
 | Frontend contract | OpenAPI 3 → generated Angular client |
-| Image base | `node:22-bookworm-slim` (not alpine — `better-sqlite3` glibc dependency) |
+| Image base | `node:22-bookworm-slim` (not alpine — `argon2` glibc dependency; `libsql` has both glibc/musl N-API prebuilds) |
 | Testing | Unit + e2e (supertest) + S3 conformance (aws-cli, mc, s3cmd) |
 
 ---

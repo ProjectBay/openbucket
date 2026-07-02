@@ -21,7 +21,7 @@ ORM lifecycle.
 - `createSchema()` in `beforeEach`/`beforeAll`; `orm.close(true)` after.
 - Run: `nx test openbucket-backend --testPathPatterns=<spec>` (Jest 30 flag is
   plural `--testPathPatterns`).
-- Runs on **Node 20** (better-sqlite3 native ABI) — see the repo's persistence
+- Runs on **Node 20** (historical; the persistence driver is now libsql, whose N-API binding is ABI-stable across Node majors) — see the repo's persistence
   note.
 
 ## 2. E2E — the built app as a spawned process

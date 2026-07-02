@@ -11,7 +11,7 @@ import type { ContinuationToken } from '../../s3/pagination/continuation-token';
  * TASK-1550 — the canonical unit-test sample (WHITEPAPER §5.20.1, BACKEND-DESIGN
  * §7.1). The principle this file exists to demonstrate: **do not mock the
  * EntityManager or the repositories.** Boot MikroORM against an in-memory
- * better-sqlite database, register the entities under test, build the schema,
+ * libsql (SQLite) database, register the entities under test, build the schema,
  * and drive the real `BucketService` through its real repositories.
  *
  * Only genuinely-unrelated collaborators are stubbed: `ObjectService` and

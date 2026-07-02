@@ -1799,12 +1799,12 @@ A tsconfig path alias (`@openbucket/api-client`) points to `libs/api-client/src/
 
 # ---------- stage 1 : build ----------
 FROM node:22-bookworm-slim AS build
-# bookworm-slim (glibc) — alpine (musl) breaks better-sqlite3 prebuilt bindings.
+# bookworm-slim (glibc) — argon2's glibc prebuilt binding needs it (libsql ships glibc + musl).
 # Rebuilding from source on alpine works but adds ~30s and a python toolchain.
 
 WORKDIR /workspace
 
-# System deps for native modules (better-sqlite3 prebuild headers, argon2).
+# System deps for native modules (argon2; libsql ships N-API prebuilds).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       python3 make g++ ca-certificates \
@@ -1864,7 +1864,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 ENTRYPOINT ["node", "dist/main.js"]
 ```
 
-**Why `bookworm-slim`, not `alpine`.** `better-sqlite3` ships prebuilt native bindings linked against glibc. On alpine (musl) those bindings are silently incompatible — npm falls back to building from source, which requires `python3`, `make`, and `g++` on both build *and* runtime stages, costs 30+ seconds, and produces an image only marginally smaller than `bookworm-slim`. `bookworm-slim` is ~85 MB; `alpine` with the toolchain ends up around 110 MB. The slim Debian base is the boring, correct choice. Do not change this without a benchmarked reason.
+**Why `bookworm-slim`, not `alpine`.** `argon2` ships prebuilt native bindings linked against glibc. On alpine (musl) those bindings are silently incompatible — npm falls back to building from source, which requires `python3`, `make`, and `g++` on both build *and* runtime stages, costs 30+ seconds, and produces an image only marginally smaller than `bookworm-slim`. (The SQLite driver, `libsql`, is not the constraint here: it ships N-API prebuilds for both glibc and musl.) `bookworm-slim` is ~85 MB; `alpine` with the toolchain ends up around 110 MB. The slim Debian base is the boring, correct choice. Do not change this without a benchmarked reason.
 
 The healthcheck pings a tiny `GET /api/admin/health` endpoint (returns `{ status: 'ok' }`, public, no auth) — its implementation lives in a `HealthController` exported by `AdminModule` but marked `@Public()`.
 
@@ -2088,7 +2088,7 @@ The principle [see §7.1 of `BACKEND-DESIGN.md`]: do not mock the EntityManager.
 import { Test } from '@nestjs/testing';
 import { MikroORM } from '@mikro-orm/core';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
-import { BetterSqliteDriver } from '@mikro-orm/better-sqlite';
+import { LibSqlDriver } from '@mikro-orm/libsql';
 
 import { BucketService } from './bucket.service';
 import { BucketEntity } from '../../persistence/entities/bucket.entity';
@@ -2101,7 +2101,7 @@ describe('BucketService', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [
         MikroOrmModule.forRoot({
-          driver: BetterSqliteDriver,
+          driver: LibSqlDriver,
           dbName: ':memory:',
           entities: [BucketEntity],
           allowGlobalContext: true,

@@ -297,7 +297,7 @@ Tried and could **not** break (with the evidence):
 ## 4. Running the harness
 
 Prereqs: a built backend (`npx nx build openbucket-backend`) and installed deps
-(`@aws-sdk/client-s3`, `aws4`, `better-sqlite3` — all present).
+(`@aws-sdk/client-s3`, `aws4`, `libsql` — all present).
 
 ```bash
 # individual attacks (each spawns a disposable app in a scratch DATA_DIR):

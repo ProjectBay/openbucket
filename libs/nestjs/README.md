@@ -210,7 +210,7 @@ the JSON admin API under `<mountPath>/api/admin/*` — the generated, typed
   context, so it won't collide with a host app's database.
 - **Graceful shutdown.** Call `app.enableShutdownHooks()` in your bootstrap so
   OpenBucket's in-flight-drain (`OnApplicationShutdown`) runs on termination.
-- **Node** ≥ 20 (better-sqlite3 native bindings).
+- **Node** ≥ 20 (libsql native bindings — N-API prebuilds, ABI-stable across Node majors).
 
 ## License
 

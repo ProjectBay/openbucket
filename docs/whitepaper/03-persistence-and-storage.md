@@ -20,7 +20,7 @@ The config is the single source of truth for the driver, entity discovery, migra
 `apps/openbucket-backend/src/mikro-orm.config.ts`
 
 ```ts
-import { defineConfig } from '@mikro-orm/better-sqlite';
+import { defineConfig } from '@mikro-orm/libsql';
 import { Migrator } from '@mikro-orm/migrations';
 import { TsMorphMetadataProvider } from '@mikro-orm/reflection';
 import { join } from 'node:path';
@@ -43,7 +43,7 @@ import {
 const DATA_DIR = process.env.DATA_DIR ?? '/data';
 
 export default defineConfig({
-  // better-sqlite3 driver — synchronous binding, fastest for embedded use.
+  // libsql driver — a better-sqlite3-compatible synchronous binding, fastest for embedded use.
   dbName: join(DATA_DIR, 'openbucket.db'),
 
   // Entities discovered explicitly. No glob scan — startup must be deterministic
@@ -78,12 +78,12 @@ export default defineConfig({
     snapshot: true,
   },
 
-  // WAL + tuning PRAGMAs. Runs once per connection. better-sqlite3 opens a
+  // WAL + tuning PRAGMAs. Runs once per connection. libsql opens a
   // single connection per process so this fires exactly once at boot.
   pool: {
     afterCreate: (conn: any, done: (err?: Error) => void) => {
       try {
-        // The .pragma() form is better-sqlite3 native; .prepare()/.run() also
+        // The .pragma() form is the better-sqlite3-compatible native form libsql exposes; .prepare()/.run() also
         // works but pragma() avoids prepared-statement caching of one-shots.
         conn.pragma('journal_mode = WAL');
         conn.pragma('synchronous = NORMAL');
@@ -118,7 +118,7 @@ export default defineConfig({
 import { Module, Global } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
-import { BetterSqliteDriver } from '@mikro-orm/better-sqlite';
+import { LibSqlDriver } from '@mikro-orm/libsql';
 import { TsMorphMetadataProvider } from '@mikro-orm/reflection';
 import { Migrator } from '@mikro-orm/migrations';
 import { join } from 'node:path';
@@ -154,7 +154,7 @@ const ENTITIES = [
     MikroOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        driver: BetterSqliteDriver,
+        driver: LibSqlDriver,
         dbName: join(config.getOrThrow<string>('DATA_DIR'), 'openbucket.db'),
         entities: ENTITIES,
         metadataProvider: TsMorphMetadataProvider,
@@ -882,7 +882,7 @@ MikroORM gives every entity a default `EntityRepository<T>`. Custom repositories
 `libs/persistence/src/repositories/bucket.repository.ts`
 
 ```ts
-import { EntityRepository } from '@mikro-orm/better-sqlite';
+import { EntityRepository } from '@mikro-orm/libsql';
 import { Bucket } from '../entities/bucket.entity';
 import { VersioningState } from '../entities/types';
 
@@ -924,7 +924,7 @@ The `listByPrefix` method backs `ListObjectsV2`. It deliberately uses raw SQL vi
 `libs/persistence/src/repositories/object.repository.ts`
 
 ```ts
-import { EntityRepository } from '@mikro-orm/better-sqlite';
+import { EntityRepository } from '@mikro-orm/libsql';
 import { ObjectEntity } from '../entities/object.entity';
 import { ObjectVersion } from '../entities/object-version.entity';
 
@@ -1702,7 +1702,7 @@ Client                Service              BlobStore           EM/SQLite       F
 
 ```ts
 import { Injectable, Logger } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 import { Readable } from 'node:stream';
 import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -1842,7 +1842,7 @@ Runs once at startup, before the HTTP server begins accepting requests. Two pass
 
 ```ts
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 import { promises as fs } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ConfigService } from '@nestjs/config';
@@ -2020,7 +2020,7 @@ The SigV4 guard owned by the S3 agent needs to recover the plaintext secret for 
 
 ```ts
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 import { ConfigService } from '@nestjs/config';
 import { AccessKey } from '@openbucket/persistence';
 
@@ -2166,7 +2166,7 @@ Delete-markers are versions with no blob: an `ObjectVersion` row with `isDeleteM
 
 ```ts
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 import { promises as fs } from 'node:fs';
 import { ConfigService } from '@nestjs/config';
 import { BlobStore } from './blob-store';

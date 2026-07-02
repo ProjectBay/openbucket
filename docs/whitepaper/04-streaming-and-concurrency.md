@@ -991,7 +991,7 @@ Because OpenBucket is single-process and single-threaded on the JS side, "concur
 | Multipart UploadPart same `uploadId`, different `partNumber` | Yes | Distinct `<N>.part.tmp` paths, distinct rename targets, distinct SQLite rows in `multipart_parts`. |
 | Multipart UploadPart same `uploadId` and same `partNumber` from two clients | Yes (last-rename-wins) | Both stage to `<N>.part.tmp` — but `flags: 'wx'` (O_EXCL) means the second creates a *different* tmp file (we suffix a random nonce when we detect the collision; see code). Both rename to `<N>.part`. The second rename atomically replaces the first. The `multipart_parts` row is updated in a SQLite transaction; the later update wins per AWS semantics. |
 | CompleteMultipartUpload while a UploadPart is in flight for the same upload | Tolerated | `CompleteMultipartUpload` reads the `multipart_parts` rows it cares about at the start of its transaction. If a part appears between then and the compose, it's ignored — the client gets the upload list it sent in the XML body. The orphan part file will be removed by the multipart-cleanup tick. |
-| Concurrent SQLite writes | Serialized | `better-sqlite3` is synchronous; the driver enforces one writer at a time. WAL mode allows readers to proceed in parallel. Long transactions (the lifecycle sweep in particular) commit in batches to avoid blocking writers. |
+| Concurrent SQLite writes | Serialized | `libsql` is synchronous; the driver enforces one writer at a time. WAL mode allows readers to proceed in parallel. Long transactions (the lifecycle sweep in particular) commit in batches to avoid blocking writers. |
 | Concurrent SQLite reads | Yes | WAL readers don't block writers and aren't blocked by them, modulo the brief WAL-checkpoint window. |
 | GET while DELETE happens | Yes | The reader has an open fd. `unlink(2)` removes the directory entry but the inode persists until the last fd closes. The GET drains successfully; the next GET gets 404. |
 | Multipart compose while a part file is being read | N/A | Parts are not exposed via S3 GET. Only internal code paths read them, and the compose path is the only such reader. |
@@ -1444,7 +1444,7 @@ export class ShutdownService implements OnApplicationShutdown {
     await this.blobs.close?.();
     this.log.log('BlobStore closed');
 
-    // (5) Close MikroORM (also checkpoints WAL on better-sqlite3).
+    // (5) Close MikroORM (also checkpoints WAL on libsql).
     await this.orm.close(true);
     this.log.log('MikroORM closed');
 
