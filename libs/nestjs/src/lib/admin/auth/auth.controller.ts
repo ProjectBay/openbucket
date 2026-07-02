@@ -3,6 +3,8 @@ import {
   Controller,
   Get,
   HttpCode,
+  Inject,
+  Optional,
   Post,
   Req,
   Res,
@@ -13,6 +15,7 @@ import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ApiOkResponse } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
+import { OPEN_BUCKET_OPTIONS, type ResolvedOpenBucketOptions } from '../../open-bucket-options';
 import { Public } from '../../common/auth/public.decorator';
 import { AuthService } from './auth.service';
 import { AuditService } from '../audit/audit.service';
@@ -34,10 +37,23 @@ const REFRESH_COOKIE = 'ob_refresh';
  */
 @Controller('api/admin/auth')
 export class AuthController {
+  /**
+   * Cookie `path` for the refresh token. The auth routes are mounted under
+   * `<mountPath>/api/admin/auth` (RouterModule prefixes the controller in library
+   * mode), so the cookie must be scoped to the SAME prefix or the browser won't
+   * send it to the mounted `/refresh` endpoint. `''` (standalone) → `/api/admin/auth`.
+   */
+  private readonly cookiePath: string;
+
   constructor(
     private readonly auth: AuthService,
     private readonly audit: AuditService,
-  ) {}
+    // Library mode supplies the resolved options (for `mountPath`); the standalone
+    // app does not (it mounts at the root, so `mountPath` is '').
+    @Optional() @Inject(OPEN_BUCKET_OPTIONS) options?: ResolvedOpenBucketOptions,
+  ) {
+    this.cookiePath = `${options?.mountPath ?? ''}/api/admin/auth`;
+  }
 
   @Public()
   @UseGuards(ThrottlerGuard)
@@ -85,7 +101,7 @@ export class AuthController {
   ): Promise<void> {
     const raw = readCookie(req, REFRESH_COOKIE);
     await this.auth.logout(raw);
-    res.clearCookie(REFRESH_COOKIE, { path: '/api/admin/auth' });
+    res.clearCookie(REFRESH_COOKIE, { path: this.cookiePath });
     const username = (req as Request & { user?: { username?: string } }).user?.username ?? 'unknown';
     this.audit.emit({ event: 'admin.logout', subject: username });
   }
@@ -114,7 +130,7 @@ export class AuthController {
       httpOnly: true,
       secure: true,
       sameSite: 'strict',
-      path: '/api/admin/auth',
+      path: this.cookiePath,
       expires: expiresAt,
     });
   }

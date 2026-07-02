@@ -9,7 +9,20 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **Admin console was unusable under a non-root `mountPath`** (e.g.
+  `mountPath: '/storage'`): every API call 404'd (`POST /api/admin/auth/login`,
+  `/refresh`, …) and, even once reachable, the session wouldn't persist. Two
+  causes, both now mount-aware:
+  - **Frontend** built every API/S3 URL root-absolute (`/api/admin/…`,
+    `/<bucket>/<key>`), ignoring the mount. A new HTTP interceptor derives the
+    mount prefix from the SPA's `<base href>` (which the backend rewrites to
+    `<mountPath>/admin/`) and prepends it to all `/api/*` requests; the object
+    "copy URL" share link is likewise prefixed. No-op for the standalone (root).
+  - **Backend** set the refresh cookie with a hardcoded `path=/api/admin/auth`,
+    so the browser never sent it to `<mountPath>/api/admin/auth/refresh`. The
+    cookie `path` (set + clear) now includes the mount prefix.
 
 ## [0.1.0-alpha.3] — 2026-07-02
 

@@ -30,6 +30,7 @@ import { appRoutes } from './app.routes';
 import { authInterceptor } from './auth/auth.interceptor';
 import { AuthService } from './auth/auth.service';
 import { provideApiClient } from './shared/api/api-client.providers';
+import { mountPrefixInterceptor } from './shared/api/mount-prefix';
 import {
   CALENDAR_I18N_CONFIGS,
   ColorSchemeService,
@@ -67,7 +68,9 @@ export const appConfig: ApplicationConfig = {
     provideHlmDatePickerConfig(DATE_PICKER_CONFIGS['en']),
     provideHttpClient(
       withFetch(),
-      withInterceptors([authInterceptor]),
+      // authInterceptor FIRST (its auth-path check keys on the un-prefixed
+      // `/api/admin/auth/*` URL); mountPrefixInterceptor then prepends the mount.
+      withInterceptors([authInterceptor, mountPrefixInterceptor]),
       withInterceptorsFromDi(),
     ),
     provideApiClient(),
