@@ -24,8 +24,10 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-# Deterministic install from the committed lock.
-COPY package.json package-lock.json nx.json tsconfig.base.json ./
+# Deterministic install from the committed lock. Include .npmrc so `npm ci` uses
+# the same peer-resolution mode (legacy-peer-deps) the lockfile was generated
+# with — otherwise strict mode reports the lockfile as out-of-sync.
+COPY package.json package-lock.json .npmrc nx.json tsconfig.base.json ./
 COPY apps ./apps
 COPY libs ./libs
 
