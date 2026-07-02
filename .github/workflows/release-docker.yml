@@ -1,0 +1,75 @@
+# .github/workflows/release-docker.yml
+# Publish the OpenBucket standalone server image to GHCR (GitHub Container
+# Registry).
+#
+# Trigger: push a tag `v<version>` (e.g. v0.1.0 or v0.1.0-alpha.1), or run
+# manually via workflow_dispatch (builds the selected ref and tags it `:edge`).
+#
+# Registry: ghcr.io/<owner>/openbucket, pushed with the built-in GITHUB_TOKEN
+# (no extra secret needed — the job has `packages: write`). AFTER the first push,
+# set the GHCR package visibility to Public (repo → Packages → openbucket →
+# Package settings → Change visibility) so `docker pull` works unauthenticated.
+#
+# Multi-arch: linux/amd64 + linux/arm64 (buildx + QEMU). better-sqlite3 and
+# argon2 ship prebuilt binaries for both, so `npm ci` fetches them rather than
+# compiling under emulation; the Dockerfile's build toolchain is the fallback.
+#
+# NOTE: authored to mirror ci.yml's build-image job (same Dockerfile + gha
+# cache). Reuses the same tag/version scheme as the git tag via metadata-action.
+name: release-docker
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-docker-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/openbucket
+
+jobs:
+  publish:
+    name: build + push image (GHCR)
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-') }}
+            type=raw,value=edge,enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=sha,prefix=sha-
+
+      - name: Build + push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
