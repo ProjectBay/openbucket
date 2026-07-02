@@ -10,7 +10,7 @@
 |---|---|---|
 | HTTP platform | Express adapter | Fastify adapter |
 | Module topology | One Nest app, two controller trees (S3 + Admin) sharing services | Two sub-apps mounted on one HTTP server |
-| ORM | MikroORM + better-sqlite3 driver | Drizzle + better-sqlite3 |
+| ORM | MikroORM + libsql driver | Drizzle + better-sqlite3 |
 | Validation | `nestjs-zod` (Zod-derived DTOs, swagger-integrated) | `class-validator` + `class-transformer` |
 | Logging | `nestjs-pino` (JSON, structured) | Winston |
 | Admin auth | JWT access (15m) in `Authorization` header + refresh in HttpOnly cookie | Pure cookie session |
@@ -60,7 +60,8 @@ apps/backend/src/
 
 **Why MikroORM fits**
 
-- First-class SQLite driver (`better-sqlite3` under the hood — sync, fast).
+- First-class SQLite driver (`libsql` under the hood — a better-sqlite3-compatible
+  synchronous binding, distributed as ABI-stable N-API prebuilds — sync, fast).
 - Unit-of-work + identity map: matters for multipart sessions where many parts mutate in one transaction.
 - Schema-first migrations (`mikro-orm migration:create --initial` then incremental) — easier to reason about than TypeORM's sync mode for an embedded DB.
 - Built-in soft-delete and filters — handy for object versioning and lifecycle "marked-for-deletion".
@@ -243,7 +244,7 @@ ServeStaticModule.forRoot({
   2. Build NestJS backend → `apps/backend/dist`.
   3. Copy SPA dist into backend dist under `spa/`.
   4. Final stage: `node:22-alpine`, copy `backend/dist`, `node_modules` (prod-only), run `node dist/main.js`.
-- `better-sqlite3` ships a native binding — ensure the build stage matches the runtime stage's libc (alpine = musl). Either build on alpine or use `node:22-bookworm-slim`.
+- `libsql` ships native bindings as N-API prebuilds for both glibc and musl (`@libsql/linux-*-gnu` / `-musl`), so the SQLite driver works on either base; `argon2`, however, is glibc-linked, so match the build/runtime libc (alpine = musl) or use `node:22-bookworm-slim`.
 - Expose port `9000` only. `DATA_DIR=/data` as the default mount point.
 
 ---

@@ -1,4 +1,4 @@
-import { MikroORM } from '@mikro-orm/better-sqlite';
+import { MikroORM } from '@mikro-orm/libsql';
 import { ReflectMetadataProvider } from '@mikro-orm/core';
 
 import { AccessKey } from './entities/access-key.entity';

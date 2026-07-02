@@ -22,8 +22,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Node 22: glibc better-sqlite3 prebuilds resolve on a clean `npm ci`, and
-  # 22.x (>=22.12) satisfies Angular's require(ESM). Matches the Docker base.
+  # Node 22 matches the Docker base and satisfies Angular's require(ESM)
+  # (22.x >=22.12). The SQLite driver (libsql) ships N-API prebuilds that are
+  # ABI-stable across Node majors, so the Node pin is Angular-driven, not DB-driven.
   NODE_VERSION: '22'
 
 jobs:

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
-import { MikroORM, EntityManager } from '@mikro-orm/better-sqlite';
+import { MikroORM, EntityManager } from '@mikro-orm/libsql';
 import { ReflectMetadataProvider } from '@mikro-orm/core';
 import { Migrator } from '@mikro-orm/migrations';
 import {

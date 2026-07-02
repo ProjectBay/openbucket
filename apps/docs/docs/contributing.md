@@ -14,7 +14,7 @@ By participating you agree to abide by our
 ## Prerequisites
 
 - **Node.js 22** (`>= 22.12`) — a single version runs the whole stack: the
-  backend (NestJS + `better-sqlite3`) and the frontend (Angular). It matches
+  backend (NestJS + `libsql`) and the frontend (Angular). It matches
   what CI and the Docker image use and is pinned in `.nvmrc`:
 
   ```bash
@@ -23,11 +23,12 @@ By participating you agree to abide by our
   ```
 
   > Earlier the backend needed Node 20 and the frontend Node 23 — that split is
-  > **gone**. Node 22 satisfies both: Angular 21 requires `>= 22.12`, and
-  > `better-sqlite3` ships a Node 22 prebuilt (so no native compile is needed).
+  > **gone**. Node 22 satisfies both: Angular 21 requires `>= 22.12`, and the
+  > SQLite driver (`libsql`) ships N-API prebuilds that are ABI-stable across
+  > Node majors (so no native compile is needed, on any supported Node).
 
 - A C/C++ toolchain is only required if a native-module **prebuilt isn't
-  available** for your platform (`better-sqlite3`, `argon2`). On common platforms
+  available** for your platform (`libsql`, `argon2`). On common platforms
   `npm ci` downloads prebuilts and **no compiler is needed**. If you do need to
   compile: `python3` + `make` + a compiler (`build-essential` on Debian/Ubuntu,
   Xcode CLT on macOS, or the Visual Studio "Desktop development with C++"

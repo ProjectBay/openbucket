@@ -27,11 +27,11 @@ const STREAM_DRAIN_DEADLINE_MS = 30_000;
  *   2. Drain in-flight streams up to 30s, then destroy survivors.
  *   3. Cancel scheduler ticks and await the in-flight tick.
  *   4. Flush BlobStore handles.
- *   5. Close MikroORM / SQLite (checkpoints the WAL on better-sqlite3).
+ *   5. Close MikroORM / SQLite (checkpoints the WAL on libsql).
  *
  * Steps 3–5 are idempotent: Nest also invokes BackgroundService's and
  * MikroORM's own shutdown hooks, but BackgroundService guards on `shuttingDown`
- * and better-sqlite3's close is a no-op when already closed.
+ * and libsql's close is a no-op when already closed.
  */
 @Injectable()
 export class ShutdownService implements OnApplicationShutdown {
@@ -107,7 +107,7 @@ export class ShutdownService implements OnApplicationShutdown {
     this.log.log('BlobStore closed');
 
     // (5) Close MikroORM last — every prior step may emit a final write. The
-    //     `true` forces the close; better-sqlite3 checkpoints the WAL on the
+    //     `true` forces the close; libsql checkpoints the WAL on the
     //     final-connection close, leaving the DB clean for the next boot.
     await this.orm.close(true);
     this.log.log('MikroORM closed');

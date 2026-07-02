@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 import { InjectEntityManager } from '@mikro-orm/nestjs';
 import { promises as fs } from 'node:fs';
 import { v7 as uuidv7 } from 'uuid';

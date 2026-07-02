@@ -1,7 +1,7 @@
 # OpenBucket — Correctness-Under-Failure Audit
 
 Scope: durability & consistency guarantees vs. S3 expectations. **Single-node**
-architecture (NestJS + MikroORM/**better-sqlite3** for metadata + **local
+architecture (NestJS + MikroORM/**libsql** (SQLite) for metadata + **local
 filesystem** for blob payloads); there is no replication / erasure coding /
 quorum layer, so the *distributed* attack classes (split-brain, node loss,
 partition) do not apply and are out of scope.

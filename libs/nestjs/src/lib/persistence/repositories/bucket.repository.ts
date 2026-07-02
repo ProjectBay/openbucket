@@ -1,4 +1,4 @@
-import { EntityRepository } from '@mikro-orm/better-sqlite';
+import { EntityRepository } from '@mikro-orm/libsql';
 
 import { Bucket } from '../entities/bucket.entity';
 import { VersioningState } from '../entities/types';

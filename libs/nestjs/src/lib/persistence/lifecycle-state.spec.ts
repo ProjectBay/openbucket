@@ -1,4 +1,4 @@
-import { MikroORM } from '@mikro-orm/better-sqlite';
+import { MikroORM } from '@mikro-orm/libsql';
 import { ReflectMetadataProvider } from '@mikro-orm/core';
 
 // This spec imports through the persistence barrel (./index) — case 5 below

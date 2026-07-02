@@ -2,7 +2,7 @@ import { Controller, Get, type INestApplication, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { MikroOrmModule, getMikroORMToken } from '@mikro-orm/nestjs';
-import { BetterSqliteDriver, EntityManager } from '@mikro-orm/better-sqlite';
+import { LibSqlDriver, EntityManager } from '@mikro-orm/libsql';
 import { Entity, MikroORM, PrimaryKey, Property } from '@mikro-orm/core';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -54,7 +54,7 @@ class HostOrmController {
 @Module({
   imports: [
     MikroOrmModule.forRoot({
-      driver: BetterSqliteDriver,
+      driver: LibSqlDriver,
       dbName: ':memory:',
       entities: [HostThing],
       allowGlobalContext: true,

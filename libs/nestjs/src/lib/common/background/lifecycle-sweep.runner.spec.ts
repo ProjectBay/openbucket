@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 
 import { Clock } from '../clock/clock';
 import { LifecycleService } from '../../domain/lifecycle/lifecycle.service';

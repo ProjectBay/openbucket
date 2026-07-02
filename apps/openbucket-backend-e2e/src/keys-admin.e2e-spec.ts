@@ -4,10 +4,11 @@ import * as argon2 from 'argon2';
 
 import { SpawnedApp, spawnApp } from './support/spawn-app';
 
-// better-sqlite3 is a transitive dep (via @mikro-orm/better-sqlite); used here to
-// inspect the backing DB for the no-plaintext-secret invariant (case 8).
+// libsql is the SQLite driver (via @mikro-orm/libsql); it exposes a
+// better-sqlite3-compatible synchronous API. Used here to inspect the backing
+// DB for the no-plaintext-secret invariant (case 8).
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const Database = require('better-sqlite3');
+const Database = require('libsql');
 
 /**
  * TEST-0415 — Access-key management endpoints, end-to-end (§5.7).

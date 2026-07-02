@@ -1,7 +1,7 @@
 import { Logger, Module, Global, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MikroOrmModule, getRepositoryToken, InjectMikroORM } from '@mikro-orm/nestjs';
-import { BetterSqliteDriver } from '@mikro-orm/better-sqlite';
+import { LibSqlDriver } from '@mikro-orm/libsql';
 import { MikroORM, ReflectMetadataProvider } from '@mikro-orm/core';
 import { Migrator } from '@mikro-orm/migrations';
 import { mkdirSync } from 'node:fs';
@@ -58,11 +58,27 @@ const ENTITIES = [
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
         const dataDir = config.getOrThrow<string>('DATA_DIR');
-        // better-sqlite3 creates the .db file but not its parent directory;
-        // ensure DATA_DIR exists (e.g. a freshly-mounted empty volume).
-        mkdirSync(dataDir, { recursive: true });
+        // libsql (like better-sqlite3) creates the .db file but not its parent
+        // directory; ensure DATA_DIR exists (e.g. a freshly-mounted empty volume).
+        // Wrap the raw fs error: an unwritable/absent `dataDir` (a common
+        // first-run mistake — e.g. the README's `/var/lib/openbucket` on a dev
+        // box → EACCES, or a top-level path like `/openbucket` → ENOENT, since
+        // `recursive` can't create a directory at the filesystem root) otherwise
+        // surfaces as a cryptic mkdir errno with no hint at the cause.
+        try {
+          mkdirSync(dataDir, { recursive: true });
+        } catch (err) {
+          const code = (err as NodeJS.ErrnoException).code;
+          throw new Error(
+            `OpenBucket: cannot create the data directory "${dataDir}" (${code ?? 'error'}). ` +
+              `Set \`dataDir\` (library) / \`DATA_DIR\` (standalone) to a path this ` +
+              `process can create and write to — e.g. an absolute path under a ` +
+              `writable parent, or a relative path like "./data" in development.`,
+            { cause: err },
+          );
+        }
         return {
-        driver: BetterSqliteDriver,
+        driver: LibSqlDriver,
         // The auto request-context middleware injects the DEFAULT MikroORM
         // token, which a named context does not bind. Disable it; OrmContextMiddleware
         // (wired in OpenBucketCoreModule) creates the per-request context for

@@ -28,9 +28,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Node 22 on Linux satisfies BOTH better-sqlite3 prebuilds and Angular's
-  # require(ESM) — see ci.yml. (The Node 20 backend / Node 23 frontend split is
-  # a Windows-dev quirk only and does not apply on the Linux runner.)
+  # Node 22 on Linux satisfies Angular's require(ESM) — see ci.yml. (libsql's
+  # N-API binding is ABI-stable across Node majors, so it imposes no Node pin.
+  # The Node 20 backend / Node 23 frontend split is a Windows-dev quirk only and
+  # does not apply on the Linux runner.)
   NODE_VERSION: '22'
 
 jobs:

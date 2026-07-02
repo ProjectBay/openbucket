@@ -1,4 +1,4 @@
-import { resolveOptions } from './open-bucket-options';
+import { resolveOptions, validateSecurityCriticalOptions } from './open-bucket-options';
 
 describe('resolveOptions', () => {
   const base = {
@@ -30,5 +30,53 @@ describe('resolveOptions', () => {
     expect(() =>
       resolveOptions({ ...base, rootCredentials: { accessKeyId: '', secretAccessKey: '' } }),
     ).toThrow(/rootCredentials/);
+  });
+});
+
+describe('validateSecurityCriticalOptions', () => {
+  const SECRET = 'x'.repeat(40);
+  const HASH = '$argon2id$v=19$m=65536,t=3,p=4$abc$def';
+  const validBase = {
+    dataDir: '/data',
+    rootCredentials: { accessKeyId: 'AKIAEXAMPLE000000000', secretAccessKey: SECRET },
+    admin: { username: 'admin', passwordHash: HASH, jwtSecret: SECRET },
+  };
+  const validate = (o: Parameters<typeof resolveOptions>[0]) =>
+    validateSecurityCriticalOptions(resolveOptions(o));
+
+  it('passes on well-formed secrets (with admin)', () => {
+    expect(() => validate(validBase)).not.toThrow();
+  });
+
+  it('passes on a headless store (no admin) with a valid secret key', () => {
+    const { admin, ...headless } = validBase;
+    void admin;
+    expect(() => validate(headless)).not.toThrow();
+  });
+
+  it('accepts a base64-of-32-bytes sseKey and rejects a malformed one', () => {
+    expect(() => validate({ ...validBase, sseKey: Buffer.alloc(32).toString('base64') })).not.toThrow();
+    expect(() => validate({ ...validBase, sseKey: 'too-short' })).toThrow(/sseKey/);
+  });
+
+  it('rejects a too-short secret access key', () => {
+    expect(() =>
+      validate({ ...validBase, rootCredentials: { accessKeyId: 'AKIA', secretAccessKey: 'short' } }),
+    ).toThrow(/secretAccessKey/);
+  });
+
+  it('rejects a non-argon2id password hash and a too-short jwtSecret', () => {
+    expect(() => validate({ ...validBase, admin: { ...validBase.admin, passwordHash: 'plain' } })).toThrow(
+      /argon2id/,
+    );
+    expect(() => validate({ ...validBase, admin: { ...validBase.admin, jwtSecret: 'short' } })).toThrow(
+      /jwtSecret/,
+    );
+  });
+
+  it('does NOT enforce the AWS access-key-id format (library callers may use arbitrary keys)', () => {
+    expect(() =>
+      validate({ ...validBase, rootCredentials: { accessKeyId: 'my-lowercase-key', secretAccessKey: SECRET } }),
+    ).not.toThrow();
   });
 });

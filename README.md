@@ -213,7 +213,7 @@ commented list. The essentials:
 ## Architecture
 
 OpenBucket is a single Node.js process: **NestJS 11** for the HTTP surface,
-**MikroORM 6** over **better-sqlite3** for metadata, the local filesystem for
+**MikroORM 6** over **libsql** (SQLite) for metadata, the local filesystem for
 blob payloads, and an **Angular 21** ([Spartan UI](https://spartan.ng)) admin
 console served as static assets.
 

@@ -1,8 +1,8 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-import Database from 'better-sqlite3';
-import { MikroORM } from '@mikro-orm/better-sqlite';
+import Database from 'libsql';
+import { MikroORM } from '@mikro-orm/libsql';
 import { ReflectMetadataProvider } from '@mikro-orm/core';
 import { Migrator } from '@mikro-orm/migrations';
 import {

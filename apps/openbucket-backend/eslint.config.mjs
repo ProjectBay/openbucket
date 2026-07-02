@@ -24,7 +24,7 @@ export default [
           // moves them to the lib's package.json + verifies the bundle scan
           // re-adds them to the generated prod package.json.)
           ignoredDependencies: [
-            '@mikro-orm/better-sqlite',
+            '@mikro-orm/libsql',
             '@mikro-orm/migrations',
             '@mikro-orm/nestjs',
             '@nestjs/common',

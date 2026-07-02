@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EntityManager } from '@mikro-orm/better-sqlite';
+import { EntityManager } from '@mikro-orm/libsql';
 import { InjectEntityManager } from '@mikro-orm/nestjs';
 import { randomBytes } from 'node:crypto';
 import * as argon2 from 'argon2';

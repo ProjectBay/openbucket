@@ -5,12 +5,14 @@
 # non-root runtime that serves both on port 9000.
 #
 # ---- Why node:22-bookworm-slim, NOT alpine -------------------------------
-# better-sqlite3 (and argon2) ship prebuilt native bindings linked against
-# glibc. alpine is musl: those prebuilds are silently incompatible, so npm
-# falls back to compiling from source — which needs python3/make/g++ on BOTH
-# stages, adds ~30s, and yields an image only marginally smaller. bookworm-slim
-# (~85MB) is the boring, correct choice. Do not switch to alpine without a
-# benchmarked reason. Node 22.x (>=22.12) also satisfies Angular's require(ESM).
+# argon2 ships prebuilt native bindings linked against glibc; on alpine (musl)
+# they're silently incompatible and npm falls back to compiling from source —
+# which needs python3/make/g++ on BOTH stages, adds ~30s, and yields an image
+# only marginally smaller. bookworm-slim (~85MB) is the boring, correct choice.
+# (The SQLite driver, libsql, ships N-API prebuilds for both glibc AND musl, so
+# it alone no longer forces glibc — but argon2 still does; don't switch to
+# alpine without benchmarking argon2 there.) Node 22.x (>=22.12) also satisfies
+# Angular's require(ESM); libsql's N-API binding is ABI-stable across Node majors.
 # --------------------------------------------------------------------------
 
 # ---------- stage 1 : build ----------
@@ -69,7 +71,7 @@ WORKDIR /app
 
 # Backend dist → /app/dist (so main.js is /app/dist/main.js); SPA → /app/spa
 # (so SPA_ROOT = /app/dist/../spa resolves). Prod-only node_modules carries the
-# externalized runtime deps (better-sqlite3 native binding, etc.).
+# externalized runtime deps (libsql N-API binding, argon2, etc.).
 COPY --from=build --chown=openbucket:openbucket /workspace/dist/apps/openbucket-backend ./dist
 COPY --from=build --chown=openbucket:openbucket /workspace/spa ./spa
 COPY --from=build --chown=openbucket:openbucket /workspace/node_modules ./node_modules
