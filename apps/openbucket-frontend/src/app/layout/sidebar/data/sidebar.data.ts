@@ -31,6 +31,12 @@ export const sidebarConfig: SidebarConfig = {
           icon: 'lucideSettings',
           url: '/settings',
         }),
+        createSidebarConfig.item({
+          id: 'backup-restore',
+          title: 'sidebar.admin.backupRestore',
+          icon: 'lucideArchive',
+          url: '/backup-restore',
+        }),
       ],
     }),
   ],

@@ -10,6 +10,7 @@ import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
+  lucideArchive,
   lucideDatabase,
   lucideKey,
   lucideLayoutDashboard,
@@ -38,6 +39,7 @@ import { CommandPaletteService } from './command-palette.service';
   imports: [TranslateModule, NgIcon, BrnDialogImports, HlmDialogImports, HlmCommandImports, HlmKbd],
   providers: [
     provideIcons({
+      lucideArchive,
       lucideDatabase,
       lucideKey,
       lucideLayoutDashboard,
@@ -157,6 +159,7 @@ export class CommandPaletteComponent {
     { label: 'sidebar.storage.buckets', icon: 'lucideDatabase', url: '/buckets' },
     { label: 'sidebar.storage.keys', icon: 'lucideKey', url: '/keys' },
     { label: 'sidebar.storage.settings', icon: 'lucideSettings', url: '/settings' },
+    { label: 'sidebar.admin.backupRestore', icon: 'lucideArchive', url: '/backup-restore' },
   ];
 
   constructor() {

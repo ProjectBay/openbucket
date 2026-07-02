@@ -8,6 +8,32 @@ export default {
       settings: 'Einstellungen',
     },
     help: 'Hilfe',
+    admin: {
+      backupRestore: 'Sicherung & Wiederherstellung',
+    },
+  },
+  backupRestore: {
+    title: 'Sicherung & Wiederherstellung',
+    subtitle:
+      'Lade einen .zip-Snapshot herunter oder lade einen hoch, um einen Bucket oder die gesamte Instanz auf diesen Stand zurückzusetzen.',
+    bucket: {
+      title: 'Einzelner Bucket',
+      description:
+        'Sichere einen Bucket oder stelle eine Bucket-Sicherung wieder her (setzt diesen Bucket zurück).',
+      select: 'Bucket',
+      selectPlaceholder: 'Bucket auswählen…',
+      download: 'Sicherung herunterladen',
+      restore: 'Aus .zip wiederherstellen',
+    },
+    instance: {
+      title: 'Gesamte Instanz',
+      description: 'Sichere alle Buckets und Objekte oder stelle einen vollständigen Snapshot wieder her.',
+      download: 'Instanz-Sicherung herunterladen',
+      restore: 'Instanz wiederherstellen',
+    },
+    resetWarning:
+      'Beim Wiederherstellen wird der aktuelle Inhalt des Ziels GELÖSCHT und durch die Sicherung ersetzt. Dies kann nicht rückgängig gemacht werden.',
+    confirmLabel: 'Wiederherstellen',
   },
   breadcrumb: {
     objects: 'Objekte',
