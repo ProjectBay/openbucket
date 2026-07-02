@@ -153,4 +153,8 @@ jobs:
       - name: Run conformance suite
         env:
           OPENBUCKET_IMAGE: openbucket:${{ needs.build-image.outputs.image-tag }}
+          # The @aws-sdk/client-s3 SDK does a dynamic import() in its request
+          # pipeline; under Jest's VM that needs this flag, else the SDK-based
+          # object-roundtrip suite fails with ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING_FLAG.
+          NODE_OPTIONS: --experimental-vm-modules
         run: npx nx run conformance:e2e --ci
