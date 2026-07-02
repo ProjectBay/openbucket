@@ -214,13 +214,15 @@ export class BackupService {
   private static readonly BUCKET_RE = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
 
   private assertSafeBucket(name: string): void {
-    const norm = posix.normalize(name);
+    // Guard the RAW value (barriers the taint analysis recognises: includes('..'),
+    // isAbsolute) plus the strict S3 bucket allowlist.
     if (
-      !BackupService.BUCKET_RE.test(name) ||
+      name.includes('..') ||
       name.includes('/') ||
-      posix.isAbsolute(norm) ||
-      norm === '..' ||
-      norm.startsWith('../')
+      name.includes('\\') ||
+      name.includes('\0') ||
+      posix.isAbsolute(name) ||
+      !BackupService.BUCKET_RE.test(name)
     ) {
       throw new BadRequestException(`unsafe bucket name in backup archive: ${JSON.stringify(name)}`);
     }
@@ -228,20 +230,20 @@ export class BackupService {
 
   /**
    * Reject object keys from an uploaded archive that could escape the bucket
-   * directory when written (path traversal / Zip Slip). Uses path.normalize +
-   * an isAbsolute / '..'-prefix containment check (the standard barrier) so a
-   * hostile "a/../../etc" is rejected while a benign "my..file" is allowed.
-   * encodeKey also neutralises these on disk — this is the explicit boundary.
+   * directory when written (path traversal / Zip Slip). Guards the RAW key so
+   * the taint analysis recognises the barrier: any '..' (even as a substring),
+   * absolute paths, leading '/', backslashes, or NUL. This rejects the rare key
+   * that literally contains '..' — an acceptable trade for a hard traversal
+   * guarantee (encodeKey also neutralises these on disk).
    */
   private assertSafeKey(key: string): void {
-    const norm = posix.normalize(key);
     if (
       key.length === 0 ||
+      key.includes('..') ||
       key.includes('\0') ||
       key.includes('\\') ||
-      posix.isAbsolute(norm) ||
-      norm === '..' ||
-      norm.startsWith('../')
+      posix.isAbsolute(key) ||
+      key.startsWith('/')
     ) {
       throw new BadRequestException(`unsafe object key in backup archive: ${JSON.stringify(key)}`);
     }
@@ -262,6 +264,10 @@ export class BackupService {
   }
 
   private async wipeBucketObjects(bucket: string): Promise<void> {
+    // Inline traversal barrier before the delete path touches fs (trash move).
+    if (bucket.includes('..') || bucket.includes('/') || bucket.includes('\\') || posix.isAbsolute(bucket)) {
+      throw new BadRequestException(`unsafe bucket name in backup archive: ${JSON.stringify(bucket)}`);
+    }
     for (;;) {
       const { rows } = await this.objectRepo.listByPrefix(bucket, '', undefined, PAGE);
       const live = rows.filter((r) => !r.softDeleted);
@@ -280,9 +286,20 @@ export class BackupService {
     stream: Readable,
     manifest: BackupManifest,
   ): Promise<void> {
-    // Sink-adjacent barrier: never hand an unvalidated path to the writer.
-    this.assertSafeBucket(bucket);
-    this.assertSafeKey(key);
+    // Inline, sink-adjacent traversal barrier on the RAW values (the form the
+    // taint analysis recognises) immediately before the writer's fs paths.
+    if (
+      bucket.includes('..') ||
+      bucket.includes('/') ||
+      bucket.includes('\\') ||
+      key.includes('..') ||
+      key.includes('\0') ||
+      key.includes('\\') ||
+      posix.isAbsolute(key) ||
+      key.startsWith('/')
+    ) {
+      throw new BadRequestException(`unsafe path in backup archive: ${JSON.stringify(`${bucket}/${key}`)}`);
+    }
     const meta = manifest.objects.find((o) => o.bucket === bucket && o.key === key);
     await this.writer.put({
       bucket,
