@@ -9,6 +9,10 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.1.0-alpha.5] — 2026-07-03
+
 ### Fixed
 
 - **Admin console (default "compact" layout) showed no page title or primary
@@ -17,6 +21,15 @@ versions may include breaking changes.
   were invisible on the default layout. Compact now renders the full page header
   like the inset/sticky variants. The `PageHeaderService` also resets on
   navigation so header state never leaks between routes.
+
+### Changed
+
+- **Admin console UI refresh.** Dashboard KPI tiles now render with loading
+  skeletons (shared `stat-card`); the bucket and access-key lists gain sortable
+  column headers and a shared skeleton/error/empty state; the bucket-detail
+  screen's tabs move to a reusable page-layout scaffold (still deep-linkable via
+  `?tab=`, still lazy-loaded); and assorted header/consistency cleanups (e.g.
+  backup & restore uses the unified page header).
 
 ## [0.1.0-alpha.4] — 2026-07-02
 
@@ -115,7 +128,8 @@ feature-complete and tested; APIs may still change before 1.0.
 
 - Dropped a dead `objects.signal-store.ts` scaffold stub from the frontend.
 
-[Unreleased]: https://github.com/ProjectBay/openbucket/compare/nestjs-v0.1.0-alpha.4...HEAD
+[Unreleased]: https://github.com/ProjectBay/openbucket/compare/nestjs-v0.1.0-alpha.5...HEAD
+[0.1.0-alpha.5]: https://github.com/ProjectBay/openbucket/compare/nestjs-v0.1.0-alpha.4...nestjs-v0.1.0-alpha.5
 [0.1.0-alpha.4]: https://github.com/ProjectBay/openbucket/compare/nestjs-v0.1.0-alpha.3...nestjs-v0.1.0-alpha.4
 [0.1.0-alpha.3]: https://github.com/ProjectBay/openbucket/compare/nestjs-v0.1.0-alpha.2...nestjs-v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/ProjectBay/openbucket/compare/nestjs-v0.1.0-alpha.1...nestjs-v0.1.0-alpha.2
