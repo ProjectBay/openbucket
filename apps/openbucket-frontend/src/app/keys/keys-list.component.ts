@@ -15,24 +15,26 @@ import { HlmTableImports } from '@openbucket/spartan-ui/table';
 import { HlmBadge } from '@openbucket/spartan-ui/badge';
 import { HlmButton } from '@openbucket/spartan-ui/button';
 import { HlmSwitch } from '@openbucket/spartan-ui/switch';
-import { HlmSkeleton } from '@openbucket/spartan-ui/skeleton';
-import { HlmEmptyImports } from '@openbucket/spartan-ui/empty';
 import { HlmDropdownMenuImports } from '@openbucket/spartan-ui/dropdown-menu';
 import { CreatedKeyDto, KeySummaryDto } from '@openbucket/api-client';
 
 import { RelativeTimePipe } from '../shared/ui/relative-time.pipe';
 import { CopyButtonComponent } from '../shared/ui/copy-button.component';
 import { ConfirmDialogComponent } from '../shared/ui/confirm-dialog.component';
+import { ListStateComponent } from '../shared/ui/list-state.component';
+import { SortHeaderComponent, type SortDir } from '../shared/ui/sort-header.component';
 import { notify } from '../shared/ui/notify';
 import { PageHeaderService } from '../layout/shell/services';
 import { KeysSignalStore } from './keys.signal-store';
 import { KeyCreateDialogComponent } from './key-create-dialog.component';
 import { KeySecretOnceDialogComponent } from './key-secret-once-dialog.component';
 
+type KeySortKey = 'label' | 'lastUsed';
+
 /**
  * Access-keys management (STORY-0611): list/create/enable-disable/delete on
- * spartan-ng, with a one-time secret reveal. Title + Create action via the
- * unified page header.
+ * spartan-ng, with sortable headers, shared list-state, and a one-time secret
+ * reveal. Title + Create action via the unified page header.
  */
 @Component({
   selector: 'ob-keys-list',
@@ -44,12 +46,12 @@ import { KeySecretOnceDialogComponent } from './key-secret-once-dialog.component
     HlmBadge,
     HlmButton,
     HlmSwitch,
-    HlmSkeleton,
-    HlmEmptyImports,
     HlmDropdownMenuImports,
     RelativeTimePipe,
     CopyButtonComponent,
     ConfirmDialogComponent,
+    ListStateComponent,
+    SortHeaderComponent,
     KeyCreateDialogComponent,
     KeySecretOnceDialogComponent,
   ],
@@ -57,31 +59,21 @@ import { KeySecretOnceDialogComponent } from './key-secret-once-dialog.component
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="p-6">
-      @if (store.loading()) {
-        <div class="space-y-2">
-          @for (r of skeletonRows; track r) {
-            <div
-              hlmSkeleton
-              class="h-12 w-full rounded-md"
-            ></div>
-          }
-        </div>
-      } @else if (store.error()) {
-        <p class="text-destructive text-sm font-medium">{{ store.error() }}</p>
-      } @else if (store.count() === 0) {
-        <div hlm-empty>
-          <div hlm-empty-header>
-            <h3 hlmEmptyTitle>{{ 'keys.empty' | translate }}</h3>
-            <p hlmEmptyDescription>{{ 'keys.emptyHint' | translate }}</p>
-          </div>
-          <button
-            hlmBtn
-            (click)="createDialog().open()"
-          >
-            {{ 'keys.create' | translate }}
-          </button>
-        </div>
-      } @else {
+      <ob-list-state
+        [loading]="store.loading()"
+        [error]="store.error()"
+        [empty]="store.count() === 0"
+        emptyTitle="keys.empty"
+        emptyHint="keys.emptyHint"
+        [skeletonCount]="3"
+      >
+        <button
+          listEmptyAction
+          hlmBtn
+          (click)="createDialog().open()"
+        >
+          {{ 'keys.create' | translate }}
+        </button>
         <div hlmTableContainer>
           <table
             hlmTable
@@ -89,10 +81,24 @@ import { KeySecretOnceDialogComponent } from './key-secret-once-dialog.component
           >
             <thead hlmTHead>
               <tr hlmTr>
-                <th hlmTh>{{ 'keys.label' | translate }}</th>
+                <th hlmTh>
+                  <ob-sort-header
+                    label="keys.label"
+                    [active]="sortKey() === 'label'"
+                    [dir]="sortDir()"
+                    (sortToggle)="toggleSort('label')"
+                  />
+                </th>
                 <th hlmTh>{{ 'keys.accessKeyId' | translate }}</th>
                 <th hlmTh>{{ 'keys.role' | translate }}</th>
-                <th hlmTh>{{ 'keys.lastUsed' | translate }}</th>
+                <th hlmTh>
+                  <ob-sort-header
+                    label="keys.lastUsed"
+                    [active]="sortKey() === 'lastUsed'"
+                    [dir]="sortDir()"
+                    (sortToggle)="toggleSort('lastUsed')"
+                  />
+                </th>
                 <th hlmTh>{{ 'keys.enabled' | translate }}</th>
                 <th
                   hlmTh
@@ -103,7 +109,7 @@ import { KeySecretOnceDialogComponent } from './key-secret-once-dialog.component
               </tr>
             </thead>
             <tbody hlmTBody>
-              @for (k of store.items(); track k.id) {
+              @for (k of sorted(); track k.id) {
                 <tr hlmTr>
                   <td
                     hlmTd
@@ -176,7 +182,7 @@ import { KeySecretOnceDialogComponent } from './key-secret-once-dialog.component
             </tbody>
           </table>
         </div>
-      }
+      </ob-list-state>
     </div>
 
     <ob-key-create-dialog (created)="onCreated($event)" />
@@ -197,8 +203,26 @@ export class KeysListComponent implements OnInit, OnDestroy {
   protected readonly secretDialog = viewChild.required(KeySecretOnceDialogComponent);
   protected readonly confirmDialog = viewChild.required(ConfirmDialogComponent);
 
-  protected readonly skeletonRows = [0, 1, 2];
   protected readonly deleteTarget = signal<KeySummaryDto | null>(null);
+  protected readonly sortKey = signal<KeySortKey>('label');
+  protected readonly sortDir = signal<SortDir>('asc');
+
+  protected readonly sorted = computed(() => {
+    const key = this.sortKey();
+    const factor = this.sortDir() === 'asc' ? 1 : -1;
+    return [...this.store.items()].sort((a, b) => {
+      let cmp = 0;
+      if (key === 'label') {
+        cmp = (a.label ?? '').localeCompare(b.label ?? '');
+      } else {
+        // lastUsed: nulls (never used) sort last in ascending order.
+        const at = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : -Infinity;
+        const bt = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : -Infinity;
+        cmp = at - bt;
+      }
+      return cmp * factor;
+    });
+  });
   protected readonly deleteDescription = computed(
     () =>
       `Permanently delete the key "${this.deleteTarget()?.label ?? ''}"? Applications using it will stop working.`,
@@ -215,6 +239,15 @@ export class KeysListComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.pageHeader.hideActionButton();
+  }
+
+  protected toggleSort(key: KeySortKey): void {
+    if (this.sortKey() === key) {
+      this.sortDir.update((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortKey.set(key);
+      this.sortDir.set('asc');
+    }
   }
 
   onCreated(key: CreatedKeyDto): void {
