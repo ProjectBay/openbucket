@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, HttpException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createWriteStream, promises as fs } from 'node:fs';
 import { join } from 'node:path';
@@ -155,6 +155,7 @@ export class BackupService {
 
   /** Reset one bucket (`target`) to the contents of an uploaded backup .zip. */
   async restoreBucket(target: string, upload: Readable): Promise<{ objectsRestored: number }> {
+    this.assertSafeBucket(target);
     const zipPath = await this.spool(upload);
     try {
       const manifest = await this.readManifest(zipPath);
@@ -209,10 +210,38 @@ export class BackupService {
 
   // ===== internals ======================================================
 
+  /** S3-style bucket name (also rejects any '..'), the write path's directory. */
+  private static readonly BUCKET_RE = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+
+  private assertSafeBucket(name: string): void {
+    if (!BackupService.BUCKET_RE.test(name) || name.includes('..')) {
+      throw new BadRequestException(`unsafe bucket name in backup archive: ${JSON.stringify(name)}`);
+    }
+  }
+
+  /**
+   * Reject object keys from an uploaded archive that could escape the bucket
+   * directory when written (Zip Slip): absolute paths, '.'/'..' path segments,
+   * backslashes, or NUL. encodeKey already neutralises these on disk, but this
+   * is an explicit, auditable barrier at the untrusted-input boundary.
+   */
+  private assertSafeKey(key: string): void {
+    if (
+      key.length === 0 ||
+      key.startsWith('/') ||
+      key.includes('\0') ||
+      key.includes('\\') ||
+      key.split('/').some((seg) => seg === '.' || seg === '..')
+    ) {
+      throw new BadRequestException(`unsafe object key in backup archive: ${JSON.stringify(key)}`);
+    }
+  }
+
   private async ensureBucket(
     name: string,
     cfg: BackupManifest['buckets'][number],
   ): Promise<void> {
+    this.assertSafeBucket(name);
     if (await this.bucketRepo.exists(name)) return;
     await this.buckets.create({
       name,
@@ -267,11 +296,26 @@ export class BackupService {
   private async readManifest(zipPath: string): Promise<BackupManifest> {
     let manifest: BackupManifest | undefined;
     await this.readZip(zipPath, async (name, openStream) => {
-      if (name !== 'manifest.json') return; // skip payloads (don't open their streams)
+      if (name.startsWith(DATA_PREFIX)) {
+        // Validate every payload entry name up front so a hostile archive is
+        // rejected BEFORE any destructive wipe (fail-fast Zip Slip guard).
+        const rest = name.slice(DATA_PREFIX.length);
+        const slash = rest.indexOf('/');
+        if (slash > 0) {
+          this.assertSafeBucket(rest.slice(0, slash));
+          this.assertSafeKey(rest.slice(slash + 1));
+        }
+        return; // don't open payload streams during the manifest pass
+      }
+      if (name !== 'manifest.json') return;
       const chunks: Buffer[] = [];
       const rs = await openStream();
       for await (const c of rs) chunks.push(c as Buffer);
-      manifest = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      try {
+        manifest = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      } catch {
+        throw new BadRequestException('invalid manifest.json in backup archive (not JSON)');
+      }
     });
     if (!manifest || manifest.version !== 1 || !Array.isArray(manifest.buckets)) {
       throw new BadRequestException('invalid or missing manifest.json in backup archive');
@@ -292,6 +336,9 @@ export class BackupService {
       const bucket = rest.slice(0, slash);
       const key = rest.slice(slash + 1);
       if (!key) return;
+      // Untrusted archive: validate before any value reaches a filesystem sink.
+      this.assertSafeBucket(bucket);
+      this.assertSafeKey(key);
       const rs = await openStream();
       await handler(bucket, key, rs);
     });
@@ -306,14 +353,19 @@ export class BackupService {
     zipPath: string,
     onEntry: (name: string, openStream: () => Promise<Readable>) => Promise<void>,
   ): Promise<void> {
+    // A failure to open/parse the archive is bad *input* (400), not a server fault.
+    const badZip = (msg: string) => new BadRequestException(`invalid backup archive: ${msg}`);
     const zipfile = await new Promise<yauzl.ZipFile>((resolve, reject) =>
       yauzl.open(zipPath, { lazyEntries: true }, (err, zf) =>
-        err || !zf ? reject(err ?? new Error('bad zip')) : resolve(zf),
+        err || !zf ? reject(badZip('not a readable .zip')) : resolve(zf),
       ),
     );
     try {
       await new Promise<void>((resolve, reject) => {
-        zipfile.on('error', reject);
+        // Preserve our own HttpExceptions (e.g. the Zip Slip guard) as-is; map
+        // raw yauzl/zlib parse errors to 400 rather than surfacing a 500.
+        const fail = (e: unknown) => reject(e instanceof HttpException ? e : badZip('corrupt archive'));
+        zipfile.on('error', fail);
         zipfile.on('end', () => resolve());
         zipfile.on('entry', (entry: yauzl.Entry) => {
           if (entry.fileName.endsWith('/')) {
@@ -322,13 +374,11 @@ export class BackupService {
           }
           const openStream = (): Promise<Readable> =>
             new Promise((res, rej) =>
-              zipfile.openReadStream(entry, (err, rs) =>
-                err || !rs ? rej(err ?? new Error('bad entry')) : res(rs),
-              ),
+              zipfile.openReadStream(entry, (err, rs) => (err || !rs ? rej(badZip('corrupt entry')) : res(rs))),
             );
           onEntry(entry.fileName, openStream)
             .then(() => zipfile.readEntry())
-            .catch(reject);
+            .catch(fail);
         });
         zipfile.readEntry();
       });

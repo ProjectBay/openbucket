@@ -1,6 +1,8 @@
 import { request as httpRequest } from 'node:http';
+import { PassThrough } from 'node:stream';
 import * as argon2 from 'argon2';
 import * as aws4 from 'aws4';
+import * as archiver from 'archiver';
 
 import { SpawnedApp, spawnApp } from './support/spawn-app';
 
@@ -107,6 +109,21 @@ function s3(method: string, path: string, body?: string): Promise<Res> {
   });
 }
 
+/** Build an in-memory .zip from [name, content] entries (for hostile archives). */
+function buildZip(entries: Array<[string, string]>): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const a = archiver('zip');
+    const chunks: Buffer[] = [];
+    const pt = new PassThrough();
+    pt.on('data', (c) => chunks.push(c as Buffer));
+    pt.on('end', () => resolve(Buffer.concat(chunks)));
+    a.on('error', reject);
+    a.pipe(pt);
+    for (const [name, content] of entries) a.append(content, { name });
+    void a.finalize();
+  });
+}
+
 const keys = (b: string) =>
   http('GET', `/api/admin/buckets/${b}/objects`, { bearer }).then((r) =>
     (JSON.parse(r.body).contents as { key: string }[]).map((o) => o.key).sort(),
@@ -191,5 +208,25 @@ describe('Admin backup & restore (e2e)', () => {
     expect(names).not.toContain('scratch'); // the mutation was rolled back
     expect(names).toContain('src');
     expect(await keys('src')).toEqual(['a.txt', 'folder/b.txt', 'folder/sub/c.txt']); // originals intact
+  }, 60_000);
+
+  it('rejects a hostile / unreadable archive with 400 (Zip Slip guard + parse errors)', async () => {
+    // Not a zip at all → 400, never 500.
+    const garbage = await sendBinary('POST', '/api/admin/buckets/dst/restore', Buffer.from('this is not a zip'), bearer);
+    expect(garbage.status).toBe(400);
+
+    // Hostile entry names (invalid bucket, path traversal) → 400; nothing escapes.
+    const manifest = JSON.stringify({
+      version: 1,
+      kind: 'bucket',
+      createdAt: 'x',
+      buckets: [{ name: 'src', versioning: 'disabled', objectLock: false, region: 'us-east-1' }],
+      objects: [],
+    });
+    for (const bad of ['data/Evil/x.txt', 'data/../evil.txt', 'data/src/../../../evil.txt']) {
+      const zip = await buildZip([['manifest.json', manifest], [bad, 'pwned']]);
+      const res = await sendBinary('POST', '/api/admin/buckets/dst/restore', zip, bearer);
+      expect(res.status).toBe(400);
+    }
   }, 60_000);
 });
