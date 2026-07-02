@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
-  OnDestroy,
   OnInit,
   inject,
   signal,
@@ -14,7 +13,6 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucidePlus, lucideTrash2 } from '@ng-icons/lucide';
-import { HlmTabsImports } from '@openbucket/spartan-ui/tabs';
 import { HlmButton } from '@openbucket/spartan-ui/button';
 import { HlmSwitch } from '@openbucket/spartan-ui/switch';
 import { HlmBadge } from '@openbucket/spartan-ui/badge';
@@ -39,6 +37,7 @@ import { RelativeTimePipe } from '../shared/ui/relative-time.pipe';
 import { ByteSizePipe } from '../shared/ui/byte-size.pipe';
 import { notify } from '../shared/ui/notify';
 import { PageHeaderService } from '../layout/shell/services';
+import { PageLayoutComponent, type PageTab } from '../layout/components/page-layout/page-layout.component';
 
 /**
  * Bucket-detail tabbed page (STORY-0613): manages bucket-level S3 config over the
@@ -53,7 +52,7 @@ import { PageHeaderService } from '../layout/shell/services';
     FormsModule,
     TranslateModule,
     NgIcon,
-    HlmTabsImports,
+    PageLayoutComponent,
     HlmButton,
     HlmSwitch,
     HlmBadge,
@@ -71,30 +70,17 @@ import { PageHeaderService } from '../layout/shell/services';
   providers: [provideIcons({ lucidePlus, lucideTrash2 })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="p-6">
-      <hlm-tabs
-        [tab]="activeTab()"
-        (tabActivated)="onTab($event)"
-      >
-        <hlm-tabs-list class="w-full justify-start overflow-x-auto">
-          <button hlmTabsTrigger="objects">{{ 'bucketDetail.tabs.objects' | translate }}</button>
-          <button hlmTabsTrigger="properties">{{ 'bucketDetail.tabs.properties' | translate }}</button>
-          <button hlmTabsTrigger="versioning">{{ 'bucketDetail.tabs.versioning' | translate }}</button>
-          <button hlmTabsTrigger="encryption">{{ 'bucketDetail.tabs.encryption' | translate }}</button>
-          <button hlmTabsTrigger="objectLock">{{ 'bucketDetail.tabs.objectLock' | translate }}</button>
-          <button hlmTabsTrigger="tags">{{ 'bucketDetail.tabs.tags' | translate }}</button>
-          <button hlmTabsTrigger="lifecycle">{{ 'bucketDetail.tabs.lifecycle' | translate }}</button>
-          <button hlmTabsTrigger="cors">{{ 'bucketDetail.tabs.cors' | translate }}</button>
-          <button hlmTabsTrigger="policy">{{ 'bucketDetail.tabs.policy' | translate }}</button>
-        </hlm-tabs-list>
+    <ob-page-layout
+      [tabs]="tabs"
+      [activeTab]="activeTab()"
+      (tabChange)="onTab($event)"
+    >
+      @switch (activeTab()) {
+        @case ('objects') {
+          <ob-object-browser [padded]="false" />
+        }
 
-        <div hlmTabsContent="objects" class="pt-4">
-          @if (activeTab() === 'objects') {
-            <ob-object-browser [padded]="false" />
-          }
-        </div>
-
-        <div hlmTabsContent="properties" class="pt-4">
+        @case ('properties') {
           @if (summary(); as s) {
             <div hlmCard class="max-w-lg">
               <div hlmCardContent class="space-y-2 pt-6 text-sm">
@@ -118,9 +104,9 @@ import { PageHeaderService } from '../layout/shell/services';
               </div>
             </div>
           }
-        </div>
+        }
 
-        <div hlmTabsContent="versioning" class="pt-4">
+        @case ('versioning') {
           <div hlmCard class="max-w-lg">
             <div hlmCardContent class="flex items-center justify-between gap-4 pt-6">
               <div>
@@ -134,9 +120,9 @@ import { PageHeaderService } from '../layout/shell/services';
               />
             </div>
           </div>
-        </div>
+        }
 
-        <div hlmTabsContent="encryption" class="pt-4">
+        @case ('encryption') {
           <div hlmCard class="max-w-lg">
             <div hlmCardContent class="flex items-center justify-between gap-4 pt-6">
               <div>
@@ -150,9 +136,9 @@ import { PageHeaderService } from '../layout/shell/services';
               />
             </div>
           </div>
-        </div>
+        }
 
-        <div hlmTabsContent="objectLock" class="pt-4">
+        @case ('objectLock') {
           <div hlmCard class="max-w-lg">
             <div hlmCardContent class="space-y-4 pt-6">
               <div class="flex items-center justify-between gap-4">
@@ -208,9 +194,9 @@ import { PageHeaderService } from '../layout/shell/services';
               </div>
             </div>
           </div>
-        </div>
+        }
 
-        <div hlmTabsContent="tags" class="pt-4">
+        @case ('tags') {
           <div hlmCard class="max-w-xl">
             <div hlmCardContent class="space-y-2 pt-6">
               @for (t of tagRows(); track $index) {
@@ -230,30 +216,30 @@ import { PageHeaderService } from '../layout/shell/services';
               </div>
             </div>
           </div>
-        </div>
+        }
 
-        <div hlmTabsContent="lifecycle" class="max-w-2xl pt-4">
-          @if (activeTab() === 'lifecycle') {
+        @case ('lifecycle') {
+          <div class="max-w-2xl">
             <ob-bucket-lifecycle-editor [bucket]="name()" />
-          }
-        </div>
+          </div>
+        }
 
-        <div hlmTabsContent="cors" class="max-w-2xl pt-4">
-          @if (activeTab() === 'cors') {
+        @case ('cors') {
+          <div class="max-w-2xl">
             <ob-bucket-cors-editor [bucket]="name()" />
-          }
-        </div>
+          </div>
+        }
 
-        <div hlmTabsContent="policy" class="max-w-2xl pt-4">
-          @if (activeTab() === 'policy') {
+        @case ('policy') {
+          <div class="max-w-2xl">
             <ob-bucket-policy-editor [bucket]="name()" />
-          }
-        </div>
-      </hlm-tabs>
-    </div>
+          </div>
+        }
+      }
+    </ob-page-layout>
   `,
 })
-export class BucketDetailComponent implements OnInit, OnDestroy {
+export class BucketDetailComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -262,6 +248,18 @@ export class BucketDetailComponent implements OnInit, OnDestroy {
 
   readonly name = signal('');
   readonly activeTab = signal('objects');
+
+  protected readonly tabs: PageTab[] = [
+    { id: 'objects', label: 'bucketDetail.tabs.objects' },
+    { id: 'properties', label: 'bucketDetail.tabs.properties' },
+    { id: 'versioning', label: 'bucketDetail.tabs.versioning' },
+    { id: 'encryption', label: 'bucketDetail.tabs.encryption' },
+    { id: 'objectLock', label: 'bucketDetail.tabs.objectLock' },
+    { id: 'tags', label: 'bucketDetail.tabs.tags' },
+    { id: 'lifecycle', label: 'bucketDetail.tabs.lifecycle' },
+    { id: 'cors', label: 'bucketDetail.tabs.cors' },
+    { id: 'policy', label: 'bucketDetail.tabs.policy' },
+  ];
   readonly summary = signal<BucketSummaryDto | null>(null);
   readonly encryptionEnabled = signal(false);
   readonly tagRows = signal<{ key: string; value: string }[]>([]);
@@ -285,7 +283,7 @@ export class BucketDetailComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.name.set(this.route.snapshot.paramMap.get('name') ?? '');
     this.pageHeader.setPageHeader(this.name());
-    this.pageHeader.setHasTabs(true);
+    // hasTabs is managed by <ob-page-layout>.
     void this.loadSummary();
     // Lazy-load each tab's config only when it becomes active, so unconfigured
     // features aren't all probed (and 404'd) on every page open.
@@ -294,10 +292,6 @@ export class BucketDetailComponent implements OnInit, OnDestroy {
       this.activeTab.set(tab);
       this.loadTab(tab);
     });
-  }
-
-  ngOnDestroy(): void {
-    this.pageHeader.setHasTabs(false);
   }
 
   private loadTab(tab: string): void {
