@@ -75,6 +75,12 @@ export const appRoutes: Routes = [
           import('./settings/settings.component').then((m) => m.SettingsComponent),
       },
       {
+        path: 'backup-restore',
+        data: { breadcrumb: 'sidebar.admin.backupRestore' },
+        loadComponent: () =>
+          import('./backup-restore/backup-restore.component').then((m) => m.BackupRestoreComponent),
+      },
+      {
         path: '**',
         loadComponent: () =>
           import('./not-found/not-found.component').then((m) => m.NotFoundComponent),

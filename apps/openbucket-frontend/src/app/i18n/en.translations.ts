@@ -8,6 +8,31 @@ export default {
       settings: 'Settings',
     },
     help: 'Help',
+    admin: {
+      backupRestore: 'Backup & Restore',
+    },
+  },
+  backupRestore: {
+    title: 'Backup & Restore',
+    subtitle:
+      'Download a .zip snapshot, or upload one to reset a bucket or the whole instance to that state.',
+    bucket: {
+      title: 'Single bucket',
+      description: 'Back up one bucket, or restore a bucket backup (resets that bucket).',
+      select: 'Bucket',
+      selectPlaceholder: 'Choose a bucket…',
+      download: 'Download backup',
+      restore: 'Restore from .zip',
+    },
+    instance: {
+      title: 'Whole instance',
+      description: 'Back up every bucket and object, or restore a full snapshot.',
+      download: 'Download instance backup',
+      restore: 'Restore instance',
+    },
+    resetWarning:
+      'Restoring ERASES the current contents of the target and replaces them with the backup. This cannot be undone.',
+    confirmLabel: 'Restore',
   },
   breadcrumb: {
     objects: 'Objects',

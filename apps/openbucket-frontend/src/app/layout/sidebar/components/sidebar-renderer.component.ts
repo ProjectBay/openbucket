@@ -4,6 +4,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { TranslateModule } from '@ngx-translate/core';
 import {
+  lucideArchive,
   lucideChevronDown,
   lucideChevronRight,
   lucideDatabase,
@@ -35,6 +36,7 @@ import { SidebarConfig } from '../types';
   ],
   providers: [
     provideIcons({
+      lucideArchive,
       lucideChevronDown,
       lucideChevronRight,
       lucideDatabase,

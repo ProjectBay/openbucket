@@ -7,6 +7,7 @@ import { BucketsAdminModule } from './buckets/buckets-admin.module';
 import { ObjectsAdminModule } from './objects/objects-admin.module';
 import { KeysAdminModule } from './keys/keys-admin.module';
 import { SettingsAdminModule } from './settings/settings-admin.module';
+import { BackupModule } from './backup/backup.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { AuditService } from './audit/audit.service';
 import { AdminBootstrapService } from './bootstrap/admin-bootstrap.service';
@@ -25,6 +26,7 @@ export const ADMIN_CONTROLLER_MODULES = [
   ObjectsAdminModule,
   KeysAdminModule,
   SettingsAdminModule,
+  BackupModule,
 ];
 
 /**
