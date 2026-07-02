@@ -40,6 +40,13 @@ describe('conformance: object roundtrip', () => {
       endpoint: `http://${container.getHost()}:${container.getMappedPort(9000)}`,
       region: 'us-east-1',
       forcePathStyle: true,
+      // AWS SDK v3 (>=~3.650) adds a default CRC32 to every request and loads the
+      // crc32 module via a dynamic import() on the first send() — which Jest's VM
+      // rejects (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING_FLAG) unless run with
+      // --experimental-vm-modules. Checksums are optional in S3, so opt out to
+      // keep this suite runnable under Jest without the Node flag.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
       credentials: {
         accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
         secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
