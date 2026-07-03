@@ -172,6 +172,7 @@ export default {
     morePages: 'weitere Seiten',
     searchPlaceholder: 'Präfix filtern / suchen (/)',
     perPage: '/ Seite',
+    itemsOnPage: 'auf dieser Seite',
     loading: 'Wird geladen…',
     previous: 'Zurück',
     next: 'Weiter',

@@ -44,13 +44,21 @@ const STORAGE_KEY = 'appearance-settings';
 
 const defaultState: AppearanceState = {
   theme: 'system',
-  shellVariant: 'compact',
-  tabsVariant: 'default',
+  shellVariant: 'inset',
+  tabsVariant: 'line',
   contentAlignment: 'center',
   contentMaxWidth: 'full',
   colorScheme: 'slate',
   locale: 'en',
   reducedMotion: false,
+};
+
+// Shell layout, tabs style, and content alignment are fixed app defaults — no
+// longer user-configurable — so any value persisted by an older build is ignored.
+const FIXED: Pick<AppearanceState, 'shellVariant' | 'tabsVariant' | 'contentAlignment'> = {
+  shellVariant: defaultState.shellVariant,
+  tabsVariant: defaultState.tabsVariant,
+  contentAlignment: defaultState.contentAlignment,
 };
 
 /** Toggle the global `reduce-motion` class STORY-0616's CSS keys off. */
@@ -61,7 +69,7 @@ function applyReducedMotion(value: boolean): void {
 function loadFromStorage(): AppearanceState {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return { ...defaultState, ...JSON.parse(stored) };
+    if (stored) return { ...defaultState, ...JSON.parse(stored), ...FIXED };
   } catch {
     // ignore
   }

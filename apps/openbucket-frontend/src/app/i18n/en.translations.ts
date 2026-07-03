@@ -171,6 +171,7 @@ export default {
     morePages: 'more pages',
     searchPlaceholder: 'Filter / search prefix (/)',
     perPage: '/ page',
+    itemsOnPage: 'on this page',
     loading: 'Loading…',
     previous: 'Previous',
     next: 'Next',
