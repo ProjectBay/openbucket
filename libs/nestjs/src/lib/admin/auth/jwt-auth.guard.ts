@@ -38,7 +38,11 @@ export class JwtAuthGuard implements CanActivate {
     private readonly jwt: JwtService,
     @Optional() @Inject(OPEN_BUCKET_OPTIONS) options?: ResolvedOpenBucketOptions,
   ) {
-    this.adminPrefix = `${options?.mountPath ?? ''}/api/admin/`;
+    // Lower-cased: the prefix test below is case-INSENSITIVE because Express
+    // routes case-insensitively by default. A case-sensitive test here would
+    // fail OPEN — e.g. `GET /api/Admin/backup` reaches the admin handler but
+    // slips past a case-sensitive `/api/admin/` check (CWE-178, TASK-2100).
+    this.adminPrefix = `${options?.mountPath ?? ''}/api/admin/`.toLowerCase();
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -48,7 +52,7 @@ export class JwtAuthGuard implements CanActivate {
     // host app's own routes when mounted) passes. CRITICAL: under a mountPath the
     // admin routes are `<mountPath>/api/admin/*`, so this prefix is mount-aware —
     // a hardcoded `/api/admin/` would leave the mounted admin API UNGUARDED.
-    if (!req.path.startsWith(this.adminPrefix)) return true;
+    if (!req.path.toLowerCase().startsWith(this.adminPrefix)) return true;
 
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
