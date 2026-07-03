@@ -25,7 +25,14 @@ import {
   lucideCopy,
   lucideDownload,
   lucideEllipsisVertical,
+  lucideFile,
+  lucideFileArchive,
+  lucideFileAudio,
+  lucideFileCode,
+  lucideFileText,
+  lucideFileVideo,
   lucideFolder,
+  lucideImage,
   lucideInfo,
   lucideLink,
   lucideFolderPlus,
@@ -116,8 +123,15 @@ import { ObjectUploadComponent } from './object-upload.component';
       lucideCopy,
       lucideDownload,
       lucideEllipsisVertical,
+      lucideFile,
+      lucideFileArchive,
+      lucideFileAudio,
+      lucideFileCode,
+      lucideFileText,
+      lucideFileVideo,
       lucideFolder,
       lucideFolderPlus,
+      lucideImage,
       lucideInfo,
       lucideLink,
       lucideSearch,
@@ -358,13 +372,20 @@ import { ObjectUploadComponent } from './object-upload.component';
                   />
                 </td>
                 <td hlmTd>
-                  <button
-                    type="button"
-                    class="break-all text-left font-medium text-primary hover:underline"
-                    (click)="openObject(o)"
-                  >
-                    {{ objectLabel(o) }}
-                  </button>
+                  <div class="flex items-center gap-2">
+                    <ng-icon
+                      [name]="fileIcon(o.key)"
+                      class="text-muted-foreground shrink-0 text-base"
+                      aria-hidden="true"
+                    />
+                    <button
+                      type="button"
+                      class="break-all text-left font-medium text-primary hover:underline"
+                      (click)="openObject(o)"
+                    >
+                      {{ objectLabel(o) }}
+                    </button>
+                  </div>
                 </td>
                 <td hlmTd>
                   @if (o.storageClass) {
@@ -925,6 +946,26 @@ export class ObjectBrowserComponent implements OnInit {
 
   objectLabel(o: ObjectListItem): string {
     return o.key.slice(this.prefix().length);
+  }
+
+  /** Lucide icon name for an object, picked from its file extension. */
+  fileIcon(key: string): string {
+    const ext = key.includes('.') ? key.slice(key.lastIndexOf('.') + 1).toLowerCase() : '';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'avif', 'bmp', 'ico', 'tif', 'tiff'].includes(ext))
+      return 'lucideImage';
+    if (['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', 'flv', 'wmv'].includes(ext)) return 'lucideFileVideo';
+    if (['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac', 'opus'].includes(ext)) return 'lucideFileAudio';
+    if (['zip', 'tar', 'gz', 'tgz', 'rar', '7z', 'bz2', 'xz', 'zst'].includes(ext)) return 'lucideFileArchive';
+    if (
+      [
+        'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'json', 'html', 'htm', 'css', 'scss', 'py', 'go',
+        'rs', 'java', 'c', 'cpp', 'h', 'hpp', 'sh', 'bash', 'yml', 'yaml', 'xml', 'rb', 'php', 'sql', 'toml',
+      ].includes(ext)
+    )
+      return 'lucideFileCode';
+    if (['txt', 'md', 'markdown', 'log', 'csv', 'tsv', 'pdf', 'doc', 'docx', 'rtf'].includes(ext))
+      return 'lucideFileText';
+    return 'lucideFile';
   }
 
   isSelected(key: string): boolean {
