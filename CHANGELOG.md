@@ -9,6 +9,26 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.7] — 2026-07-03
+
+### Added
+
+- **Admin console: version & updates.** A version line in the sidebar footer (with
+  a notification dot when a newer release exists) links to a new **About** page
+  showing the running version, an update check against GitHub Releases, the full
+  changelog (Markdown-rendered), and links to GitHub Releases + npm. New
+  `GET /api/admin/version` endpoint, behind the admin JWT guard.
+
+### Changed
+
+- **Admin console: fixed layout defaults.** Shell layout (**inset**), tabs style
+  (**underline**), and content alignment (**center**) are now fixed defaults; their
+  controls were removed from Settings and any value persisted by an older build is
+  ignored. Content width, theme, color scheme, language, and reduced-motion remain
+  user-configurable.
+- **Object browser: restyled the pagination bar** — a left-side item/page count,
+  centered previous/next controls, and a right-aligned page-size selector.
+
 ## [0.1.0-alpha.6] — 2026-07-03
 
 ### Fixed
