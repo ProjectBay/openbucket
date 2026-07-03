@@ -12,7 +12,7 @@ import {
 import { Subscription } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideRotateCcw, lucideUpload, lucideX } from '@ng-icons/lucide';
+import { lucideFolderUp, lucideRotateCcw, lucideUpload, lucideX } from '@ng-icons/lucide';
 import { HlmButton } from '@openbucket/spartan-ui/button';
 import { HlmProgressImports } from '@openbucket/spartan-ui/progress';
 
@@ -40,7 +40,7 @@ interface UploadItem {
   standalone: true,
   selector: 'ob-object-upload',
   imports: [NgIcon, TranslateModule, HlmButton, HlmProgressImports],
-  providers: [provideIcons({ lucideRotateCcw, lucideUpload, lucideX })],
+  providers: [provideIcons({ lucideFolderUp, lucideRotateCcw, lucideUpload, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="space-y-2">
@@ -49,38 +49,47 @@ interface UploadItem {
           {{ 'upload.uploadTo' | translate }}
           <span class="text-foreground font-medium">{{ prefix || ('upload.bucketRoot' | translate) }}</span>
         </span>
-        <label
+        <input
+          #fileInput
+          type="file"
+          multiple
+          hidden
+          (change)="onPick($event)"
+        />
+        <button
           hlmBtn
           size="sm"
-          class="cursor-pointer"
+          type="button"
+          (click)="fileInput.click()"
         >
           <ng-icon
             name="lucideUpload"
             class="text-base"
           />
           {{ 'upload.browse' | translate }}
-          <input
-            type="file"
-            multiple
-            class="sr-only"
-            (change)="onPick($event)"
-          />
-        </label>
-        <label
+        </button>
+
+        <input
+          #folderInput
+          type="file"
+          multiple
+          webkitdirectory
+          hidden
+          (change)="onPick($event)"
+        />
+        <button
           hlmBtn
-          variant="ghost"
+          variant="outline"
           size="sm"
-          class="cursor-pointer"
+          type="button"
+          (click)="folderInput.click()"
         >
-          {{ 'upload.folder' | translate }}
-          <input
-            type="file"
-            multiple
-            webkitdirectory
-            class="sr-only"
-            (change)="onPick($event)"
+          <ng-icon
+            name="lucideFolderUp"
+            class="text-base"
           />
-        </label>
+          {{ 'upload.folder' | translate }}
+        </button>
       </div>
 
       @if (uploads().length > 0) {
