@@ -176,6 +176,115 @@ versioning / encryption / lifecycle / CORS / policy, browsing audit events), cal
 the JSON admin API under `<mountPath>/api/admin/*` — the generated, typed
 [`@openbucket/api-client`](../api-client) wraps it.
 
+### Recipe: accept file uploads and store their URLs
+
+A very common pattern: your NestJS app takes a browser upload, streams it into
+OpenBucket, and saves a row (with a URL) in **your own** database.
+
+**1 — make sure the bucket exists** (once, at startup):
+
+```ts
+import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { OpenBucketService } from '@openbucket/nestjs';
+
+@Injectable()
+export class UploadsBootstrap implements OnApplicationBootstrap {
+  constructor(private readonly ob: OpenBucketService) {}
+
+  async onApplicationBootstrap() {
+    if (!(await this.ob.bucketExists('uploads'))) {
+      await this.ob.createBucket('uploads');
+    }
+  }
+}
+```
+
+**2 — the upload endpoint** — parse the multipart file (multer, via
+`FileInterceptor`), `putObject` it into OpenBucket, then persist it with your ORM:
+
+```ts
+import {
+  BadRequestException,
+  Controller,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { OpenBucketService } from '@openbucket/nestjs';
+import { randomUUID } from 'node:crypto';
+import { extname } from 'node:path';
+import { PrismaService } from './prisma.service'; // ← your DB; swap for TypeORM / MikroORM / Drizzle
+
+const BUCKET = 'uploads';
+const PUBLIC_ORIGIN = 'https://files.example.com'; // where clients reach the store
+
+@Controller('files')
+export class FilesController {
+  constructor(
+    private readonly ob: OpenBucketService,
+    private readonly db: PrismaService,
+  ) {}
+
+  @Post()
+  @UseInterceptors(FileInterceptor('file')) // multipart field name: "file"
+  async upload(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('file is required');
+
+    // A stable, collision-free key. Keep the extension for tidy URLs.
+    const key = `${new Date().getFullYear()}/${randomUUID()}${extname(file.originalname)}`;
+
+    // Stream straight into OpenBucket — in-process, no HTTP round-trip.
+    await this.ob.putObject(BUCKET, key, file.buffer, { contentType: file.mimetype });
+
+    // Persist the STABLE identity (bucket + key) — NOT a signed URL (those expire).
+    const saved = await this.db.file.create({
+      data: {
+        bucket: BUCKET,
+        key,
+        name: file.originalname,
+        size: file.size,
+        contentType: file.mimetype,
+      },
+    });
+
+    return this.toDto(saved);
+  }
+
+  private toDto(f: { id: string; bucket: string; key: string; name: string }) {
+    return {
+      id: f.id,
+      name: f.name,
+      // A fresh, time-limited download URL, minted on demand (pure crypto — no I/O).
+      url: this.ob.presignGetUrl(f.bucket, f.key, { baseUrl: PUBLIC_ORIGIN, expiresIn: 3600 }),
+    };
+  }
+}
+```
+
+**3 — serve it back.** Because you stored the **key** (not a URL), mint a fresh
+presigned URL whenever you read the row — nothing leaks or goes stale:
+
+```ts
+const files = await this.db.file.findMany({ where: { ownerId } });
+return files.map((f) => this.toDto(f)); // each gets a fresh 1-hour URL
+```
+
+> **“I just want a URL column.”** Either store `presignGetUrl(...)` with a longer
+> `expiresIn` (max **7 days**) and re-mint it periodically, or — for a bucket you
+> deliberately make public (an anonymous-GET bucket policy) — store the stable
+> path-style URL `` `${PUBLIC_ORIGIN}${mountPath}/${bucket}/${key}` ``. The
+> **key + presign-on-read** pattern above is the robust default: no expiry to
+> babysit and nothing world-readable by accident.
+
+Notes:
+
+- `FileInterceptor` buffers the file in memory (`file.buffer`), which is fine for
+  typical uploads. For large files, pass a `Readable` stream to `putObject`
+  instead of a buffer.
+- Your app’s multipart parsing is independent of OpenBucket — its S3 routes mount
+  under `mountPath` and handle their own request bodies.
+
 ## Options
 
 | Option | Required | Default | Notes |

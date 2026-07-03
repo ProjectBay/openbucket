@@ -183,6 +183,34 @@ await s3.send(new PutObjectCommand({ Bucket: 'my-bucket', Key: 'a.jpg', Body: bu
 Full method list and admin-API usage: see the
 [`@openbucket/nestjs` README](./libs/nestjs/README.md#using-openbucket-from-your-code).
 
+#### Recipe: file uploads → your database
+
+Take a browser upload, stream it into OpenBucket, and save a row (with a URL) in
+your **own** database:
+
+```ts
+@Post('files')
+@UseInterceptors(FileInterceptor('file')) // multer field name: "file"
+async upload(@UploadedFile() file: Express.Multer.File) {
+  const key = `${randomUUID()}${extname(file.originalname)}`;
+  await this.ob.putObject('uploads', key, file.buffer, { contentType: file.mimetype });
+
+  // Store the STABLE key (not a signed URL) in your DB; mint URLs on read.
+  await this.db.file.create({ data: { bucket: 'uploads', key, name: file.originalname } });
+
+  return {
+    url: this.ob.presignGetUrl('uploads', key, {
+      baseUrl: 'https://files.example.com',
+      expiresIn: 3600,
+    }),
+  };
+}
+```
+
+Full walkthrough (bucket bootstrap, serving, and the “store a URL column”
+variants): see the
+[`@openbucket/nestjs` README](./libs/nestjs/README.md#recipe-accept-file-uploads-and-store-their-urls).
+
 ### Run from source
 
 OpenBucket runs on a single Node.js version — **Node 22** (pinned in
