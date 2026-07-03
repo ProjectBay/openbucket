@@ -2,6 +2,7 @@ import { Controller, Get, HttpCode, ServiceUnavailableException } from '@nestjs/
 
 import { Public } from '../../common/auth/public.decorator';
 import { ShutdownState } from '../../common/shutdown-state.service';
+import { OPENBUCKET_VERSION } from '../../version';
 
 /**
  * Liveness + readiness probes. Deliberately not under /api/admin/auth/* and
@@ -22,6 +23,16 @@ export class HealthController {
   @HttpCode(200)
   health(): { status: 'ok'; uptime: number } {
     return { status: 'ok', uptime: Math.floor(process.uptime()) };
+  }
+
+  /**
+   * The running OpenBucket version — for the admin console's About / updates view.
+   * Not `@Public`: it's behind the admin JWT guard so the version isn't disclosed
+   * to unauthenticated callers.
+   */
+  @Get('version')
+  version(): { name: 'openbucket'; version: string } {
+    return { name: 'openbucket', version: OPENBUCKET_VERSION };
   }
 
   /** Readiness — the process can serve traffic right now. */

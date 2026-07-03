@@ -16,6 +16,7 @@ import {
 import { type LocaleCode } from '../core/platform/common/locale/store/locale.store';
 import { PageHeaderService } from '../layout/shell/services';
 import { ChangePasswordComponent } from './change-password.component';
+import { AboutUpdatesComponent } from './about-updates.component';
 
 /**
  * Settings screen (STORY-0607): exposes the appearance engine — 12 color schemes,
@@ -34,6 +35,7 @@ import { ChangePasswordComponent } from './change-password.component';
     HlmSelectImports,
     BrnSelectImports,
     ChangePasswordComponent,
+    AboutUpdatesComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -144,6 +146,8 @@ import { ChangePasswordComponent } from './change-password.component';
       </div>
 
       <ob-change-password />
+
+      <ob-about-updates />
     </div>
   `,
 })
