@@ -9,11 +9,34 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.6] — 2026-07-03
+
 ### Fixed
 
+- **Storage: creating a folder returned HTTP 500.** A folder is a zero-byte object
+  whose key ends in `/` (e.g. `photos/`); the filesystem key codec mapped the empty
+  trailing segment to an empty path component, so the blob path ended in `/` and the
+  write failed with `ENOENT`. Empty segments (trailing `/` or `//`) now encode to a
+  reserved `%2F` placeholder — collision-free, since `/` never appears inside a
+  segment, and it round-trips back to the original key.
 - **Admin console: the page title/subtitle vanished when switching tabs** on a
   tabbed page (e.g. bucket detail). The page-header reset now fires only on a real
   route change, not on `?tab=` query-param navigations.
+- **Admin console: the breadcrumb read "Buckets > Buckets"** inside a bucket — a
+  route now uses its own breadcrumb data instead of inheriting the parent's.
+- **Admin console: file-upload buttons leaked the browser's native "no file chosen"
+  text.** The controls now use hidden inputs triggered by real buttons.
+- **Admin console: the favicon is now the OpenBucket logo** (previously a default
+  framework icon).
+
+### Added
+
+- **Settings: Content width** (Full / Extra wide / Wide / Medium / Narrow) and
+  **Content alignment** (Left / Center), applied consistently across pages. Tabbed
+  pages keep their tab bar full width; width/alignment apply to the tab content.
+- **Object browser: file-type icons** next to each object name.
+- **Docs: a "NestJS file uploads → OpenBucket → your database" recipe** (package
+  README, docs site, and root README).
 
 ### Changed
 
@@ -22,6 +45,8 @@ versions may include breaking changes.
   denser, matching the intent of the "compact" variant.
 - **Settings: added a "Tabs style" toggle** (Default / Underline) for the tab
   appearance, alongside the existing shell-layout control.
+- **Lifecycle / CORS / bucket-policy editors: the add/edit form now opens in a
+  dialog**; existing entries render as compact summary rows with Edit/Remove.
 
 ## [0.1.0-alpha.5] — 2026-07-03
 
