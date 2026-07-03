@@ -9,7 +9,19 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **Admin console: the page title/subtitle vanished when switching tabs** on a
+  tabbed page (e.g. bucket detail). The page-header reset now fires only on a real
+  route change, not on `?tab=` query-param navigations.
+
+### Changed
+
+- **Admin console (compact layout): the page header now sits inside the sticky top
+  bar** (title/subtitle/action inline) instead of a separate block below it —
+  denser, matching the intent of the "compact" variant.
+- **Settings: added a "Tabs style" toggle** (Default / Underline) for the tab
+  appearance, alongside the existing shell-layout control.
 
 ## [0.1.0-alpha.5] — 2026-07-03
 

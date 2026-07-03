@@ -11,6 +11,7 @@ import {
   AppearanceStore,
   type ColorScheme,
   type ShellVariant,
+  type TabsVariant,
   type Theme,
 } from '../core/platform/common/appearance/store/appearance.store';
 import { type LocaleCode } from '../core/platform/common/locale/store/locale.store';
@@ -99,6 +100,22 @@ import { ChangePasswordComponent } from './change-password.component';
           </div>
 
           <div class="space-y-2">
+            <span class="text-sm font-medium">{{ 'settings.tabsMode' | translate }}</span>
+            <div class="flex gap-2">
+              @for (tv of tabsModes; track tv.value) {
+                <button
+                  hlmBtn
+                  size="sm"
+                  [variant]="store.tabsVariant() === tv.value ? 'default' : 'outline'"
+                  (click)="store.setTabsVariant(tv.value)"
+                >
+                  {{ tv.label | translate }}
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="space-y-2">
             <span class="text-sm font-medium">{{ 'settings.language' | translate }}</span>
             <brn-select
               hlm
@@ -174,6 +191,10 @@ export class SettingsComponent {
     { value: 'inset', label: 'settings.shellInset' },
     { value: 'sticky', label: 'settings.shellSticky' },
     { value: 'compact', label: 'settings.shellCompact' },
+  ];
+  protected readonly tabsModes: { value: TabsVariant; label: string }[] = [
+    { value: 'default', label: 'settings.tabsDefault' },
+    { value: 'line', label: 'settings.tabsLine' },
   ];
   protected readonly locales: { value: LocaleCode; label: string }[] = [
     { value: 'en', label: 'English' },
