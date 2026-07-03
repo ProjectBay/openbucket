@@ -39,7 +39,7 @@ jobs:
     name: build + publish to npm
     runs-on: ubuntu-22.04
     permissions:
-      contents: read
+      contents: write # create the GitHub Release for this tag
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
@@ -85,3 +85,25 @@ jobs:
           npm publish ./dist/libs/nestjs --access public --tag "$dist_tag"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Publish a GitHub Release (notes from the matching CHANGELOG section) so the
+      # admin console's About/updates card can list changelogs and detect updates.
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#nestjs-v}"
+          notes="$(awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { grab=1; next }
+            grab && /^## \[/ { exit }
+            grab { print }
+          ' CHANGELOG.md)"
+          [ -z "$notes" ] && notes="Release v$version"
+          prerelease=""
+          [[ "$version" == *-* ]] && prerelease="--prerelease"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --title "v$version" --notes "$notes"
+          else
+            gh release create "$GITHUB_REF_NAME" --title "v$version" --notes "$notes" $prerelease --verify-tag
+          fi

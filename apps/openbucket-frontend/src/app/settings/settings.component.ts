@@ -10,10 +10,7 @@ import { HlmSwitch } from '@openbucket/spartan-ui/switch';
 import {
   AppearanceStore,
   type ColorScheme,
-  type ContentAlignment,
   type ContentMaxWidth,
-  type ShellVariant,
-  type TabsVariant,
   type Theme,
 } from '../core/platform/common/appearance/store/appearance.store';
 import { type LocaleCode } from '../core/platform/common/locale/store/locale.store';
@@ -86,38 +83,6 @@ import { ChangePasswordComponent } from './change-password.component';
           </div>
 
           <div class="space-y-2">
-            <span class="text-sm font-medium">{{ 'settings.shellLayout' | translate }}</span>
-            <div class="flex gap-2">
-              @for (sh of shells; track sh.value) {
-                <button
-                  hlmBtn
-                  size="sm"
-                  [variant]="store.shellVariant() === sh.value ? 'default' : 'outline'"
-                  (click)="store.setShellVariant(sh.value)"
-                >
-                  {{ sh.label | translate }}
-                </button>
-              }
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <span class="text-sm font-medium">{{ 'settings.tabsMode' | translate }}</span>
-            <div class="flex gap-2">
-              @for (tv of tabsModes; track tv.value) {
-                <button
-                  hlmBtn
-                  size="sm"
-                  [variant]="store.tabsVariant() === tv.value ? 'default' : 'outline'"
-                  (click)="store.setTabsVariant(tv.value)"
-                >
-                  {{ tv.label | translate }}
-                </button>
-              }
-            </div>
-          </div>
-
-          <div class="space-y-2">
             <span class="text-sm font-medium">{{ 'settings.contentWidth' | translate }}</span>
             <div class="flex flex-wrap gap-2">
               @for (cw of contentWidths; track cw.value) {
@@ -128,22 +93,6 @@ import { ChangePasswordComponent } from './change-password.component';
                   (click)="store.setContentMaxWidth(cw.value)"
                 >
                   {{ cw.label | translate }}
-                </button>
-              }
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <span class="text-sm font-medium">{{ 'settings.contentAlignment' | translate }}</span>
-            <div class="flex gap-2">
-              @for (ca of contentAligns; track ca.value) {
-                <button
-                  hlmBtn
-                  size="sm"
-                  [variant]="store.contentAlignment() === ca.value ? 'default' : 'outline'"
-                  (click)="store.setContentAlignment(ca.value)"
-                >
-                  {{ ca.label | translate }}
                 </button>
               }
             </div>
@@ -221,25 +170,12 @@ export class SettingsComponent {
     { value: 'dark', label: 'settings.modeDark' },
     { value: 'system', label: 'settings.modeSystem' },
   ];
-  protected readonly shells: { value: ShellVariant; label: string }[] = [
-    { value: 'inset', label: 'settings.shellInset' },
-    { value: 'sticky', label: 'settings.shellSticky' },
-    { value: 'compact', label: 'settings.shellCompact' },
-  ];
-  protected readonly tabsModes: { value: TabsVariant; label: string }[] = [
-    { value: 'default', label: 'settings.tabsDefault' },
-    { value: 'line', label: 'settings.tabsLine' },
-  ];
   protected readonly contentWidths: { value: ContentMaxWidth; label: string }[] = [
     { value: 'full', label: 'settings.widthFull' },
     { value: '5xl', label: 'settings.widthExtraWide' },
     { value: '4xl', label: 'settings.widthWide' },
     { value: '3xl', label: 'settings.widthMedium' },
     { value: '2xl', label: 'settings.widthNarrow' },
-  ];
-  protected readonly contentAligns: { value: ContentAlignment; label: string }[] = [
-    { value: 'left', label: 'settings.alignLeft' },
-    { value: 'center', label: 'settings.alignCenter' },
   ];
   protected readonly locales: { value: LocaleCode; label: string }[] = [
     { value: 'en', label: 'English' },

@@ -208,13 +208,62 @@ import { ObjectUploadComponent } from './object-upload.component';
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-2 px-1 py-1">
+        <div class="text-muted-foreground flex items-center gap-1 text-nowrap text-sm">
+          @if (loading()) {
+            {{ 'objects.loading' | translate }}
+          } @else {
+            <b class="text-foreground">{{ itemCount() }}</b>
+            {{ 'objects.itemsOnPage' | translate }}
+            <span class="px-1 opacity-50">|</span>
+            {{ 'objects.page' | translate }} <b class="text-foreground">{{ stack.length }}</b>
+          }
+        </div>
+
+        <nav hlmPagination>
+          <ul hlmPaginationContent>
+            <li hlmPaginationItem>
+              <button
+                hlmBtn
+                variant="ghost"
+                size="sm"
+                class="gap-1 pl-2.5"
+                [disabled]="stack.length <= 1"
+                (click)="back()"
+              >
+                <ng-icon
+                  name="lucideChevronLeft"
+                  class="text-base"
+                />
+                <span class="hidden sm:block">{{ 'objects.previous' | translate }}</span>
+              </button>
+            </li>
+            <li hlmPaginationItem>
+              <button
+                hlmBtn
+                variant="ghost"
+                size="sm"
+                class="gap-1 pr-2.5"
+                [disabled]="!nextMarker()"
+                (click)="nextPage()"
+              >
+                <span class="hidden sm:block">{{ 'objects.next' | translate }}</span>
+                <ng-icon
+                  name="lucideChevronRight"
+                  class="text-base"
+                />
+              </button>
+            </li>
+          </ul>
+        </nav>
+
         <brn-select
           hlm
+          class="ml-auto"
           [ngModel]="pageSize()"
           (ngModelChange)="onPageSize($event)"
         >
-          <hlm-select-trigger class="w-32">
+          <hlm-select-trigger class="w-fit">
             <hlm-select-value />
           </hlm-select-trigger>
           <hlm-select-content>
@@ -223,49 +272,6 @@ import { ObjectUploadComponent } from './object-upload.component';
             }
           </hlm-select-content>
         </brn-select>
-
-        <div class="flex items-center gap-2">
-          @if (loading()) {
-            <span class="text-sm text-muted-foreground">{{ 'objects.loading' | translate }}</span>
-          }
-          <nav hlmPagination>
-            <ul hlmPaginationContent>
-              <li hlmPaginationItem>
-                <button
-                  hlmBtn
-                  variant="ghost"
-                  size="sm"
-                  [disabled]="stack.length <= 1"
-                  (click)="back()"
-                >
-                  <ng-icon
-                    name="lucideChevronLeft"
-                    class="text-base"
-                  />
-                  {{ 'objects.previous' | translate }}
-                </button>
-              </li>
-              <li hlmPaginationItem>
-                <span class="text-muted-foreground px-2 text-sm">{{ 'objects.page' | translate }} {{ stack.length }}</span>
-              </li>
-              <li hlmPaginationItem>
-                <button
-                  hlmBtn
-                  variant="ghost"
-                  size="sm"
-                  [disabled]="!nextMarker()"
-                  (click)="nextPage()"
-                >
-                  {{ 'objects.next' | translate }}
-                  <ng-icon
-                    name="lucideChevronRight"
-                    class="text-base"
-                  />
-                </button>
-              </li>
-            </ul>
-          </nav>
-        </div>
       </div>
 
       @if (error()) {
@@ -881,6 +887,8 @@ export class ObjectBrowserComponent implements OnInit {
       ? this.objects().filter((o) => this.objectLabel(o).toLowerCase().includes(t))
       : this.objects();
   });
+  /** Rows visible on the current page (folders + objects, after search filter). */
+  readonly itemCount = computed(() => this.filteredFolders().length + this.filteredObjects().length);
   private readonly searchBox = viewChild<ElementRef<HTMLInputElement>>('searchBox');
   readonly pageSize = signal(100);
   readonly pageSizes = [25, 50, 100, 250, 1000];

@@ -33,4 +33,10 @@ export interface HealthServiceInterface {
      */
     ready(extraHttpRequestParams?: any): Observable<{}>;
 
+    /**
+     * 
+     * 
+     */
+    version(extraHttpRequestParams?: any): Observable<{}>;
+
 }
