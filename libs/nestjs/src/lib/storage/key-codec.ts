@@ -34,12 +34,20 @@ const UNRESERVED = new Set<number>();
 
 const HEX = '0123456789ABCDEF';
 
+// Placeholder for an EMPTY key segment (from a trailing slash — an S3 "folder
+// marker" like `photos/` — or a `//` in the key). Left as '' it would produce a
+// path ending in (or containing a doubled) '/', which can't be a filename
+// (`fs.rename` to `.../photos/` fails with ENOENT). `/` can never appear inside a
+// segment (it's the separator), so `%2F` never collides with a real encoded
+// segment; decodeSegment maps it back to '' so the key still round-trips.
+const EMPTY_SEGMENT = '%2F';
+
 function encodeByte(b: number): string {
   return '%' + HEX[(b >> 4) & 0xf] + HEX[b & 0xf];
 }
 
 function encodeSegment(segment: string): string {
-  if (segment.length === 0) return ''; // double-slash path component
+  if (segment.length === 0) return EMPTY_SEGMENT; // trailing/double slash → safe placeholder
   const bytes = Buffer.from(segment, 'utf8');
   let out = '';
   for (let i = 0; i < bytes.length; i++) {
@@ -95,7 +103,7 @@ export function decodeKey(encoded: string): string {
 }
 
 function decodeSegment(segment: string): string {
-  if (segment.length === 0) return '';
+  if (segment.length === 0 || segment === EMPTY_SEGMENT) return '';
   const out: number[] = [];
   for (let i = 0; i < segment.length; i++) {
     const ch = segment.charCodeAt(i);

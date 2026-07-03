@@ -7,7 +7,7 @@ import { RouterOutlet } from '@angular/router';
 import { HlmSidebarImports } from '@openbucket/spartan-ui/sidebar';
 import { StickySidebar } from './components/sticky-sidebar.component';
 import { StickyHeader } from './components/sticky-header.component';
-import { PageHeaderComponent } from '../components';
+import { ContentWidthComponent, PageHeaderComponent } from '../components';
 
 @Component({
   selector: 'ob-sticky-shell',
@@ -17,6 +17,7 @@ import { PageHeaderComponent } from '../components';
     StickySidebar,
     StickyHeader,
     PageHeaderComponent,
+    ContentWidthComponent,
     RouterOutlet,
   ],
   encapsulation: ViewEncapsulation.None,
@@ -33,7 +34,9 @@ import { PageHeaderComponent } from '../components';
       >
         <ob-page-header />
         <div class="flex-1 overflow-auto min-h-0">
-          <router-outlet />
+          <ob-content-width>
+            <router-outlet />
+          </ob-content-width>
         </div>
       </main>
     </ob-sticky-sidebar>

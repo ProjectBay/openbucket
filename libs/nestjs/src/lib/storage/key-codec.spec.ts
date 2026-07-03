@@ -99,9 +99,14 @@ describe('encodeKey / decodeKey', () => {
       expect(() => encodeKey('')).toThrow(/empty key/);
     });
 
-    it('preserves consecutive slashes as empty segments', () => {
-      expect(encodeKey('a//b')).toBe('a//b');
-      expect(decodeKey('a//b')).toBe('a//b');
+    it('maps empty segments (//, trailing /) to a safe placeholder that round-trips', () => {
+      // An empty segment can't be a real filename ('' → doubled/trailing '/'),
+      // so it encodes to the reserved `%2F` placeholder and decodes back to ''.
+      expect(encodeKey('a//b')).toBe('a/%2F/b');
+      expect(decodeKey('a/%2F/b')).toBe('a//b');
+      // Trailing slash = an S3 "folder marker" object (e.g. `photos/`).
+      expect(encodeKey('photos/')).toBe('photos/%2F');
+      expect(decodeKey('photos/%2F')).toBe('photos/');
     });
 
     it('decode tolerates malformed % escapes', () => {

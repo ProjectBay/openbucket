@@ -17,12 +17,21 @@ export class PageHeaderService {
   readonly hasTabs = this._hasTabs.asReadonly();
 
   constructor() {
-    // Clear header state on every navigation so a page that doesn't set (part of)
-    // the header never inherits the previous route's title / subtitle / action /
-    // tabs. Fires on NavigationStart, before the next route's component sets its
+    // Clear header state when navigating to a different PAGE so a route that
+    // doesn't set (part of) the header never inherits the previous route's title /
+    // subtitle / action / tabs. Fires before the next route's component sets its
     // own header, so pages no longer need manual ngOnDestroy cleanup.
-    inject(Router).events.subscribe((e) => {
-      if (e instanceof NavigationStart) this.reset();
+    //
+    // Only reset on a PATH change — NOT on query-param/fragment-only navigations
+    // (e.g. switching a `?tab=` within a tabbed page), which must keep the header
+    // the current page already set.
+    const router = inject(Router);
+    router.events.subscribe((e) => {
+      if (e instanceof NavigationStart) {
+        const nextPath = e.url.split(/[?#]/)[0];
+        const currentPath = router.url.split(/[?#]/)[0];
+        if (nextPath !== currentPath) this.reset();
+      }
     });
   }
 

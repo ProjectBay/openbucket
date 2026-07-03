@@ -82,7 +82,7 @@ import { PageLayoutComponent, type PageTab } from '../layout/components/page-lay
 
         @case ('properties') {
           @if (summary(); as s) {
-            <div hlmCard class="max-w-lg">
+            <div hlmCard>
               <div hlmCardContent class="space-y-2 pt-6 text-sm">
                 <div class="flex justify-between">
                   <span class="text-muted-foreground">Created</span><span>{{ s.createdAt | relativeTime }}</span>
@@ -107,7 +107,7 @@ import { PageLayoutComponent, type PageTab } from '../layout/components/page-lay
         }
 
         @case ('versioning') {
-          <div hlmCard class="max-w-lg">
+          <div hlmCard>
             <div hlmCardContent class="flex items-center justify-between gap-4 pt-6">
               <div>
                 <p class="font-medium">Versioning</p>
@@ -123,7 +123,7 @@ import { PageLayoutComponent, type PageTab } from '../layout/components/page-lay
         }
 
         @case ('encryption') {
-          <div hlmCard class="max-w-lg">
+          <div hlmCard>
             <div hlmCardContent class="flex items-center justify-between gap-4 pt-6">
               <div>
                 <p class="font-medium">Default encryption (SSE-S3)</p>
@@ -139,7 +139,7 @@ import { PageLayoutComponent, type PageTab } from '../layout/components/page-lay
         }
 
         @case ('objectLock') {
-          <div hlmCard class="max-w-lg">
+          <div hlmCard>
             <div hlmCardContent class="space-y-4 pt-6">
               <div class="flex items-center justify-between gap-4">
                 <div>
@@ -197,7 +197,7 @@ import { PageLayoutComponent, type PageTab } from '../layout/components/page-lay
         }
 
         @case ('tags') {
-          <div hlmCard class="max-w-xl">
+          <div hlmCard>
             <div hlmCardContent class="space-y-2 pt-6">
               @for (t of tagRows(); track $index) {
                 <div class="flex items-center gap-2">
@@ -219,21 +219,15 @@ import { PageLayoutComponent, type PageTab } from '../layout/components/page-lay
         }
 
         @case ('lifecycle') {
-          <div class="max-w-2xl">
-            <ob-bucket-lifecycle-editor [bucket]="name()" />
-          </div>
+          <ob-bucket-lifecycle-editor [bucket]="name()" />
         }
 
         @case ('cors') {
-          <div class="max-w-2xl">
-            <ob-bucket-cors-editor [bucket]="name()" />
-          </div>
+          <ob-bucket-cors-editor [bucket]="name()" />
         }
 
         @case ('policy') {
-          <div class="max-w-2xl">
-            <ob-bucket-policy-editor [bucket]="name()" />
-          </div>
+          <ob-bucket-policy-editor [bucket]="name()" />
         }
       }
     </ob-page-layout>

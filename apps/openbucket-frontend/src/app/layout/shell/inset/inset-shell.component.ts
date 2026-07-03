@@ -7,7 +7,7 @@ import { RouterOutlet } from '@angular/router';
 import { HlmSidebarImports } from '@openbucket/spartan-ui/sidebar';
 import { InsetSidebar } from './components/inset-sidebar.component';
 import { InsetHeader } from './components/inset-header.component';
-import { PageHeaderComponent } from '../components';
+import { ContentWidthComponent, PageHeaderComponent } from '../components';
 
 @Component({
   selector: 'ob-inset-shell',
@@ -17,6 +17,7 @@ import { PageHeaderComponent } from '../components';
     InsetSidebar,
     InsetHeader,
     PageHeaderComponent,
+    ContentWidthComponent,
     RouterOutlet,
   ],
   encapsulation: ViewEncapsulation.None,
@@ -33,7 +34,9 @@ import { PageHeaderComponent } from '../components';
         <ob-inset-header />
         <ob-page-header />
         <div class="flex-1 overflow-auto min-h-0">
-          <router-outlet />
+          <ob-content-width>
+            <router-outlet />
+          </ob-content-width>
         </div>
       </main>
     </ob-inset-sidebar>

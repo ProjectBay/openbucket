@@ -28,7 +28,7 @@ import { PageHeaderService } from '../layout/shell/services';
   imports: [FormsModule, TranslateModule, NgIcon, HlmCardImports, HlmButton, ConfirmDialogComponent],
   providers: [provideIcons({ lucideDownload, lucideUpload, lucideDatabase, lucideServer })],
   template: `
-    <div class="mx-auto max-w-3xl space-y-6 p-6">
+    <div class="space-y-6 p-6">
       <!-- Title + subtitle render through the unified page header (PageHeaderService). -->
 
       <!-- Per-bucket -->
