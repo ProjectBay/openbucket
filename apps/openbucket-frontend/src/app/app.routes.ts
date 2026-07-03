@@ -81,6 +81,11 @@ export const appRoutes: Routes = [
           import('./backup-restore/backup-restore.component').then((m) => m.BackupRestoreComponent),
       },
       {
+        path: 'about',
+        data: { breadcrumb: 'about.title' },
+        loadComponent: () => import('./about/about.component').then((m) => m.AboutComponent),
+      },
+      {
         path: '**',
         loadComponent: () =>
           import('./not-found/not-found.component').then((m) => m.NotFoundComponent),

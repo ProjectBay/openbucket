@@ -3,6 +3,7 @@ import { HlmSidebarImports } from '@openbucket/spartan-ui/sidebar';
 import { SidebarRendererComponent } from '../../../sidebar/components/sidebar-renderer.component';
 import { BrandComponent } from '../../components/brand.component';
 import { AccountMenuComponent } from '../../components/account-menu.component';
+import { VersionFooterComponent } from '../../components/version-footer.component';
 import {
   sidebarConfig,
   secondaryNavConfig,
@@ -16,6 +17,7 @@ import {
     SidebarRendererComponent,
     BrandComponent,
     AccountMenuComponent,
+    VersionFooterComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -53,6 +55,7 @@ import {
 
         <hlm-sidebar-footer>
           <ob-sidebar-renderer [config]="secondaryConfig" />
+          <ob-version-footer />
           <ob-account-menu />
         </hlm-sidebar-footer>
       </hlm-sidebar>
