@@ -47,7 +47,7 @@ const defaultState: AppearanceState = {
   shellVariant: 'compact',
   tabsVariant: 'default',
   contentAlignment: 'center',
-  contentMaxWidth: '4xl',
+  contentMaxWidth: 'full',
   colorScheme: 'slate',
   locale: 'en',
   reducedMotion: false,

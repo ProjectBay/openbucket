@@ -10,6 +10,7 @@ import { HlmSwitch } from '@openbucket/spartan-ui/switch';
 import {
   AppearanceStore,
   type ColorScheme,
+  type ContentMaxWidth,
   type ShellVariant,
   type TabsVariant,
   type Theme,
@@ -38,7 +39,7 @@ import { ChangePasswordComponent } from './change-password.component';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="max-w-3xl space-y-6 p-6">
+    <div class="space-y-6 p-6">
       <div hlmCard>
         <div hlmCardHeader>
           <h3 hlmCardTitle>{{ 'settings.appearance' | translate }}</h3>
@@ -110,6 +111,22 @@ import { ChangePasswordComponent } from './change-password.component';
                   (click)="store.setTabsVariant(tv.value)"
                 >
                   {{ tv.label | translate }}
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <span class="text-sm font-medium">{{ 'settings.contentWidth' | translate }}</span>
+            <div class="flex flex-wrap gap-2">
+              @for (cw of contentWidths; track cw.value) {
+                <button
+                  hlmBtn
+                  size="sm"
+                  [variant]="store.contentMaxWidth() === cw.value ? 'default' : 'outline'"
+                  (click)="store.setContentMaxWidth(cw.value)"
+                >
+                  {{ cw.label | translate }}
                 </button>
               }
             </div>
@@ -195,6 +212,13 @@ export class SettingsComponent {
   protected readonly tabsModes: { value: TabsVariant; label: string }[] = [
     { value: 'default', label: 'settings.tabsDefault' },
     { value: 'line', label: 'settings.tabsLine' },
+  ];
+  protected readonly contentWidths: { value: ContentMaxWidth; label: string }[] = [
+    { value: 'full', label: 'settings.widthFull' },
+    { value: '5xl', label: 'settings.widthExtraWide' },
+    { value: '4xl', label: 'settings.widthWide' },
+    { value: '3xl', label: 'settings.widthMedium' },
+    { value: '2xl', label: 'settings.widthNarrow' },
   ];
   protected readonly locales: { value: LocaleCode; label: string }[] = [
     { value: 'en', label: 'English' },

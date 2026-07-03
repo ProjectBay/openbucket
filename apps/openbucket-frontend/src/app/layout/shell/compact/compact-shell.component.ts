@@ -7,11 +7,12 @@ import { RouterOutlet } from '@angular/router';
 import { HlmSidebarImports } from '@openbucket/spartan-ui/sidebar';
 import { CompactSidebar } from './components/compact-sidebar.component';
 import { CompactHeader } from './components/compact-header.component';
+import { ContentWidthComponent } from '../components';
 
 @Component({
   selector: 'ob-compact-shell',
   standalone: true,
-  imports: [HlmSidebarImports, CompactSidebar, CompactHeader, RouterOutlet],
+  imports: [HlmSidebarImports, CompactSidebar, CompactHeader, ContentWidthComponent, RouterOutlet],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block' },
@@ -27,7 +28,9 @@ import { CompactHeader } from './components/compact-header.component';
         <ob-compact-header class="sticky top-0 bg-background z-10" />
         <div class="flex-1 flex flex-col bg-muted/10 min-h-0">
           <div class="flex-1 overflow-auto">
-            <router-outlet />
+            <ob-content-width>
+              <router-outlet />
+            </ob-content-width>
           </div>
         </div>
       </main>

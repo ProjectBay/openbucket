@@ -50,7 +50,10 @@ export class BreadcrumbService {
       }
       const routeURL = snap.url.map((s) => s.path).join('/');
       url += `/${routeURL}`;
-      const label = snap.data['breadcrumb'];
+      // Use the route's OWN data, not `snap.data` — Angular merges parent data
+      // into children, so a `:name` child would otherwise inherit its parent's
+      // `breadcrumb` (rendering "Buckets > Buckets" instead of the bucket name).
+      const label = snap.routeConfig?.data?.['breadcrumb'];
       if (label) {
         breadcrumbs.push({ label, url, isLast: false });
       } else if (snap.routeConfig?.path?.includes(':')) {

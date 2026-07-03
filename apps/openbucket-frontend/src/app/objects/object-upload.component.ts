@@ -12,7 +12,7 @@ import {
 import { Subscription } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideCloudUpload, lucideRotateCcw, lucideUpload, lucideX } from '@ng-icons/lucide';
+import { lucideRotateCcw, lucideUpload, lucideX } from '@ng-icons/lucide';
 import { HlmButton } from '@openbucket/spartan-ui/button';
 import { HlmProgressImports } from '@openbucket/spartan-ui/progress';
 
@@ -40,41 +40,17 @@ interface UploadItem {
   standalone: true,
   selector: 'ob-object-upload',
   imports: [NgIcon, TranslateModule, HlmButton, HlmProgressImports],
-  providers: [provideIcons({ lucideCloudUpload, lucideRotateCcw, lucideUpload, lucideX })],
+  providers: [provideIcons({ lucideRotateCcw, lucideUpload, lucideX })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="space-y-2">
-      <label
-        class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 text-center text-sm transition-colors"
-        [class.border-primary]="dragOver()"
-        [class.bg-accent]="dragOver()"
-        [class.text-muted-foreground]="!dragOver()"
-        (dragover)="onDragOver($event)"
-        (dragleave)="onDragLeave($event)"
-        (drop)="onDrop($event)"
-      >
-        <ng-icon
-          name="lucideCloudUpload"
-          class="text-2xl"
-          aria-hidden="true"
-        />
-        <span class="font-medium"
-          >{{ 'upload.uploadTo' | translate }}
-          {{ prefix || ('upload.bucketRoot' | translate) }}</span
-        >
-        <span class="text-xs">{{ 'upload.dropHint' | translate }}</span>
-        <input
-          type="file"
-          multiple
-          class="sr-only"
-          (change)="onPick($event)"
-        />
-      </label>
-
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-muted-foreground mr-1 text-sm">
+          {{ 'upload.uploadTo' | translate }}
+          <span class="text-foreground font-medium">{{ prefix || ('upload.bucketRoot' | translate) }}</span>
+        </span>
         <label
           hlmBtn
-          variant="outline"
           size="sm"
           class="cursor-pointer"
         >
@@ -191,7 +167,6 @@ export class ObjectUploadComponent {
   @Output() uploaded = new EventEmitter<string>(); // emits the (decoded) key
 
   readonly uploads = signal<UploadItem[]>([]);
-  readonly dragOver = signal(false);
 
   private summaryShown = true;
 
@@ -201,22 +176,6 @@ export class ObjectUploadComponent {
     const failed = all.filter((u) => u.status === 'error').length;
     return `${done}/${all.length} uploaded${failed ? `, ${failed} failed` : ''}`;
   });
-
-  onDragOver(e: DragEvent): void {
-    e.preventDefault();
-    this.dragOver.set(true);
-  }
-
-  onDragLeave(e: DragEvent): void {
-    e.preventDefault();
-    this.dragOver.set(false);
-  }
-
-  onDrop(e: DragEvent): void {
-    e.preventDefault();
-    this.dragOver.set(false);
-    if (e.dataTransfer?.files) this.startMany(e.dataTransfer.files);
-  }
 
   onPick(e: Event): void {
     const input = e.target as HTMLInputElement;
