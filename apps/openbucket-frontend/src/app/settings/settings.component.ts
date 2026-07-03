@@ -10,6 +10,7 @@ import { HlmSwitch } from '@openbucket/spartan-ui/switch';
 import {
   AppearanceStore,
   type ColorScheme,
+  type ContentAlignment,
   type ContentMaxWidth,
   type ShellVariant,
   type TabsVariant,
@@ -133,6 +134,22 @@ import { ChangePasswordComponent } from './change-password.component';
           </div>
 
           <div class="space-y-2">
+            <span class="text-sm font-medium">{{ 'settings.contentAlignment' | translate }}</span>
+            <div class="flex gap-2">
+              @for (ca of contentAligns; track ca.value) {
+                <button
+                  hlmBtn
+                  size="sm"
+                  [variant]="store.contentAlignment() === ca.value ? 'default' : 'outline'"
+                  (click)="store.setContentAlignment(ca.value)"
+                >
+                  {{ ca.label | translate }}
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="space-y-2">
             <span class="text-sm font-medium">{{ 'settings.language' | translate }}</span>
             <brn-select
               hlm
@@ -219,6 +236,10 @@ export class SettingsComponent {
     { value: '4xl', label: 'settings.widthWide' },
     { value: '3xl', label: 'settings.widthMedium' },
     { value: '2xl', label: 'settings.widthNarrow' },
+  ];
+  protected readonly contentAligns: { value: ContentAlignment; label: string }[] = [
+    { value: 'left', label: 'settings.alignLeft' },
+    { value: 'center', label: 'settings.alignCenter' },
   ];
   protected readonly locales: { value: LocaleCode; label: string }[] = [
     { value: 'en', label: 'English' },

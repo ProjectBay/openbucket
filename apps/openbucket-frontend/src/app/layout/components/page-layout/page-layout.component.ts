@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   effect,
   inject,
   input,
@@ -12,6 +13,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { HlmTabsImports } from '@openbucket/spartan-ui/tabs';
 import { PageTabsVariantService } from './page-tabs-variant.service';
 import { PageHeaderService } from '../../shell/services';
+import { AppearanceStore } from '../../../core/platform/common/appearance';
 
 /** A single tab in {@link PageLayoutComponent}. `id` is the tab key (also the `?tab=` value). */
 export interface PageTab {
@@ -57,7 +59,14 @@ export interface PageTab {
       }
 
       <div class="flex-1 overflow-auto">
-        <div class="p-6">
+        <div
+          class="w-full p-6"
+          [class.mx-auto]="alignment() === 'center'"
+          [class.max-w-2xl]="width() === '2xl'"
+          [class.max-w-3xl]="width() === '3xl'"
+          [class.max-w-4xl]="width() === '4xl'"
+          [class.max-w-5xl]="width() === '5xl'"
+        >
           <ng-content />
         </div>
       </div>
@@ -67,6 +76,9 @@ export interface PageTab {
 export class PageLayoutComponent implements OnDestroy {
   protected readonly tabsVariant = inject(PageTabsVariantService);
   private readonly pageHeader = inject(PageHeaderService);
+  private readonly appearance = inject(AppearanceStore);
+  protected readonly width = computed(() => this.appearance.contentMaxWidth());
+  protected readonly alignment = computed(() => this.appearance.contentAlignment());
 
   readonly tabs = input<PageTab[]>([]);
   /** The active tab id (owned by the host, typically synced to `?tab=`). */
