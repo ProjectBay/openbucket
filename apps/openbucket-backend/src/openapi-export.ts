@@ -23,9 +23,11 @@ import { dirname, join, resolve } from 'node:path';
 function ensureSpecEnv(): void {
   process.env.NODE_ENV ??= 'production';
   process.env.DATA_DIR ??= mkdtempSync(join(tmpdir(), 'ob-openapi-'));
-  process.env.JWT_SECRET ??= 'x'.repeat(40);
+  // High-entropy throwaway secrets (the export just needs the app to boot); the
+  // entropy floor in env.schema (TASK-2151) rejects repeated-char placeholders.
+  process.env.JWT_SECRET ??= 'openapiExportJwtSecret9f3a7c1e5b2d0846XkQ';
   process.env.ROOT_ACCESS_KEY_ID ??= 'AKIA0000000000000000';
-  process.env.ROOT_SECRET_ACCESS_KEY ??= 'x'.repeat(40);
+  process.env.ROOT_SECRET_ACCESS_KEY ??= 'openapiExportRootSecret4b8d2f6a0c9e1573Xk';
   process.env.ADMIN_PASSWORD_HASH ??= '$argon2id$v=19$m=65536,t=3,p=4$abc$def';
 }
 
