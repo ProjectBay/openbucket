@@ -9,6 +9,32 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.8] — 2026-07-04
+
+Security release — remediates a white-box security audit (EPIC-08, 22 confirmed findings).
+
+### Security
+
+- **CRITICAL — unauthenticated admin-API bypass (CWE-178).** The admin JWT guard
+  gated authentication on a case-sensitive path prefix while Express routes
+  case-insensitively, so a request like `GET /api/Admin/backup` reached the admin
+  handler without a token — exposing whole-instance backup download, bucket CRUD,
+  and S3 access-key minting to anonymous callers. The guard now compares
+  case-insensitively (fail-closed).
+- **HIGH — stored XSS → admin token theft.** Enabled a Content-Security-Policy and
+  forced safe `Content-Type`/`Content-Disposition` on S3 object downloads.
+- **Bucket policies are now evaluated** (previously stored but inert): explicit
+  `Deny` is enforced, with default-allow so credentialed access is unaffected.
+- Medium/low fixes: server-side CopyObject now decrypts + re-encrypts SSE objects;
+  sessions/refresh tokens are revoked on password change; request/socket timeouts
+  (slowloris); storage quota; SigV4 signatures + access-key IDs redacted from logs;
+  restore decompression-bomb + manifest size caps; SignedHeaders coverage enforced;
+  `mustChangePassword` enforced; S3 rate limiting; ListParts pagination; opaque CORS
+  preflight (no bucket-existence oracle); aggregate key-length cap; SPA symlink
+  check; LIKE-metacharacter escaping; low-entropy secret rejection; disabled
+  `@scarf/scarf` install telemetry; `@nx/nest` moved out of production dependencies
+  with an `npm audit` CI gate.
+
 ## [0.1.0-alpha.7] — 2026-07-03
 
 ### Added
