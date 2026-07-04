@@ -6,7 +6,7 @@ import {
   RequestTimeTooSkewedError,
 } from '../errors/s3-error';
 import type { AccessKey, KeyService } from './key.service';
-import { verifyPresigned } from './presigned';
+import { stripSigV4QueryAuth, verifyPresigned } from './presigned';
 import { Sigv4Verifier } from './sigv4.verifier';
 
 /**
@@ -95,5 +95,50 @@ describe('verifyPresigned (TEST-0107)', () => {
   it('returns false for an unknown access key (no key-existence leak)', async () => {
     const req = presigned('GET', '/b/k?X-Amz-Expires=900');
     expect(await verifyPresigned(req, keyService(null), verifier)).toBe(false);
+  });
+});
+
+/**
+ * TEST-0705 — stripSigV4QueryAuth: the log-sanitizer that keeps replayable
+ * presigned credentials out of request logs (TASK-2150, CWE-532).
+ */
+describe('stripSigV4QueryAuth (TEST-0705)', () => {
+  it('case 1: removes X-Amz-Signature and X-Amz-Credential', () => {
+    const url =
+      '/bucket/key?X-Amz-Algorithm=AWS4-HMAC-SHA256' +
+      '&X-Amz-Credential=AKIDEXAMPLE%2F20260704%2Fus-east-1%2Fs3%2Faws4_request' +
+      '&X-Amz-Date=20260704T000000Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host' +
+      `&X-Amz-Signature=${'a'.repeat(64)}`;
+    const out = stripSigV4QueryAuth(url);
+    expect(out).not.toContain('a'.repeat(64));
+    expect(out).not.toContain('AKIDEXAMPLE');
+    expect(out).not.toContain('X-Amz-Signature');
+    expect(out).not.toContain('X-Amz-Credential');
+    // Benign SigV4 params (algorithm, date, expires) stay for debuggability.
+    expect(out).toContain('X-Amz-Algorithm=AWS4-HMAC-SHA256');
+    expect(out.startsWith('/bucket/key?')).toBe(true);
+  });
+
+  it('case 2: removes X-Amz-Security-Token', () => {
+    const out = stripSigV4QueryAuth('/b/k?X-Amz-Security-Token=SESSIONTOKENVALUE&x=1');
+    expect(out).not.toContain('SESSIONTOKENVALUE');
+    expect(out).not.toContain('X-Amz-Security-Token');
+    expect(out).toContain('x=1');
+  });
+
+  it('case 3: leaves a non-presigned URL with benign query params unchanged', () => {
+    expect(stripSigV4QueryAuth('/b/k?prefix=foo&max-keys=10')).toBe('/b/k?prefix=foo&max-keys=10');
+    expect(stripSigV4QueryAuth('/b/k')).toBe('/b/k');
+  });
+
+  it('case 4: a malformed URL does not throw and never leaks the signature', () => {
+    const sig = 's'.repeat(64);
+    const weird = `not a valid url with spaces?X-Amz-Signature=${sig}`;
+    let out!: string;
+    expect(() => {
+      out = stripSigV4QueryAuth(weird);
+    }).not.toThrow();
+    expect(typeof out).toBe('string');
+    expect(out).not.toContain(sig);
   });
 });

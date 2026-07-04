@@ -31,7 +31,7 @@ describe('OpenBucketService — in-process facade', () => {
         OpenBucketModule.forRoot({
           dataDir: DATA_DIR,
           mountPath: '/storage',
-          rootCredentials: { accessKeyId: 'AKIAEXAMPLE000000000', secretAccessKey: 'x'.repeat(40) },
+          rootCredentials: { accessKeyId: 'AKIAEXAMPLE000000000', secretAccessKey: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s' },
           // headless — the facade must work with no admin surface
         }),
       ],

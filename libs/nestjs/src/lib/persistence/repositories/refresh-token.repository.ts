@@ -49,6 +49,21 @@ export class RefreshTokenRepository extends EntityRepository<RefreshToken> {
   }
 
   /**
+   * Revoke every still-live refresh token for a subject (TASK-2101, CWE-613).
+   * Called on password change so a stolen `ob_refresh` cookie can't keep rotating
+   * to fresh 7-day tokens after the account is recovered. Only rows whose
+   * `revokedAt` is still null are touched (already-revoked rows keep their
+   * original timestamp); the entity is indexed on `subjectId` (`ix_refresh_subject`).
+   */
+  async revokeAllForSubject(subjectId: string, at: Date): Promise<void> {
+    await this.getEntityManager().nativeUpdate(
+      RefreshToken,
+      { subjectId, revokedAt: null },
+      { revokedAt: at },
+    );
+  }
+
+  /**
    * Revoke a token and every token descended from it via rotation. Called on
    * reuse-detection: a stolen token replayed after rotation revokes the whole
    * chain it spawned (self-detected lockout). Chains are short, so descendants

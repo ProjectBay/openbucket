@@ -2,6 +2,41 @@ import { z } from 'zod';
 
 const portNumber = z.coerce.number().int().min(1).max(65_535);
 
+/**
+ * Case-insensitive denylist of well-known placeholder / example secrets. A 32+
+ * char value that is one of these boots cleanly under a bare `.min(32)` but is
+ * trivially guessable, so it is refused (CWE-521). Kept small and high-signal to
+ * avoid false rejections of legitimate high-entropy secrets.
+ */
+export const PLACEHOLDER_SECRETS = new Set([
+  'changeme',
+  'change-me',
+  'please-change-me',
+  'secret',
+  'password',
+  'passphrase',
+  'default',
+  'example',
+  'insecure',
+]);
+
+/**
+ * Length floor plus a cheap, low-false-positive low-entropy / placeholder guard
+ * for security-critical HMAC/secret keys (JWT_SECRET, ROOT_SECRET_ACCESS_KEY).
+ * Rejects all-identical strings, known placeholders, and values with too few
+ * distinct characters. Generate a strong value with `openssl rand -base64 48`.
+ */
+export const strongSecret = (label: string) =>
+  z
+    .string()
+    .min(32, `${label} must be at least 32 characters`)
+    .refine((v) => !/^(.)\1+$/.test(v), `${label} must not be a single repeated character`)
+    .refine(
+      (v) => !PLACEHOLDER_SECRETS.has(v.toLowerCase()),
+      `${label} must not be a known placeholder value`,
+    )
+    .refine((v) => new Set(v).size >= 8, `${label} has too few distinct characters`);
+
 export const EnvSchema = z
   .object({
     // --- runtime ---
@@ -16,7 +51,7 @@ export const EnvSchema = z
       .refine((p) => !p.endsWith('/'), 'DATA_DIR must not have a trailing slash'),
 
     // --- admin auth ---
-    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+    JWT_SECRET: strongSecret('JWT_SECRET'),
     JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900), // 15m
     JWT_REFRESH_TTL_SECONDS: z.coerce
       .number()
@@ -33,9 +68,7 @@ export const EnvSchema = z
     ROOT_ACCESS_KEY_ID: z
       .string()
       .regex(/^[A-Z0-9]{16,32}$/, 'ROOT_ACCESS_KEY_ID must be 16-32 uppercase alphanumerics'),
-    ROOT_SECRET_ACCESS_KEY: z
-      .string()
-      .min(32, 'ROOT_SECRET_ACCESS_KEY must be at least 32 characters'),
+    ROOT_SECRET_ACCESS_KEY: strongSecret('ROOT_SECRET_ACCESS_KEY'),
     OPENBUCKET_ENDPOINT: z
       .string()
       .regex(/^[a-z0-9.-]+$/, 'OPENBUCKET_ENDPOINT must be a DNS-safe hostname')
@@ -49,9 +82,38 @@ export const EnvSchema = z
       .optional(),
 
     // --- limits ---
-    MAX_OBJECT_SIZE_MB: z.coerce.number().int().positive().max(5_242_880).default(5_120_000), // 5 TiB
+    // Per-object size cap. Default 5 GiB (was 5 TiB — an unbounded-allocation
+    // footgun, TASK-2140/CWE-770); operators raise it explicitly if they need to.
+    MAX_OBJECT_SIZE_MB: z.coerce.number().int().positive().max(5_242_880).default(5_120), // 5 GiB
     MAX_MULTIPART_PARTS: z.coerce.number().int().positive().max(10_000).default(10_000),
     MULTIPART_TTL_HOURS: z.coerce.number().int().positive().default(24),
+
+    // --- storage quota / free-space guard (TASK-2140, CWE-770) ---
+    // Refuse writes once the DATA_DIR volume has less than this many bytes free,
+    // so a credential holder can't fill the disk shared with the SQLite metadata
+    // DB and deny the whole instance. Default 100 MiB reserve.
+    DATA_DIR_MIN_FREE_BYTES: z.coerce.number().int().nonnegative().default(100 * 1024 * 1024),
+    // Optional aggregate quotas (0 = disabled): total stored bytes / object count.
+    STORAGE_QUOTA_BYTES: z.coerce.number().int().nonnegative().default(0),
+    STORAGE_QUOTA_OBJECTS: z.coerce.number().int().nonnegative().default(0),
+    // Cap concurrent in-flight multipart sessions (staging amplifier). 0 = unlimited.
+    MAX_CONCURRENT_MULTIPART_UPLOADS: z.coerce.number().int().nonnegative().default(1_000),
+
+    // --- S3 API rate limit (TASK-2141, CWE-770) — defence-in-depth ---
+    // Per-IP token bucket applied to the S3 data plane. Generous vs the admin
+    // 100/min so legitimate high-throughput clients aren't broken; 0 disables it.
+    S3_THROTTLE_LIMIT: z.coerce.number().int().nonnegative().default(1_000),
+    S3_THROTTLE_TTL_MS: z.coerce.number().int().positive().default(60_000),
+
+    // --- restore decompression caps (TASK-2143/2144, CWE-409/400) ---
+    // Total decompressed payload bytes accepted from a restore archive.
+    RESTORE_MAX_TOTAL_BYTES: z.coerce.number().int().positive().default(100 * 1024 * 1024 * 1024), // 100 GiB
+    // Per-entry decompressed byte cap.
+    RESTORE_MAX_ENTRY_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024 * 1024), // 5 GiB
+    // Max number of payload entries in a restore archive.
+    RESTORE_MAX_ENTRIES: z.coerce.number().int().positive().default(1_000_000),
+    // Max bytes read for the buffered manifest.json entry before aborting (400).
+    RESTORE_MAX_MANIFEST_BYTES: z.coerce.number().int().positive().default(4 * 1024 * 1024), // 4 MiB
 
     // --- shutdown ---
     SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),

@@ -9,9 +9,8 @@ import {
   Req,
   Res,
   UnauthorizedException,
-  UseGuards,
 } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { ApiOkResponse } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
@@ -56,7 +55,10 @@ export class AuthController {
   }
 
   @Public()
-  @UseGuards(ThrottlerGuard)
+  // ThrottlerGuard is bound app-wide (APP_GUARD in AdminModule); a second
+  // controller-level @UseGuards(ThrottlerGuard) here would run the guard twice and
+  // double-count, halving the effective login limit. @Throttle config is read by
+  // the app-wide guard, so the decorator below is all that's needed.
   @Throttle({ login: { limit: 5, ttl: 60_000 } })
   @Post('login')
   @HttpCode(200)

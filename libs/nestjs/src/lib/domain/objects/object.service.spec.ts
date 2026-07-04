@@ -1,14 +1,24 @@
 import type { Request, Response } from 'express';
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
+import type { ConfigService } from '@nestjs/config';
 
 import type { BucketRepository, ObjectRepository } from '../../persistence/index';
 
 import { InternalError, NoSuchBucketError, NoSuchKeyError } from '../../s3/errors/s3-error';
-import type { BlobStore } from '../../storage/blob-store';
+import { BlobStore } from '../../storage/blob-store';
+import { createSseCipher, generateIv } from '../../storage/sse-cipher';
 import type { ObjectWriterService } from '../../storage/object-writer.service';
 import type { VersionStoreService } from '../../storage/version-store.service';
 import type { SseKeyService } from '../../storage/sse-key.service';
 import type { XmlSerializer } from '../../s3/xml/xml.serializer';
-import { ObjectService } from './object.service';
+import {
+  ObjectService,
+  applySafeObjectResponseHeaders,
+  isActiveContentType,
+} from './object.service';
 
 const REPO = {} as ObjectRepository;
 const BLOBS = {} as BlobStore;
@@ -35,6 +45,9 @@ function mkRes(): Response & { _status?: number; _headers: Record<string, string
     _headers: {} as Record<string, string>,
     setHeader(k: string, v: string) {
       this._headers[k.toLowerCase()] = v;
+    },
+    getHeader(k: string) {
+      return this._headers[k.toLowerCase()];
     },
     status(s: number) {
       this._status = s;
@@ -118,5 +131,154 @@ describe('ObjectService.getObject (TEST-0305)', () => {
     expect(out).toBeUndefined();
     expect(res._status).toBe(416);
     expect(res._headers['content-range']).toBe('bytes */100');
+  });
+});
+
+describe('safe object-response headers (TASK-2110, CWE-79)', () => {
+  it('isActiveContentType flags HTML/XHTML/SVG (params + case ignored), not images/text', () => {
+    expect(isActiveContentType('text/html')).toBe(true);
+    expect(isActiveContentType('text/HTML; charset=utf-8')).toBe(true);
+    expect(isActiveContentType('application/xhtml+xml')).toBe(true);
+    expect(isActiveContentType('image/svg+xml')).toBe(true);
+    expect(isActiveContentType('image/png')).toBe(false);
+    expect(isActiveContentType('text/plain')).toBe(false);
+    expect(isActiveContentType('application/octet-stream')).toBe(false);
+  });
+
+  it('applySafeObjectResponseHeaders neutralizes text/html → octet-stream + attachment + CSP + nosniff', () => {
+    const res = mkRes();
+    const emitted = applySafeObjectResponseHeaders(res, 'text/html');
+    expect(emitted).toBe('application/octet-stream');
+    expect(res._headers['content-disposition']).toBe('attachment');
+    expect(res._headers['content-security-policy']).toBe("default-src 'none'; sandbox");
+    expect(res._headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  it('applySafeObjectResponseHeaders keeps a safe Content-Type inline but still sets CSP + nosniff', () => {
+    const res = mkRes();
+    const emitted = applySafeObjectResponseHeaders(res, 'image/png');
+    expect(emitted).toBe('image/png');
+    expect(res._headers['content-disposition']).toBeUndefined();
+    expect(res._headers['content-security-policy']).toBe("default-src 'none'; sandbox");
+    expect(res._headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  it('applySafeObjectResponseHeaders preserves a pre-set attachment filename disposition', () => {
+    const res = mkRes();
+    res.setHeader('Content-Disposition', 'attachment; filename="evil.html"');
+    applySafeObjectResponseHeaders(res, 'text/html');
+    expect(res._headers['content-disposition']).toBe('attachment; filename="evil.html"');
+  });
+});
+
+describe('ObjectService.copyObject SSE decrypt (TASK-2130, CWE-325)', () => {
+  const KEY = Buffer.alloc(32, 7);
+  const SSE_KEY = { key: () => KEY } as unknown as SseKeyService;
+  const stubConfig = (dir: string) => ({ getOrThrow: () => dir }) as unknown as ConfigService;
+
+  let dataDir: string;
+  let store: BlobStore;
+
+  beforeEach(async () => {
+    dataDir = join(process.cwd(), 'tmp', 'openbucket-copy-decrypt', randomUUID());
+    await fs.mkdir(dataDir, { recursive: true });
+    store = new BlobStore(stubConfig(dataDir));
+  });
+  afterEach(async () => {
+    await fs.rm(dataDir, { recursive: true, force: true });
+  });
+
+  /** Run copyObject against a staged source, capturing the bytes handed to the writer. */
+  async function runCopy(src: {
+    plaintext: Buffer;
+    encryption?: { algorithm: 'AES256'; iv: string };
+  }): Promise<Buffer> {
+    const buckets = { exists: jest.fn().mockResolvedValue(true) } as unknown as BucketRepository;
+    const objects = {
+      findCurrentVersion: jest.fn().mockResolvedValue({
+        etag: 'srcetag',
+        contentType: 'text/plain',
+        userMetadata: undefined,
+        encryption: src.encryption,
+        size: BigInt(src.plaintext.length),
+      }),
+    } as unknown as ObjectRepository;
+
+    let captured = Buffer.alloc(0);
+    const writer = {
+      put: jest.fn(async (cmd: { body: Readable }) => {
+        const chunks: Buffer[] = [];
+        for await (const c of cmd.body) chunks.push(c as Buffer);
+        captured = Buffer.concat(chunks);
+        return { etag: 'dst', modifiedAt: new Date() };
+      }),
+    } as unknown as ObjectWriterService;
+
+    const svc = new ObjectService(writer, buckets, objects, store, VERSIONS, SERIALIZER, SSE_KEY);
+    const req = mkReq({ 'x-amz-copy-source': '/src/k' });
+    await svc.copyObject(req, mkRes(), 'dst', 'k');
+    return captured;
+  }
+
+  it('decrypts an SSE-encrypted source so the writer receives PLAINTEXT (not ciphertext)', async () => {
+    const plaintext = Buffer.from('the quick brown fox — encrypted at rest'.repeat(4));
+    const iv = generateIv();
+    // Stage the source as ciphertext on disk, exactly as an SSE PutObject would.
+    await store.putBlob('src', 'k', Readable.from([plaintext]), createSseCipher(KEY, iv));
+
+    const captured = await runCopy({ plaintext, encryption: { algorithm: 'AES256', iv: iv.toString('base64') } });
+    expect(captured.equals(plaintext)).toBe(true);
+  });
+
+  it('passes an unencrypted source through unchanged', async () => {
+    const plaintext = Buffer.from('plain source bytes');
+    await store.putBlob('src', 'k', Readable.from([plaintext]));
+
+    const captured = await runCopy({ plaintext });
+    expect(captured.equals(plaintext)).toBe(true);
+  });
+});
+
+describe('ObjectService.headObject safe headers (TASK-2110)', () => {
+  const makeSvc = (obj: unknown) => {
+    const repo = {
+      findCurrentVersion: jest.fn().mockResolvedValue(obj),
+    } as unknown as ObjectRepository;
+    return new ObjectService(
+      {} as ObjectWriterService,
+      {} as BucketRepository,
+      repo,
+      BLOBS,
+      VERSIONS,
+      SERIALIZER,
+      SSE,
+    );
+  };
+  const baseObj = {
+    etag: 'e',
+    modifiedAt: new Date('2026-01-01T00:00:00Z'),
+    size: 10n,
+    userMetadata: {},
+    currentVersionId: undefined,
+  };
+
+  it('HEAD on a text/html object → attachment + octet-stream + CSP + nosniff', async () => {
+    const svc = makeSvc({ ...baseObj, contentType: 'text/html' });
+    const res = mkRes();
+    await svc.headObject(mkReq({}), res, 'b', 'k');
+    expect(res._status).toBe(200);
+    expect(res._headers['content-type']).toBe('application/octet-stream');
+    expect(res._headers['content-disposition']).toBe('attachment');
+    expect(res._headers['content-security-policy']).toBe("default-src 'none'; sandbox");
+    expect(res._headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  it('HEAD on an image/png object → inline Content-Type retained, still CSP + nosniff', async () => {
+    const svc = makeSvc({ ...baseObj, contentType: 'image/png' });
+    const res = mkRes();
+    await svc.headObject(mkReq({}), res, 'b', 'k');
+    expect(res._headers['content-type']).toBe('image/png');
+    expect(res._headers['content-disposition']).toBeUndefined();
+    expect(res._headers['content-security-policy']).toBe("default-src 'none'; sandbox");
   });
 });

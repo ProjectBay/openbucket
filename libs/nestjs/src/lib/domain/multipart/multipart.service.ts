@@ -13,11 +13,20 @@ import {
   MultipartPart,
   MultipartUpload,
   ObjectRepository,
+  nextStringBound,
 } from '../../persistence/index';
 import { OPEN_BUCKET_ORM_CONTEXT } from '../../persistence/orm-context';
 
 import { BlobRef, BlobStore } from '../../storage/blob-store';
 import { ObjectWriterService } from '../../storage/object-writer.service';
+import {
+  alignedStart,
+  createRangeDecipher,
+  createSseDecipher,
+  skipBytes,
+} from '../../storage/sse-cipher';
+import { SseKeyService } from '../../storage/sse-key.service';
+import { AppConfigService } from '../../common/config/app-config.service';
 import {
   EntityTooSmallError,
   InternalError,
@@ -28,6 +37,7 @@ import {
   NoSuchBucketError,
   NoSuchKeyError,
   NoSuchUploadError,
+  SlowDownError,
 } from '../../s3/errors/s3-error';
 import type { PutObjectStreamContext } from '../../s3/object/put-object.interceptor';
 import { parseRange } from '../../s3/object/range';
@@ -56,6 +66,8 @@ export class MultipartService {
     private readonly writer: ObjectWriterService,
     private readonly objects: ObjectRepository,
     private readonly serializer: XmlSerializer,
+    private readonly sseKey: SseKeyService,
+    private readonly config: AppConfigService,
   ) {}
 
   // Serialize Complete/Abort per uploadId (F7): otherwise two concurrent
@@ -90,10 +102,13 @@ export class MultipartService {
     const maxUploads =
       Number.isFinite(maxRaw) && maxRaw >= 0 ? Math.min(maxRaw, MAX_UPLOADS_CAP) : MAX_UPLOADS_CAP;
 
+    // Literal, byte-wise prefix match via an indexed range scan (S3 semantics),
+    // mirroring ObjectRepository.listByPrefix. Using `$like` here would let `%`/`_`
+    // in the client prefix act as SQL LIKE wildcards (TASK-2162, CWE-150).
     const rows = await this.em.find(
       MultipartUpload,
       prefix.length > 0
-        ? { bucket: { name: bucket }, key: { $like: `${prefix}%` } }
+        ? { bucket: { name: bucket }, key: { $gte: prefix, $lt: nextStringBound(prefix) } }
         : { bucket: { name: bucket } },
       { orderBy: { key: 'ASC', initiatedAt: 'ASC' }, limit: maxUploads + 1 },
     );
@@ -125,6 +140,17 @@ export class MultipartService {
    */
   async createUpload(req: Request, res: Response, bucket: string, key: string): Promise<unknown> {
     if (!(await this.buckets.exists(bucket))) throw new NoSuchBucketError(bucket);
+
+    // Bound concurrent in-flight multipart sessions (TASK-2140, CWE-770): each
+    // open upload can stage up to MAX_MULTIPART_PARTS files, so an unbounded
+    // number of sessions is a disk-fill amplifier. 0 disables the cap.
+    const maxUploads = this.config.maxConcurrentMultipartUploads;
+    if (maxUploads > 0) {
+      const open = await this.em.count(MultipartUpload, {});
+      if (open >= maxUploads) {
+        throw new SlowDownError('too many multipart uploads in progress; retry later');
+      }
+    }
 
     const uploadId = randomUUID();
     await fs.mkdir(this.blobs.paths.multipartDir(uploadId), { recursive: true, mode: 0o700 });
@@ -277,9 +303,10 @@ export class MultipartService {
     _key: string,
     q: Record<string, string | undefined>,
   ): Promise<undefined> {
+    const maxParts = this.config.maxMultipartParts;
     const partNumber = Number(q['partNumber']);
-    if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10_000) {
-      throw new InvalidArgumentError('partNumber must be in [1, 10000]', 'partNumber', q['partNumber']);
+    if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > maxParts) {
+      throw new InvalidArgumentError(`partNumber must be in [1, ${maxParts}]`, 'partNumber', q['partNumber']);
     }
     const uploadId = q['uploadId'] as string;
 
@@ -313,9 +340,10 @@ export class MultipartService {
     _key: string,
     q: Record<string, string | undefined>,
   ): Promise<unknown> {
+    const maxParts = this.config.maxMultipartParts;
     const partNumber = Number(q['partNumber']);
-    if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10_000) {
-      throw new InvalidArgumentError('partNumber must be in [1, 10000]', 'partNumber', q['partNumber']);
+    if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > maxParts) {
+      throw new InvalidArgumentError(`partNumber must be in [1, ${maxParts}]`, 'partNumber', q['partNumber']);
     }
     const uploadId = q['uploadId'] as string;
 
@@ -327,7 +355,8 @@ export class MultipartService {
     const src = await this.objects.findCurrentVersion(srcBucket, srcKey);
     if (!src) throw new NoSuchKeyError(srcKey);
 
-    // Optional x-amz-copy-source-range: bytes=start-end.
+    // Optional x-amz-copy-source-range: bytes=start-end. Interpreted against the
+    // PLAINTEXT byte offsets of the source object.
     const rangeHeader = req.headers['x-amz-copy-source-range'];
     let range: { start: number; end: number } | undefined;
     if (typeof rangeHeader === 'string' && rangeHeader.length > 0) {
@@ -338,8 +367,28 @@ export class MultipartService {
       range = parsed;
     }
 
-    const blob = await this.blobs.getBlob(srcBucket, srcKey, range);
-    const { etag, size } = await this.blobs.putPart(uploadId, partNumber, blob.stream as Readable);
+    // The source blob is ciphertext when the source object is SSE-encrypted
+    // (TASK-2130, CWE-325): decrypt it here so the copied part is hashed + staged
+    // as PLAINTEXT, exactly as the GetObject read path does. For a range we read
+    // from the block-aligned ciphertext offset and drop the intra-block prefix so
+    // the CTR keystream lines up at the requested plaintext start.
+    const readRange =
+      src.encryption && range ? { start: alignedStart(range.start), end: range.end } : range;
+    const blob = await this.blobs.getBlob(srcBucket, srcKey, readRange);
+    let partStream: Readable = blob.stream;
+    if (src.encryption) {
+      const sk = this.sseKey.key();
+      const iv = Buffer.from(src.encryption.iv, 'base64');
+      partStream = range
+        ? blob.stream
+            .pipe(createRangeDecipher(sk, iv, range.start))
+            .pipe(skipBytes(range.start - alignedStart(range.start)))
+        : blob.stream.pipe(createSseDecipher(sk, iv));
+      // A decipher error must tear down the source fd too.
+      partStream.on('error', () => blob.stream.destroy());
+    }
+
+    const { etag, size } = await this.blobs.putPart(uploadId, partNumber, partStream);
     await this.upsertPart(em, upload, partNumber, size, etag);
 
     return {
@@ -355,7 +404,7 @@ export class MultipartService {
    * response itself.
    */
   async listParts(
-    _req: Request,
+    req: Request,
     res: Response,
     bucket: string,
     key: string,
@@ -364,16 +413,35 @@ export class MultipartService {
     const em = this.em.fork();
     const upload = await em.findOne(MultipartUpload, { uploadId });
     if (!upload) throw new NoSuchUploadError();
-    const parts = await em.find(MultipartPart, { upload }, { orderBy: { partNumber: 'ASC' } });
+
+    // Honour the S3 pagination query params (TASK-2142, CWE-770): clamp
+    // `max-parts` to [1, 1000] (default 1000) and read `part-number-marker` as
+    // the exclusive lower bound. Previously every row was materialized into one
+    // XML doc with a hardcoded MaxParts:1000 / IsTruncated:false (wrong).
+    const q = (req.query ?? {}) as Record<string, unknown>;
+    const maxParts = clampInt(q['max-parts'], 1, 1000, 1000);
+    const marker = clampInt(q['part-number-marker'], 0, Number.MAX_SAFE_INTEGER, 0);
+
+    // Fetch one extra row to detect truncation without a separate count.
+    const rows = await em.find(
+      MultipartPart,
+      { upload, partNumber: { $gt: marker } },
+      { orderBy: { partNumber: 'ASC' }, limit: maxParts + 1 },
+    );
+    const isTruncated = rows.length > maxParts;
+    const page = isTruncated ? rows.slice(0, maxParts) : rows;
+    const nextMarker = isTruncated ? page[page.length - 1].partNumber : undefined;
 
     const body = this.serializer.serialize('ListPartsResult', {
       Bucket: bucket,
       Key: key,
       UploadId: uploadId,
       StorageClass: 'STANDARD',
-      MaxParts: 1000,
-      IsTruncated: false,
-      Part: parts.map((p) => ({
+      PartNumberMarker: marker,
+      MaxParts: maxParts,
+      IsTruncated: isTruncated,
+      ...(nextMarker !== undefined ? { NextPartNumberMarker: nextMarker } : {}),
+      Part: page.map((p) => ({
         PartNumber: p.partNumber,
         ETag: `"${p.etag}"`,
         Size: Number(p.size),
@@ -405,6 +473,17 @@ export class MultipartService {
     em.persist(part);
     await em.flush();
   }
+}
+
+/**
+ * Parse a query param as an integer and clamp it to `[min, max]`, falling back
+ * to `fallback` for a missing/non-numeric/negative value. Used to bound the
+ * ListParts pagination inputs (TASK-2142).
+ */
+function clampInt(raw: unknown, min: number, max: number, fallback: number): number {
+  const n = typeof raw === 'string' ? Number.parseInt(raw, 10) : NaN;
+  if (!Number.isFinite(n) || n < min) return fallback;
+  return Math.min(n, max);
 }
 
 /**

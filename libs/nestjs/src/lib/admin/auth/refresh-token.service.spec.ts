@@ -59,6 +59,13 @@ class FakeRepo {
     if (row) row.revokedAt = at;
   }
 
+  /** Revoke every still-live row for a subject (mirrors the nativeUpdate WHERE). */
+  async revokeAllForSubject(subjectId: string, at: Date): Promise<void> {
+    for (const row of this.rows.values()) {
+      if (row.subjectId === subjectId && row.revokedAt === null) row.revokedAt = at;
+    }
+  }
+
   /** Revoke a token and everything descended from it via rotatedFromId. */
   async revokeDescendants(id: string): Promise<void> {
     this.revokeDescendantsCalls.push(id);
@@ -215,5 +222,35 @@ describe('RefreshTokenService (TEST-0402)', () => {
 
     expect(repo.revokeCalls).toBe(1);
     expect(row!.revokedAt).toEqual(new Date(START));
+  });
+
+  it('case 11: revokeAllForSubject revokes every live row for the subject at now (TASK-2101)', async () => {
+    const { repo, svc } = build();
+    const a1 = (await svc.mint('admin', 'admin')).token;
+    const a2 = (await svc.mint('admin', 'admin')).token;
+
+    await svc.revokeAllForSubject('admin');
+
+    expect((await repo.findByLookup(sha256hex(a1)))!.revokedAt).toEqual(new Date(START));
+    expect((await repo.findByLookup(sha256hex(a2)))!.revokedAt).toEqual(new Date(START));
+  });
+
+  it('case 12: revokeAllForSubject leaves other subjects and already-revoked rows untouched', async () => {
+    const { repo, svc, advance } = build();
+    const otherRaw = (await svc.mint('other', 'other')).token;
+    const alreadyRaw = (await svc.mint('admin', 'admin')).token;
+    // Pre-revoke one admin row at START so we can prove the timestamp isn't rewritten.
+    (await repo.findByLookup(sha256hex(alreadyRaw)))!.revokedAt = new Date(START);
+    advance(1000); // now != START
+    const liveRaw = (await svc.mint('admin', 'admin')).token;
+
+    await svc.revokeAllForSubject('admin');
+
+    // Other subject's live token is untouched.
+    expect((await repo.findByLookup(sha256hex(otherRaw)))!.revokedAt).toBeNull();
+    // The already-revoked admin row keeps its ORIGINAL revocation timestamp.
+    expect((await repo.findByLookup(sha256hex(alreadyRaw)))!.revokedAt).toEqual(new Date(START));
+    // The live admin row is revoked at the current clock (START + 1000).
+    expect((await repo.findByLookup(sha256hex(liveRaw)))!.revokedAt).toEqual(new Date(START + 1000));
   });
 });

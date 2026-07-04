@@ -22,6 +22,14 @@ async function bootstrap(): Promise<void> {
   expressInstance.disable('x-powered-by');
   expressInstance.disable('etag'); // we issue our own ETags for objects
   expressInstance.set('trust proxy', 'loopback'); // upstream TLS-terminating proxy
+  // Case-sensitive routing (defense-in-depth for the admin-guard case bug,
+  // TASK-2100/TASK-2110): a mixed-case `/api/Admin/*` no longer matches the
+  // literal admin controller routes and falls through to the SigV4-guarded S3
+  // tree instead of reaching an admin handler. The JwtAuthGuard's lower-cased
+  // prefix test remains the primary control; this removes the case-variant path
+  // as a way to reach admin handlers at all. Strict routing is deliberately left
+  // off — S3 treats `/bucket` and `/bucket/` as equivalent.
+  expressInstance.set('case sensitive routing', true);
 
   const app = await NestFactory.create<NestExpressApplication>(
     // The standalone app always serves the admin surface — the env schema (§1.7)
@@ -38,8 +46,33 @@ async function bootstrap(): Promise<void> {
   // Bind Pino as the application logger. nestjs-pino is registered in AppModule.
   app.useLogger(app.get(Logger));
 
-  // Security headers — harmless on S3, useful on /admin SPA.
-  app.use(helmet({ contentSecurityPolicy: false })); // CSP disabled; SPA + S3 set their own headers
+  // Security headers (TASK-2110, CWE-79). Restore a restrictive default CSP for
+  // the admin SPA/API (`default-src 'self'`) instead of disabling it entirely.
+  // `style-src` allows inline styles (Angular injects component styles inline)
+  // and `img-src` allows data:/blob: (object previews). No
+  // `upgrade-insecure-requests` — the app may run over plain HTTP behind a
+  // TLS-terminating loopback proxy. Raw S3 object responses override this with a
+  // stricter per-response `default-src 'none'; sandbox` in ObjectService.
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          'default-src': ["'self'"],
+          'base-uri': ["'self'"],
+          'font-src': ["'self'", 'data:'],
+          'form-action': ["'self'"],
+          'frame-ancestors': ["'self'"],
+          'img-src': ["'self'", 'data:', 'blob:'],
+          'object-src': ["'none'"],
+          'script-src': ["'self'"],
+          'script-src-attr': ["'none'"],
+          'style-src': ["'self'", "'unsafe-inline'"],
+          'connect-src': ["'self'"],
+        },
+      },
+    }),
+  );
 
   // Mount opt-in body parsers for admin routes only. S3 PUTs stay raw.
   configureBodyParsers(expressInstance);
@@ -85,16 +118,20 @@ async function bootstrap(): Promise<void> {
   // Allow ConfigService access before listen().
   const config = app.get(AppConfigService);
 
-  // Tune the underlying http.Server for long-lived multipart streams.
-  // Values per WHITEPAPER §4.5 (the dedicated timeout-calibration section,
-  // authoritative over §1.2's inline 65_000): a slow multi-GB PUT must never
-  // be cut off by a per-request or socket-inactivity timeout.
+  // Tune the underlying http.Server (WHITEPAPER §4.5). TASK-2111 (CWE-400)
+  // supersedes STORY-0309's blanket `0`/`0`: unbounded per-request and socket
+  // timeouts let a slow-body client (e.g. a drip-fed `POST /api/admin/auth/login`)
+  // pin a socket forever (slowloris/RUDY). Restore finite bounds; legitimate long
+  // streaming PUTs are protected by a per-request stall watchdog in
+  // PutObjectInterceptor (which re-arms on every received chunk) rather than by
+  // disabling every timeout server-wide.
   const httpServer = app.getHttpServer();
-  httpServer.requestTimeout = 0; // disable per-request timeout; streaming sets its own
+  httpServer.requestTimeout = 300_000; // 5-min hard per-request completion deadline (Node default)
   httpServer.headersTimeout = 60_000; // 60s to send full request headers
   httpServer.keepAliveTimeout = 75_000; // > headersTimeout; friendly with HTTP/1.1 keep-alive
-  httpServer.timeout = 0; // no socket inactivity timeout; streams set their own
-  httpServer.maxRequestsPerSocket = 0;
+  httpServer.timeout = 120_000; // socket inactivity timeout (was 0 = disabled)
+  httpServer.maxRequestsPerSocket = 0; // no per-socket request cap (keep-alive friendly)
+  httpServer.maxConnections = 1024; // ceiling on concurrent sockets (slow-client blast radius)
 
   // Run forward-only migrations before the listener binds (§3.3.2): an empty
   // DATA_DIR becomes a usable instance with no manual SQL.

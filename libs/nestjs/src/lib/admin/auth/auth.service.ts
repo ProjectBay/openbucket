@@ -56,10 +56,16 @@ export class AuthService {
 
   async refresh(rawRefreshToken: string): Promise<IssuedTokens> {
     const rotated = await this.refreshTokens.rotate(rawRefreshToken);
+    // Re-derive mustChangePassword from the persisted row rather than hardcoding
+    // `false` (TASK-2102, CWE-620): a forced-rotation principal must not be able
+    // to shed the claim simply by refreshing. The guard enforces against a fresh
+    // DB read too, but keeping the claim truthful avoids handing out a token that
+    // advertises a stale `false`.
+    const user = await this.users.findByUsername(rotated.username);
     return this.issueTokens(
       rotated.subjectId,
       rotated.username,
-      false,
+      user?.mustChangePassword ?? false,
       rotated.token,
       rotated.expiresAt,
     );

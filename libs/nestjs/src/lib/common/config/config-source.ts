@@ -37,5 +37,18 @@ export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
     MAX_OBJECT_SIZE_MB: opts.limits.maxObjectSizeMb,
     MAX_MULTIPART_PARTS: opts.limits.maxMultipartParts,
     MULTIPART_TTL_HOURS: opts.limits.multipartTtlHours,
+    // Hardening limits (TASK-2140/2141/2143/2144). Library hosts get the same
+    // defaults as the env schema; they front OpenBucket with their own process
+    // and can tune these via the env-driven standalone path if needed.
+    DATA_DIR_MIN_FREE_BYTES: 100 * 1024 * 1024,
+    STORAGE_QUOTA_BYTES: 0,
+    STORAGE_QUOTA_OBJECTS: 0,
+    MAX_CONCURRENT_MULTIPART_UPLOADS: 1_000,
+    S3_THROTTLE_LIMIT: 1_000,
+    S3_THROTTLE_TTL_MS: 60_000,
+    RESTORE_MAX_TOTAL_BYTES: 100 * 1024 * 1024 * 1024,
+    RESTORE_MAX_ENTRY_BYTES: 5 * 1024 * 1024 * 1024,
+    RESTORE_MAX_ENTRIES: 1_000_000,
+    RESTORE_MAX_MANIFEST_BYTES: 4 * 1024 * 1024,
   };
 }

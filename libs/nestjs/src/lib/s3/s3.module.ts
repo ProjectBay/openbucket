@@ -4,6 +4,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { DomainModule } from '../domain/domain.module';
 import { StorageModule } from '../storage/storage.module';
 import { KeyService as StorageKeyService } from '../storage/key.service';
+import { PolicyAuthorizationGuard } from './authz/policy-authorization.guard';
 import { BucketController } from './controllers/bucket.controller';
 import { MultipartController } from './controllers/multipart.controller';
 import { ObjectController } from './controllers/object.controller';
@@ -44,6 +45,7 @@ import { XmlSerializer } from './xml/xml.serializer';
   providers: [
     RouteResolver,
     SigV4Guard,
+    PolicyAuthorizationGuard,
     Sigv4Verifier,
     // Bind the SigV4 abstract KeyService (§2.4.2) onto the concrete
     // persistence-backed KeyService (STORY-0212), mapping its KeyLookupResult

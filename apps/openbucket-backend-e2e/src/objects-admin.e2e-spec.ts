@@ -13,7 +13,7 @@ import { SpawnedApp, spawnApp } from './support/spawn-app';
  */
 const PORT = 9257;
 const PASSWORD = 'correct-horse-battery-staple';
-const S3_CREDS = { accessKeyId: 'AKIA1234567890ABCD', secretAccessKey: 'x'.repeat(40) };
+const S3_CREDS = { accessKeyId: 'AKIA1234567890ABCD', secretAccessKey: 'e2eRootSecretAccessKey9f3a7c1e5b2d08X6Yk' };
 
 interface Res {
   status: number;

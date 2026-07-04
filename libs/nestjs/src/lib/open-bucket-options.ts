@@ -1,6 +1,8 @@
 import type { ModuleMetadata, Type } from '@nestjs/common';
 import { z } from 'zod';
 
+import { strongSecret } from './common/config/env.schema';
+
 /**
  * Configuration for {@link OpenBucketModule}. Replaces the standalone app's
  * env-var/refuse-to-boot config — a host NestJS app passes these in code.
@@ -172,9 +174,7 @@ export function resolveOptions(o: OpenBucketModuleOptions): ResolvedOpenBucketOp
 export function validateSecurityCriticalOptions(o: ResolvedOpenBucketOptions): void {
   const schema = z.object({
     rootCredentials: z.object({
-      secretAccessKey: z
-        .string()
-        .min(32, 'rootCredentials.secretAccessKey must be at least 32 characters'),
+      secretAccessKey: strongSecret('rootCredentials.secretAccessKey'),
     }),
     sseKey: z
       .string()
@@ -182,7 +182,7 @@ export function validateSecurityCriticalOptions(o: ResolvedOpenBucketOptions): v
       .optional(),
     admin: z
       .object({
-        jwtSecret: z.string().min(32, 'admin.jwtSecret must be at least 32 characters'),
+        jwtSecret: strongSecret('admin.jwtSecret'),
         passwordHash: z
           .string()
           .regex(/^\$argon2id\$/, 'admin.passwordHash must be an argon2id hash'),

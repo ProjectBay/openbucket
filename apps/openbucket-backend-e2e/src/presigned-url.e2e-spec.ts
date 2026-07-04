@@ -6,7 +6,7 @@ import { SpawnedApp, spawnApp } from './support/spawn-app';
 /** TEST-0108 — presigned URL verification end-to-end (STORY-0104). */
 const PORT = 9241;
 const HOST = `127.0.0.1:${PORT}`;
-const CREDS = { accessKeyId: 'AKIA1234567890ABCD', secretAccessKey: 'x'.repeat(40) };
+const CREDS = { accessKeyId: 'AKIA1234567890ABCD', secretAccessKey: 'e2eRootSecretAccessKey9f3a7c1e5b2d08X6Yk' };
 const BUCKET = 'presign-bucket';
 const KEY = 'doc.txt';
 const DATA = 'presigned payload data';

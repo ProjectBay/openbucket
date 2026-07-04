@@ -1,6 +1,6 @@
 import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
@@ -20,6 +20,42 @@ describe('spa-utils', () => {
     expect(safeAssetPath(root, 'app.js')).not.toBeNull();
     expect(safeAssetPath(root, '../../etc/passwd')).toBeNull();
     expect(safeAssetPath(root, 'missing.js')).toBeNull();
+  });
+
+  // TASK-2161 (CWE-59): a symlink inside the SPA root must not escape it.
+  it('safeAssetPath rejects a symlink whose target is outside the SPA root', () => {
+    const base = mkdtempSync(join(tmpdir(), 'ob-spa-sym-'));
+    const root = join(base, 'spa');
+    const outside = join(base, 'outside');
+    mkdirSync(root);
+    mkdirSync(outside);
+    const secret = join(outside, 'secret.js');
+    writeFileSync(secret, 'SECRET');
+    symlinkSync(secret, join(root, 'leak.js'));
+    expect(safeAssetPath(root, 'leak.js')).toBeNull();
+  });
+
+  it('safeAssetPath serves a symlink whose target is inside the SPA root', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ob-spa-symin-'));
+    mkdirSync(join(root, 'real'));
+    writeFileSync(join(root, 'real', 'asset.js'), 'OK');
+    symlinkSync(join(root, 'real', 'asset.js'), join(root, 'link.js'));
+    const resolved = safeAssetPath(root, 'link.js');
+    expect(resolved).not.toBeNull();
+    // Returns the lexical in-root path so the controller can serve it root-relative.
+    expect(resolved).toBe(join(root, 'link.js'));
+  });
+
+  it('safeAssetPath returns null for a dangling symlink (realpath throws)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ob-spa-dangling-'));
+    symlinkSync(join(root, 'nonexistent-target.js'), join(root, 'broken.js'));
+    expect(safeAssetPath(root, 'broken.js')).toBeNull();
+  });
+
+  it('safeAssetPath still resolves a normal regular file', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ob-spa-normal-'));
+    writeFileSync(join(root, 'main.js'), '1');
+    expect(safeAssetPath(root, 'main.js')).toBe(join(root, 'main.js'));
   });
 });
 

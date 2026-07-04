@@ -742,6 +742,18 @@ export class BucketService {
     return row.policy;
   }
 
+  /**
+   * Bucket policy for request-path evaluation (TASK-2120): the stored document,
+   * or `null` when the bucket has no policy *or* does not exist. Unlike
+   * {@link getPolicyDoc} this never throws, so the `PolicyAuthorizationGuard`
+   * can default-allow (and let the handler surface `NoSuchBucket`) instead of
+   * turning a missing policy/bucket into a spurious 404 on e.g. CreateBucket.
+   */
+  async tryGetPolicyDoc(bucket: string): Promise<PolicyDocument | null> {
+    const row = await this.buckets.getByName(bucket);
+    return row?.policy ?? null;
+  }
+
   /** Store the bucket policy JSON verbatim (MalformedPolicy 400 on a non-object). */
   async setPolicy(bucket: string, policy: Record<string, unknown>): Promise<void> {
     if (!policy || typeof policy !== 'object' || Array.isArray(policy)) {

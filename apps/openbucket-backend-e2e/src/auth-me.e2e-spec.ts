@@ -13,7 +13,7 @@ import { SpawnedApp, spawnApp } from './support/spawn-app';
  */
 const PORT = 9251;
 const PASSWORD = 'correct-horse-battery-staple';
-const JWT_SECRET = 'a'.repeat(40); // matches spawn-app's validEnv default
+const JWT_SECRET = 'e2eJwtSigningSecret4b8d2f6a0c9e1573A6Ykp'; // matches spawn-app's validEnv default
 
 interface Res {
   status: number;

@@ -20,6 +20,13 @@ FROM node:22-bookworm-slim AS build
 
 WORKDIR /workspace
 ENV NX_DAEMON=false
+# Suppress @scarf/scarf install-time telemetry pulled in transitively via
+# @nestjs/swagger → swagger-ui-dist (TASK-2170). Setting these env vars (rather
+# than `npm ci --ignore-scripts`) disables the beacon deterministically while
+# still letting argon2's install script fetch its prebuilt native binary — see
+# the argon2 note above; --ignore-scripts would skip that and break the runtime.
+ENV SCARF_ANALYTICS=false
+ENV DO_NOT_TRACK=1
 
 # Toolchain for any native module that has to compile from source.
 RUN apt-get update \

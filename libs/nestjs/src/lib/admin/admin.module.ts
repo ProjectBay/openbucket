@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule, type ThrottlerModuleOptions } from '@nestjs/throttler';
 
+import { AppConfigService } from '../common/config/app-config.service';
+import { isLoginRoute, isS3ThrottledRoute } from '../s3/s3-throttle';
 import { AuthModule } from './auth/auth.module';
 import { BucketsAdminModule } from './buckets/buckets-admin.module';
 import { ObjectsAdminModule } from './objects/objects-admin.module';
@@ -39,18 +41,34 @@ export const ADMIN_CONTROLLER_MODULES = [
 @Module({
   imports: [
     // Single global throttler config (ThrottlerModule is @Global, so forRoot
-    // must be called exactly once app-wide): the 100/min-per-IP default plus
-    // the named `login` throttler (5/min) the login endpoint applies. AuthModule
-    // (§5.2.1) references the `login` name but must NOT call forRoot again — two
-    // @Global forRoots deadlock DI at boot.
-    ThrottlerModule.forRoot([
-      { ttl: 60_000, limit: 100 },
-      { ttl: 60_000, limit: 5, name: 'login' },
-    ]),
+    // must be called exactly once app-wide). Three mutually-exclusive named
+    // buckets (TASK-2141): `default` (admin 100/min), `login` (5/min, login route
+    // only) and `s3` (a wide, configurable per-IP bucket for the S3 data plane).
+    // `ThrottlerGuard` is bound app-wide below; each bucket's `skipIf` keeps it to
+    // its own routes so binding it globally doesn't throttle S3 at the admin rate
+    // (or admin at the login rate). AuthModule (§5.2.1) references the `login`
+    // name but must NOT call forRoot again — two @Global forRoots deadlock DI.
+    ThrottlerModule.forRootAsync({
+      inject: [AppConfigService],
+      useFactory: (config: AppConfigService): ThrottlerModuleOptions => [
+        { name: 'default', ttl: 60_000, limit: 100, skipIf: (ctx) => isS3ThrottledRoute(ctx) },
+        { name: 'login', ttl: 60_000, limit: 5, skipIf: (ctx) => !isLoginRoute(ctx) },
+        {
+          name: 's3',
+          ttl: config.s3ThrottleTtlMs,
+          limit: config.s3ThrottleLimit,
+          // Only the S3 controllers, and skipped entirely when disabled (limit 0).
+          skipIf: (ctx) => config.s3ThrottleLimit <= 0 || !isS3ThrottledRoute(ctx),
+        },
+      ],
+    }),
     ...ADMIN_CONTROLLER_MODULES,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // Bind ThrottlerGuard app-wide (TASK-2141): covers the S3 controllers, not
+    // just admin login. Listed after JwtAuthGuard so both APP_GUARDs run.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     AuditService,
     AdminBootstrapService,
   ],

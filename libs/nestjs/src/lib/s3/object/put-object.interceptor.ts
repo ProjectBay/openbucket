@@ -75,6 +75,16 @@ const HIGH_WATER_MARK = 256 * 1024;
  */
 @Injectable()
 export class PutObjectInterceptor implements NestInterceptor {
+  /**
+   * Idle-stall window for a streaming PUT (TASK-2111, CWE-400). If no body bytes
+   * arrive for this long the request is destroyed, so a slow/stalled upload can't
+   * pin a socket open. The timer re-arms on every received chunk, so an
+   * actively-progressing stream is never cut off (the server-wide
+   * `requestTimeout` in main.ts is the coarse backstop; this fires far sooner on
+   * a genuine stall).
+   */
+  static readonly STALL_TIMEOUT_MS = 30_000;
+
   constructor(private readonly config: AppConfigService) {}
 
   intercept(ctx: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -225,6 +235,23 @@ export class PutObjectInterceptor implements NestInterceptor {
       rejectHashes(err);
       rejectSize(err);
     };
+
+    // Per-request stall watchdog (TASK-2111, CWE-400). Bound the body phase via
+    // the SOCKET inactivity timeout rather than a per-chunk data listener: adding
+    // a "data" event listener would force the request into flowing mode and
+    // defeat the pull-based backpressure this interceptor relies on (TEST-0316).
+    // The socket timeout auto-resets on I/O, so an actively-progressing multi-GB
+    // PUT is never interrupted, while a body that sends no bytes for
+    // STALL_TIMEOUT_MS trips the callback and is destroyed (the server-wide
+    // requestTimeout in main.ts is the coarse backstop). Destroying the request
+    // routes through `fail` via the error handler below. Cast to an optional
+    // `setTimeout` so a socketless test double (a bare Readable) doesn't blow up.
+    const timed = req as unknown as {
+      setTimeout?: (ms: number, cb: () => void) => unknown;
+    };
+    timed.setTimeout?.(PutObjectInterceptor.STALL_TIMEOUT_MS, () => {
+      req.destroy(new IncompleteBodyError('upload stalled: no bytes received within the idle window'));
+    });
 
     // Surface request-side failures into the pipeline and the pending promises.
     req.on('error', fail);

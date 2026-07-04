@@ -45,11 +45,11 @@ describe('OpenBucketModule.forRoot — host-app embedding', () => {
         HostFeatureModule,
         OpenBucketModule.forRoot({
           dataDir: DATA_DIR,
-          rootCredentials: { accessKeyId: 'AKIAEXAMPLE000000000', secretAccessKey: 'x'.repeat(40) },
+          rootCredentials: { accessKeyId: 'AKIAEXAMPLE000000000', secretAccessKey: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s' },
           admin: {
             username: 'admin',
             passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$abc$def',
-            jwtSecret: 'x'.repeat(40),
+            jwtSecret: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
           },
         }),
       ],
@@ -110,7 +110,7 @@ describe('OpenBucketModule.forRoot — admin disabled (headless S3-only)', () =>
       imports: [
         OpenBucketModule.forRoot({
           dataDir: DATA_DIR_HEADLESS,
-          rootCredentials: { accessKeyId: 'AKIAEXAMPLE000000000', secretAccessKey: 'x'.repeat(40) },
+          rootCredentials: { accessKeyId: 'AKIAEXAMPLE000000000', secretAccessKey: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s' },
           // No `admin` block ⇒ no admin API, no JWT guard, no SPA, no bootstrap.
         }),
       ],

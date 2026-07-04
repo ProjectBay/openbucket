@@ -172,4 +172,68 @@ describe('PutObjectInterceptor (TEST-0301)', () => {
     await expect(ctx.hashes).rejects.toBe(boom);
     await expect(ctx.size).rejects.toBe(boom);
   });
+
+  // TASK-2111 (CWE-400): the per-request stall watchdog. It's wired via the
+  // SOCKET inactivity timeout (req.setTimeout), NOT a req.on('data') listener,
+  // so it can't defeat the backpressure invariant (TEST-0316, backpressure.spec).
+  it('case 10: registers a socket stall timeout that destroys the request on inactivity', async () => {
+    const req = new PassThrough() as unknown as IncomingMessage;
+    (req as unknown as { headers: unknown }).headers = { 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD' };
+    let stallCb: (() => void) | undefined;
+    const setTimeoutSpy = jest.fn((_ms: number, cb: () => void) => {
+      stallCb = cb;
+      return req;
+    });
+    (req as unknown as { setTimeout: unknown }).setTimeout = setTimeoutSpy;
+
+    interceptor.intercept(execCtx(req), NEXT);
+    const ctx = req.openbucketPutCtx as PutObjectStreamContext;
+    ctx.stream.on('error', () => undefined);
+    ctx.hashes.catch(() => undefined);
+    ctx.size.catch(() => undefined);
+    ctx.stream.resume();
+
+    expect(setTimeoutSpy).toHaveBeenCalledWith(
+      PutObjectInterceptor.STALL_TIMEOUT_MS,
+      expect.any(Function),
+    );
+    expect((req as unknown as { destroyed: boolean }).destroyed).toBe(false);
+
+    // Simulate the socket going idle for STALL_TIMEOUT_MS → watchdog fires.
+    stallCb!();
+
+    await expect(ctx.hashes).rejects.toBeInstanceOf(IncompleteBodyError);
+    expect((req as unknown as { destroyed: boolean }).destroyed).toBe(true);
+  });
+
+  it('case 11: the watchdog is armed but does not interfere with a normally-completing upload', async () => {
+    const req = Readable.from([Buffer.from('hello')]) as unknown as IncomingMessage;
+    (req as unknown as { headers: unknown }).headers = { 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD' };
+    const setTimeoutSpy = jest.fn().mockReturnValue(req);
+    (req as unknown as { setTimeout: unknown }).setTimeout = setTimeoutSpy;
+
+    interceptor.intercept(execCtx(req), NEXT);
+    const ctx = req.openbucketPutCtx as PutObjectStreamContext;
+    ctx.stream.resume();
+
+    expect(setTimeoutSpy).toHaveBeenCalledWith(
+      PutObjectInterceptor.STALL_TIMEOUT_MS,
+      expect.any(Function),
+    );
+    // The body streams to completion with the watchdog present — no interference,
+    // and no premature destroy-with-error (hashes/size settle, not reject).
+    await expect(ctx.size).resolves.toBe(5);
+    await expect(ctx.hashes).resolves.toMatchObject({ sha256Hex: expect.any(String) });
+  });
+
+  it('case 12: a socketless request (no setTimeout) does not throw', () => {
+    const req = Readable.from([Buffer.from('x')]) as unknown as IncomingMessage;
+    (req as unknown as { headers: unknown }).headers = { 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD' };
+    expect(() => interceptor.intercept(execCtx(req), NEXT)).not.toThrow();
+    const ctx = req.openbucketPutCtx as PutObjectStreamContext;
+    ctx.stream.on('error', () => undefined);
+    ctx.hashes.catch(() => undefined);
+    ctx.size.catch(() => undefined);
+    ctx.stream.resume();
+  });
 });

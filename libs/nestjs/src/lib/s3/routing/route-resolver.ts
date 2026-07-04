@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Request } from 'express';
 
-import { InvalidBucketNameError } from '../errors/s3-error';
+import { InvalidBucketNameError, KeyTooLongError } from '../errors/s3-error';
 
 /**
  * Canonical S3 bucket label per AWS naming rules (subset honoured by S3 for
@@ -9,6 +9,15 @@ import { InvalidBucketNameError } from '../errors/s3-error';
  * alphanumeric, middle chars are alphanumeric + `.` / `-`. See §2.2.
  */
 const BUCKET_NAME_RE = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+
+/**
+ * S3's hard object-key limit is 1024 UTF-8 bytes. Enforced here (TASK-2160,
+ * CWE-770) so an over-length key is a deterministic 400 rather than reaching
+ * `fs.mkdir(..., { recursive: true })` and exploding as an opaque `ENAMETOOLONG`
+ * 500 (and fanning out one directory per segment). Complements — does not
+ * replace — the per-segment 255-byte cap in `storage/key-codec.ts`.
+ */
+const MAX_KEY_BYTES = 1024;
 
 /**
  * Resolves the canonical `(bucket, key)` pair for a request. The classifier
@@ -42,6 +51,10 @@ export class RouteResolver {
     }
 
     const key = ob.keyRaw ?? ob.key ?? '';
+    const keyBytes = Buffer.byteLength(key, 'utf8');
+    if (keyBytes > MAX_KEY_BYTES) {
+      throw new KeyTooLongError(keyBytes);
+    }
     return { bucket, key };
   }
 }

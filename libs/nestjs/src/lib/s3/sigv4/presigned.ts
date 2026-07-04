@@ -8,6 +8,7 @@ import {
 } from '../errors/s3-error';
 import { awsUriEncode, buildCanonicalRequest } from './canonical-request';
 import { KeyService } from './key.service';
+import { assertMandatorySignedHeaders } from './signed-headers';
 import { Sigv4Verifier } from './sigv4.verifier';
 
 export const MAX_EXPIRES = 7 * 24 * 60 * 60; // AWS: max 7 days.
@@ -72,6 +73,9 @@ export async function verifyPresigned(
   // Strip only X-Amz-Signature from the canonical query.
   const queryWithoutSig = stripParam(req.originalUrl, 'X-Amz-Signature');
   const signedHeaders = signedHeadersStr.split(';').map((s) => s.toLowerCase());
+  // Reject a presigned URL that leaves `host` (or a wire-present x-amz-* header)
+  // out of X-Amz-SignedHeaders, so those headers cannot be left unbound (TASK-2121).
+  assertMandatorySignedHeaders(signedHeaders, req.headers);
 
   const canonical = buildCanonicalRequest({
     method: req.method,
@@ -192,4 +196,29 @@ function stripParam(url: string, name: string): string {
   const u = new URL(`http://h${url}`);
   u.searchParams.delete(name);
   return u.search.startsWith('?') ? u.search.slice(1) : u.search;
+}
+
+/** The SigV4 query-auth params that carry replayable credentials (§2.5). */
+const SIGV4_QUERY_AUTH_PARAMS = [
+  'X-Amz-Signature', // the request signature — replayable within the presign window
+  'X-Amz-Credential', // embeds the access-key-id
+  'X-Amz-Security-Token', // optional STS session token
+] as const;
+
+/**
+ * Strip the SigV4 query-auth params (`X-Amz-Signature`, `X-Amz-Credential`,
+ * `X-Amz-Security-Token`) from a request URL so a presigned request can be logged
+ * without leaking a replayable signature or the access-key-id (CWE-532,
+ * TASK-2150). Returns `pathname + search`; benign query params are preserved so
+ * ordinary URLs stay debuggable. Falls back to the path-only portion if `url`
+ * cannot be parsed, so logging never throws on a malformed request line.
+ */
+export function stripSigV4QueryAuth(url: string): string {
+  try {
+    const u = new URL(`http://h${url}`);
+    for (const p of SIGV4_QUERY_AUTH_PARAMS) u.searchParams.delete(p);
+    return u.pathname + (u.search || '');
+  } catch {
+    return url.split('?')[0];
+  }
 }

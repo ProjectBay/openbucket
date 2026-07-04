@@ -16,6 +16,10 @@
     "./package.json": "./package.json"
   },
   "files": ["src", "assets", "README.md"],
+  "//scarfSettings": "Best-effort opt-out of @scarf/scarf install-time telemetry pulled transitively via @nestjs/swagger → swagger-ui-dist (TASK-2170). scarf-js honours an any-in-chain disable check, so a downstream `npm install @openbucket/nestjs` suppresses the beacon. Deterministic suppression for our own build/CI is via SCARF_ANALYTICS=false / DO_NOT_TRACK=1 in Docker/CI.",
+  "scarfSettings": {
+    "enabled": false
+  },
   "peerDependencies": {
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",

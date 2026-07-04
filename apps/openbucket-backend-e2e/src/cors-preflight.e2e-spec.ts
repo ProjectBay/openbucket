@@ -11,7 +11,7 @@ import { SpawnedApp, spawnApp } from './support/spawn-app';
  */
 const PORT = 9273;
 const HOST = `127.0.0.1:${PORT}`;
-const CREDS = { accessKeyId: 'AKIA1234567890ABCD', secretAccessKey: 'x'.repeat(40) };
+const CREDS = { accessKeyId: 'AKIA1234567890ABCD', secretAccessKey: 'e2eRootSecretAccessKey9f3a7c1e5b2d08X6Yk' };
 const BUCKET = 'cors-pf-bucket';
 const NO_CORS_BUCKET = 'cors-pf-none';
 
@@ -103,13 +103,17 @@ describe('CORS preflight (e2e, TEST-0132)', () => {
     expect(res.body).toContain('CORSResponse: This CORS request is not allowed.');
   });
 
-  it('case 3: bucket without CORS config → 404 NoSuchCORSConfiguration', async () => {
+  it('case 3: bucket without CORS config → opaque 403 AccessDenied (no existence oracle)', async () => {
+    // Security (finding #14 / TASK-2112, CWE-204): the preflight must not reveal
+    // whether a bucket exists or is CORS-configured. A bucket with no CORS config,
+    // a non-matching rule, and (case 2) a disallowed origin all collapse to the
+    // same opaque 403 AccessDenied so an unauthenticated caller cannot enumerate.
     const res = await options(`/${NO_CORS_BUCKET}/some/key.txt`, {
       Origin: 'https://example.com',
       'Access-Control-Request-Method': 'GET',
     });
-    expect(res.status).toBe(404);
-    expect(res.body).toContain('<Code>NoSuchCORSConfiguration</Code>');
+    expect(res.status).toBe(403);
+    expect(res.body).toContain('<Code>AccessDenied</Code>');
   });
 
   it('case 4: no Origin → 200, Allow header, no CORS headers', async () => {

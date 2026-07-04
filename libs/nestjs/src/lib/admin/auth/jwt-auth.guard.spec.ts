@@ -1,8 +1,9 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import type { ExecutionContext } from '@nestjs/common';
 import type { Reflector } from '@nestjs/core';
 import type { JwtService } from '@nestjs/jwt';
 
+import type { AdminUserRepository } from '../../persistence/index';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 /**
@@ -21,11 +22,23 @@ function context(req: Record<string, unknown>): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
-function build(opts: { isPublic?: boolean; verify?: jest.Mock } = {}) {
+function build(
+  opts: { isPublic?: boolean; verify?: jest.Mock; mustChangePassword?: boolean } = {},
+) {
   const reflector = { getAllAndOverride: jest.fn().mockReturnValue(opts.isPublic ?? false) };
   const jwt = { verifyAsync: opts.verify ?? jest.fn() };
-  const guard = new JwtAuthGuard(reflector as unknown as Reflector, jwt as unknown as JwtService);
-  return { guard, reflector, jwt };
+  // The persisted AdminUser row the guard reads for forced-rotation enforcement.
+  const users = {
+    findByUsername: jest
+      .fn()
+      .mockResolvedValue({ username: 'admin', mustChangePassword: opts.mustChangePassword ?? false }),
+  };
+  const guard = new JwtAuthGuard(
+    reflector as unknown as Reflector,
+    jwt as unknown as JwtService,
+    users as unknown as AdminUserRepository,
+  );
+  return { guard, reflector, jwt, users };
 }
 
 describe('JwtAuthGuard (TEST-0408)', () => {
@@ -88,5 +101,50 @@ describe('JwtAuthGuard (TEST-0408)', () => {
     await guard.canActivate(context({ path: '/api/admin/buckets', headers: { authorization: 'Bearer good' } }));
 
     expect(verify).toHaveBeenCalledWith('good', { issuer: 'openbucket', audience: 'openbucket-admin' });
+  });
+
+  // TASK-2102 (CWE-620): forced-password-rotation enforcement reads the DB, not
+  // the JWT claim, and confines a must-change principal to the recovery routes.
+  const validPayload = { sub: 'admin', username: 'admin', mustChangePassword: false, iat: 1, exp: 2 };
+
+  it('case 9: mustChangePassword principal is 403d on a normal admin route', async () => {
+    const verify = jest.fn().mockResolvedValue(validPayload);
+    const { guard, users } = build({ verify, mustChangePassword: true });
+    await expect(
+      guard.canActivate(context({ path: '/api/admin/buckets', headers: { authorization: 'Bearer good' } })),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(users.findByUsername).toHaveBeenCalledWith('admin');
+  });
+
+  it('case 10: mustChangePassword principal is allowed on change-password / logout / me', async () => {
+    for (const path of [
+      '/api/admin/settings/change-password',
+      '/api/admin/auth/logout',
+      '/api/admin/auth/me',
+    ]) {
+      const verify = jest.fn().mockResolvedValue(validPayload);
+      const { guard } = build({ verify, mustChangePassword: true });
+      await expect(
+        guard.canActivate(context({ path, headers: { authorization: 'Bearer good' } })),
+      ).resolves.toBe(true);
+    }
+  });
+
+  it('case 11: enforcement uses the DB flag, not the token claim (stale false claim still 403s)', async () => {
+    // Token claims mustChangePassword=false, but the persisted row says true —
+    // the guard must trust the DB (a pre-fix refresh could mint a false claim).
+    const verify = jest.fn().mockResolvedValue({ ...validPayload, mustChangePassword: false });
+    const { guard } = build({ verify, mustChangePassword: true });
+    await expect(
+      guard.canActivate(context({ path: '/api/admin/buckets', headers: { authorization: 'Bearer good' } })),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('case 12: cleared flag → principal reaches all admin routes normally', async () => {
+    const verify = jest.fn().mockResolvedValue(validPayload);
+    const { guard } = build({ verify, mustChangePassword: false });
+    await expect(
+      guard.canActivate(context({ path: '/api/admin/buckets', headers: { authorization: 'Bearer good' } })),
+    ).resolves.toBe(true);
   });
 });
