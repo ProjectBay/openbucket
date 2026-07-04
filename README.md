@@ -43,6 +43,13 @@ upload/download, presigned share links, access-key management, per-bucket
 versioning / encryption / object-lock / lifecycle / CORS / policy editors,
 i18n (en/de), light/dark themes.
 
+**Developer file pipeline** — on-the-fly **image transformations** on GET
+(`?w=&h=&fit=&format=&q=`, cached derivatives), **object event notifications**
+(in-process `@OnObjectCreated()` events for the embedded case + signed HTTP
+webhooks), **direct browser uploads** (presigned POST), and one-call
+`OpenBucketService.uploadFrom()` helpers (content-type sniffing, validation, image
+metadata).
+
 **Operations** — refuse-to-boot env validation, forward-only DB migrations on
 startup, graceful drain on `SIGTERM`, structured (pino) JSON logs, health &
 readiness probes, request IDs.
