@@ -25,6 +25,7 @@ import { TestModule } from './admin/_test/test.module';
 import { RequestClassifierMiddleware } from './common/middleware/request-classifier.middleware';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { OrmContextMiddleware } from './common/middleware/orm-context.middleware';
+import { stripSigV4QueryAuth } from './s3/sigv4/presigned';
 
 /**
  * Build the ordered import list for the composition root. Order matters: config
@@ -78,7 +79,12 @@ function buildCoreImports(adminEnabled: boolean): Array<Type | DynamicModule> {
           serializers: {
             req: (req) => ({
               method: req.method,
-              url: req.url,
+              // Strip SigV4 query-auth params (X-Amz-Signature / -Credential /
+              // -Security-Token) so a presigned request never logs a replayable
+              // signature or the access-key-id (CWE-532, TASK-2150). pino `redact`
+              // can't censor a substring inside the opaque `url` string, so the
+              // sanitization must happen here in the serializer.
+              url: stripSigV4QueryAuth(req.url ?? ''),
               host: req.headers.host,
               remoteAddress: req.remoteAddress,
             }),

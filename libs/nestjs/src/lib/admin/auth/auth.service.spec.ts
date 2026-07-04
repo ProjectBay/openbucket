@@ -126,6 +126,25 @@ describe('AuthService (TEST-0401)', () => {
     expect(tokens.refreshExpiresAt).toBe(expiresAt);
   });
 
+  it('refresh: re-derives mustChangePassword from the persisted row, not a hardcoded false (TASK-2102)', async () => {
+    const m = build();
+    m.refresh.rotate.mockResolvedValue({
+      subjectId: 'admin',
+      username: 'admin',
+      token: 'rotated-raw',
+      expiresAt: new Date('2031-06-01T00:00:00Z'),
+    });
+    // The persisted user is still in the forced-rotation state.
+    m.users.findByUsername.mockResolvedValue({ username: 'admin', mustChangePassword: true });
+
+    await m.svc.refresh('old-raw');
+
+    expect(m.users.findByUsername).toHaveBeenCalledWith('admin');
+    expect(m.jwt.signAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ mustChangePassword: true }),
+    );
+  });
+
   it('logout: revokes when a raw token is present, no-ops when undefined', async () => {
     const m = build();
     await m.svc.logout('raw');

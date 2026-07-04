@@ -54,9 +54,9 @@ export function validEnv(overrides: Record<string, string> = {}): NodeJS.Process
     ...process.env,
     NODE_ENV: 'production',
     DATA_DIR: mkdtempSync(join(scratch, 'ob-e2e-')),
-    JWT_SECRET: 'a'.repeat(40),
+    JWT_SECRET: 'e2eJwtSigningSecret4b8d2f6a0c9e1573A6Ykp',
     ROOT_ACCESS_KEY_ID: 'AKIA1234567890ABCD',
-    ROOT_SECRET_ACCESS_KEY: 'x'.repeat(40),
+    ROOT_SECRET_ACCESS_KEY: 'e2eRootSecretAccessKey9f3a7c1e5b2d08X6Yk',
     ADMIN_PASSWORD_HASH: '$argon2id$v=19$m=65536,t=3,p=4$abc$def',
     ...overrides,
   };

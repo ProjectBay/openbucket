@@ -11,6 +11,19 @@ import { SSE_KEY_BYTES } from './sse-cipher';
  * `OPENBUCKET_SSE_KEY` (base64 32 bytes) when set, otherwise generated once and
  * persisted to `<DATA_DIR>/sse.key` (mode 0600). Losing this key makes every
  * SSE-encrypted object unreadable — operators must back it up.
+ *
+ * KEY MODEL / THREAT-MODEL BOUNDARY (TASK-2131, audit finding [10], CWE-522):
+ * this is the intended **SSE-S3** design — one instance-wide key used verbatim
+ * for every object, with no per-object/per-tenant HKDF derivation, no key-id, and
+ * therefore no in-place rotation in v1 (rotation would need bulk re-encryption).
+ * The cipher is non-AEAD `aes-256-ctr`; decryption is gated on the mutable DB
+ * flag `obj.encryption`, and a "flag-flip downgrade" does NOT disclose plaintext
+ * (the on-disk bytes are ciphertext) — it is caught on the read path by the
+ * stored-`contentSha256` integrity gate. Both attack legs (read of the key file /
+ * write of the DB) already require privileged access that defeats the at-rest
+ * model. Per-object/tenant keys + key-id/rotation + AEAD binding are a documented
+ * roadmap item, not shipped in v1. Operators must deliver the key via a secrets
+ * manager/file (see libs/nestjs/README.md), not an inline env var.
  */
 @Injectable()
 export class SseKeyService implements OnModuleInit {

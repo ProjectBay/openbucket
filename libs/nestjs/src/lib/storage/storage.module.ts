@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { BlobStore } from './blob-store';
+import { FreeSpaceService } from './free-space.service';
 import { KeyService } from './key.service';
 import { ObjectWriterService } from './object-writer.service';
 import { RecoveryService } from './recovery.service';
@@ -14,7 +15,7 @@ import { VersionStoreService } from './version-store.service';
  * and VersionStoreService (§3.11, STORY-0213).
  */
 @Module({
-  providers: [BlobStore, ObjectWriterService, RecoveryService, KeyService, SseKeyService, VersionStoreService],
-  exports: [BlobStore, ObjectWriterService, RecoveryService, KeyService, SseKeyService, VersionStoreService],
+  providers: [BlobStore, FreeSpaceService, ObjectWriterService, RecoveryService, KeyService, SseKeyService, VersionStoreService],
+  exports: [BlobStore, FreeSpaceService, ObjectWriterService, RecoveryService, KeyService, SseKeyService, VersionStoreService],
 })
 export class StorageModule {}

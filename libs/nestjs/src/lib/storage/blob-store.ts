@@ -4,11 +4,25 @@ import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { dirname, join } from 'node:path';
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { PathResolver } from './paths';
 import type { TrashManifest } from './trash';
+import type { FreeSpaceService } from './free-space.service';
+
+/**
+ * Thrown by {@link BlobStore.putBlob} when the streamed input exceeds the
+ * caller-supplied `maxSize` cap (TASK-2143, CWE-409/400). The pipeline is aborted
+ * and the staging temp file unlinked before the bytes can fill the disk. Callers
+ * (e.g. the restore path) map this to a 400.
+ */
+export class MaxBlobSizeExceededError extends Error {
+  constructor(public readonly maxSize: number) {
+    super(`blob exceeds the maximum allowed size of ${maxSize} bytes`);
+    this.name = 'MaxBlobSizeExceededError';
+  }
+}
 
 export interface PutResult {
   /** Bytes written, post-flush. */
@@ -43,7 +57,12 @@ export class BlobStore {
   private readonly log = new Logger(BlobStore.name);
   readonly paths: PathResolver;
 
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    // Optional so unit tests can `new BlobStore(stubConfig)` without the guard;
+    // production DI (StorageModule) always supplies it (TASK-2140).
+    @Optional() private readonly freeSpace?: FreeSpaceService,
+  ) {
     this.paths = new PathResolver(config.getOrThrow<string>('DATA_DIR'));
   }
 
@@ -71,7 +90,12 @@ export class BlobStore {
     key: string,
     source: Readable | string,
     cipher?: import('node:crypto').Cipher,
+    maxSize?: number,
   ): Promise<PutResult> {
+    // Free-space preflight (TASK-2140): reject before opening the staging stream
+    // so a nearly-full DATA_DIR can't be pushed over the edge by object writes.
+    await this.freeSpace?.assertWritable();
+
     await this.ensureDir(this.paths.tmpDir());
     const tmpName = `put-${randomUUID()}`;
     const tmpPath = this.paths.tmpPath(tmpName);
@@ -80,6 +104,7 @@ export class BlobStore {
     const md5 = createHash('md5');
     const sha = createHash('sha256');
     let bytesWritten = 0n;
+    const cap = maxSize !== undefined ? BigInt(maxSize) : undefined;
 
     const sink = createWriteStream(tmpPath, { flags: 'wx' });
     const input: Readable = typeof source === 'string' ? createReadStream(source) : source;
@@ -91,6 +116,12 @@ export class BlobStore {
         md5.update(chunk);
         sha.update(chunk);
         bytesWritten += BigInt(chunk.length);
+        // Abort past the caller's cap (restore decompression bomb, TASK-2143):
+        // destroy the source so the pipeline rejects and the tmp file is unlinked
+        // in the catch below — the bytes never accumulate on disk.
+        if (cap !== undefined && bytesWritten > cap && !input.destroyed) {
+          input.destroy(new MaxBlobSizeExceededError(maxSize as number));
+        }
       });
       if (cipher) await pipeline(input, cipher, sink);
       else await pipeline(input, sink);
@@ -124,6 +155,10 @@ export class BlobStore {
     partNumber: number,
     source: Readable,
   ): Promise<{ etag: string; size: bigint }> {
+    // Free-space preflight (TASK-2140): abandoned multipart staging is the other
+    // disk-fill vector, so guard part writes too.
+    await this.freeSpace?.assertWritable();
+
     const finalPath = this.paths.multipartPartPath(uploadId, partNumber);
     await this.ensureDir(dirname(finalPath));
     const tmpPath = `${finalPath}.${randomUUID()}.tmp`;

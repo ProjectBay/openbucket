@@ -311,6 +311,29 @@ Notes:
   `<mountPath>/api/admin/*`. When disabled, no global guard is bound at all.
 - **Migrations** run automatically on module init (no manual step).
 
+## Server-side encryption (SSE-S3) key model
+
+OpenBucket encrypts objects at rest with a **single, backend-managed 32-byte key**
+(the SSE-S3 model). Operational notes:
+
+- **One key for the whole instance.** Every encrypted object of every bucket is
+  encrypted with the same key — there is no per-object/per-tenant key derivation
+  (that is the SSE-KMS model, out of scope for v1) and **no in-place key rotation**
+  in v1 (persisted state is `{ algorithm, iv }` with no key-id, so rotating would
+  require re-encrypting every object).
+- **Back it up.** Losing the key makes every encrypted object permanently
+  unreadable. Store `<dataDir>/sse.key` (or the `OPENBUCKET_SSE_KEY` value) with
+  your other break-glass secrets.
+- **Deliver it via a secrets manager or file**, not an inline shell env var: prefer
+  mounting `sse.key` or injecting `OPENBUCKET_SSE_KEY` from a secrets store so the
+  key doesn't leak into process listings, shell history, or logs.
+- **Threat-model boundary.** The at-rest design assumes the key material and the
+  metadata DB are protected; an attacker who can already read `sse.key` or write the
+  DB has defeated the at-rest model regardless. A tampered `obj.encryption` flag does
+  not disclose plaintext (the on-disk bytes are ciphertext) and is caught on read by
+  the `contentSha256` integrity gate. Known residual gaps: legacy objects without a
+  stored `contentSha256`, and range reads above the range-verify cap.
+
 ## Caveats
 
 - **Body parsing.** The S3 protocol needs raw, unbuffered request bodies. Do **not**
@@ -320,6 +343,23 @@ Notes:
 - **Graceful shutdown.** Call `app.enableShutdownHooks()` in your bootstrap so
   OpenBucket's in-flight-drain (`OnApplicationShutdown`) runs on termination.
 - **Node** ≥ 20 (libsql native bindings — N-API prebuilds, ABI-stable across Node majors).
+
+## Install-time telemetry (opt out)
+
+`@openbucket/nestjs` pulls in `@nestjs/swagger` for the admin API docs, which in turn
+resolves `swagger-ui-dist` → `@scarf/scarf`. Scarf runs a `postinstall` script that
+sends anonymous install analytics to `scarf.sh`. OpenBucket ships
+`"scarfSettings": { "enabled": false }` in its manifest to disable this best-effort,
+but if your CI is privacy-sensitive, suppress the beacon deterministically by exporting
+either variable before installing:
+
+```sh
+export DO_NOT_TRACK=1          # or: export SCARF_ANALYTICS=false
+npm ci
+```
+
+Both are honored by scarf-js regardless of dependency-tree resolution. OpenBucket's own
+Docker image build and CI already set these.
 
 ## License
 

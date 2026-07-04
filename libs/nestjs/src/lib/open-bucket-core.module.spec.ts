@@ -18,9 +18,9 @@ describe('OpenBucketCoreModule', () => {
       ...ORIGINAL,
       NODE_ENV: 'test',
       DATA_DIR: '/tmp/openbucket-appmodule-test',
-      JWT_SECRET: 'a'.repeat(40),
+      JWT_SECRET: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
       ROOT_ACCESS_KEY_ID: 'AKIA1234567890ABCD',
-      ROOT_SECRET_ACCESS_KEY: 'x'.repeat(40),
+      ROOT_SECRET_ACCESS_KEY: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
       ADMIN_PASSWORD_HASH: '$argon2id$v=19$m=65536,t=3,p=4$abc$def',
     };
   });

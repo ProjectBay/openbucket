@@ -98,4 +98,14 @@ export class RefreshTokenService {
     if (!row || row.revokedAt) return; // idempotent on missing / already-revoked
     await this.repo.revoke(row.id, this.clock.now());
   }
+
+  /**
+   * Revoke every live refresh token for a subject (TASK-2101, CWE-613). Called on
+   * password change to evict any attacker still holding a stolen `ob_refresh`
+   * cookie — after this, {@link rotate} rejects their token at the `revokedAt`
+   * gate. Stateless 15-minute access JWTs are unaffected (out of scope).
+   */
+  async revokeAllForSubject(subjectId: string): Promise<void> {
+    await this.repo.revokeAllForSubject(subjectId, this.clock.now());
+  }
 }

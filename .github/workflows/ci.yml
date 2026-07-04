@@ -26,6 +26,11 @@ env:
   # (22.x >=22.12). The SQLite driver (libsql) ships N-API prebuilds that are
   # ABI-stable across Node majors, so the Node pin is Angular-driven, not DB-driven.
   NODE_VERSION: '22'
+  # Suppress @scarf/scarf install-time telemetry (transitive via
+  # @nestjs/swagger → swagger-ui-dist) so CI never phones home (TASK-2170).
+  # Applied workflow-wide so every `npm ci` step inherits it.
+  SCARF_ANALYTICS: 'false'
+  DO_NOT_TRACK: '1'
 
 jobs:
   lint-and-test:
@@ -41,6 +46,12 @@ jobs:
           cache: npm
 
       - run: npm ci --no-audit --no-fund
+
+      - name: Production dependency audit gate
+        # Fail the build on any high/critical advisory in the PRODUCTION dependency
+        # graph (TASK-2171). Dev-only toolchain advisories (e.g. Nx transitive ReDoS)
+        # are excluded via --omit=dev so this tracks genuinely-shipped risk only.
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Derive nx affected base
         uses: nrwl/nx-set-shas@v5

@@ -15,10 +15,12 @@ import type { Request, Response } from 'express';
 
 import { CompletePart, MultipartService } from '../../domain/multipart/multipart.service';
 import { ObjectService } from '../../domain/objects/object.service';
+import { PolicyAuthorizationGuard } from '../authz/policy-authorization.guard';
 import { NotImplementedError } from '../errors/s3-error';
 import { S3ExceptionFilter } from '../errors/s3-exception.filter';
 import { PutObjectInterceptor } from '../object/put-object.interceptor';
 import { RouteResolver } from '../routing/route-resolver';
+import { S3Throttled } from '../s3-throttle';
 import { SigV4Guard } from '../sigv4/sigv4.guard';
 import { XmlInterceptor } from '../xml/xml.interceptor';
 
@@ -37,7 +39,8 @@ import { XmlInterceptor } from '../xml/xml.interceptor';
  * + key come from the classifier, not from Nest's path parser.
  */
 @Controller(':bucket')
-@UseGuards(SigV4Guard)
+@S3Throttled()
+@UseGuards(SigV4Guard, PolicyAuthorizationGuard)
 @UseFilters(S3ExceptionFilter)
 @UseInterceptors(XmlInterceptor)
 export class ObjectController {

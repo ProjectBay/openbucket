@@ -2,11 +2,7 @@ import { Controller, Options, Req, Res, UseFilters } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
 import { BucketService } from '../../domain/buckets/bucket.service';
-import {
-  AccessDeniedError,
-  NoSuchBucketError,
-  NoSuchCORSConfigurationError,
-} from '../errors/s3-error';
+import { AccessDeniedError } from '../errors/s3-error';
 import { S3ExceptionFilter } from '../errors/s3-exception.filter';
 import { RouteResolver } from '../routing/route-resolver';
 
@@ -54,15 +50,15 @@ export class CorsController {
       return;
     }
 
-    const bucketRow = await this.buckets.findByName(bucket);
-    if (!bucketRow) throw new NoSuchBucketError(bucket);
-
-    const rules = bucketRow.cors;
-    if (!rules || rules.length === 0) {
-      throw new NoSuchCORSConfigurationError('CORSResponse: CORS is not enabled for this bucket.');
-    }
-
-    const rule = rules.find(
+    // Uniform outcome for every non-matching case (TASK-2112, CWE-203): a
+    // missing bucket, an existing bucket with no CORS config, and an existing
+    // bucket whose rules don't match all collapse to one opaque 403 AccessDenied.
+    // Distinct NoSuchBucket / NoSuchCORSConfiguration codes here would let an
+    // anonymous caller (preflights are unsigned) diff the responses to enumerate
+    // which bucket names exist. Only a genuine rule match yields 200 + ACAO,
+    // which reveals existence solely for a bucket whose owner deliberately
+    // published a matching public CORS rule.
+    const rule = (await this.buckets.findByName(bucket))?.cors?.find(
       (r) =>
         matchOrigin(r.allowedOrigins, origin) &&
         (r.allowedMethods as readonly string[]).includes(method.toUpperCase()) &&

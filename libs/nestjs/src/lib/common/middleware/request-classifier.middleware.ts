@@ -41,14 +41,22 @@ export class RequestClassifierMiddleware implements NestMiddleware {
     }
     const host = stripPort((req.headers.host ?? '').toLowerCase());
 
+    // The admin/SPA prefix tests are case-INSENSITIVE (TASK-2110): Express routes
+    // the literal admin controller paths case-insensitively by default, and the
+    // JwtAuthGuard's prefix test is likewise lower-cased, so a mixed-case
+    // `/api/Admin/*` must classify as `admin` here too (the SigV4 guard skips
+    // admin-kind requests) rather than slipping through as an S3 request. Key
+    // extraction below still uses the original-case `path`.
+    const lowerPath = path.toLowerCase();
+
     // 1. /api/admin/* → admin API. Checked before /admin/ because it's the longer prefix.
-    if (path === '/api/admin' || path.startsWith('/api/admin/')) {
+    if (lowerPath === '/api/admin' || lowerPath.startsWith('/api/admin/')) {
       ctx.kind = 'admin';
       return next();
     }
 
     // 2. /admin/* → SPA. The ServeStaticModule will serve index.html for unknown subpaths.
-    if (path === '/admin' || path.startsWith('/admin/')) {
+    if (lowerPath === '/admin' || lowerPath.startsWith('/admin/')) {
       ctx.kind = 'spa';
       return next();
     }

@@ -28,5 +28,15 @@ export class AppConfigService {
   get maxObjectSizeMb(): number { return this.raw.get('MAX_OBJECT_SIZE_MB', { infer: true }); }
   get maxMultipartParts(): number { return this.raw.get('MAX_MULTIPART_PARTS', { infer: true }); }
   get multipartTtlHours(): number { return this.raw.get('MULTIPART_TTL_HOURS', { infer: true }); }
+  get dataDirMinFreeBytes(): number { return this.raw.get('DATA_DIR_MIN_FREE_BYTES', { infer: true }); }
+  get storageQuotaBytes(): number { return this.raw.get('STORAGE_QUOTA_BYTES', { infer: true }); }
+  get storageQuotaObjects(): number { return this.raw.get('STORAGE_QUOTA_OBJECTS', { infer: true }); }
+  get maxConcurrentMultipartUploads(): number { return this.raw.get('MAX_CONCURRENT_MULTIPART_UPLOADS', { infer: true }); }
+  get s3ThrottleLimit(): number { return this.raw.get('S3_THROTTLE_LIMIT', { infer: true }); }
+  get s3ThrottleTtlMs(): number { return this.raw.get('S3_THROTTLE_TTL_MS', { infer: true }); }
+  get restoreMaxTotalBytes(): number { return this.raw.get('RESTORE_MAX_TOTAL_BYTES', { infer: true }); }
+  get restoreMaxEntryBytes(): number { return this.raw.get('RESTORE_MAX_ENTRY_BYTES', { infer: true }); }
+  get restoreMaxEntries(): number { return this.raw.get('RESTORE_MAX_ENTRIES', { infer: true }); }
+  get restoreMaxManifestBytes(): number { return this.raw.get('RESTORE_MAX_MANIFEST_BYTES', { infer: true }); }
   get shutdownDrainMs(): number { return this.raw.get('SHUTDOWN_DRAIN_MS', { infer: true }); }
 }

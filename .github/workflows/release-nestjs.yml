@@ -33,6 +33,10 @@ env:
   # The Node 20 backend / Node 23 frontend split is a Windows-dev quirk only and
   # does not apply on the Linux runner.)
   NODE_VERSION: '22'
+  # Suppress @scarf/scarf install-time telemetry (transitive via
+  # @nestjs/swagger → swagger-ui-dist) during the release install (TASK-2170).
+  SCARF_ANALYTICS: 'false'
+  DO_NOT_TRACK: '1'
 
 jobs:
   publish:

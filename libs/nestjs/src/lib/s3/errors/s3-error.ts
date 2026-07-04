@@ -43,6 +43,23 @@ export class InvalidArgumentError extends S3Error {
     if (argValue !== undefined) this.extra.ArgumentValue = argValue;
   }
 }
+/**
+ * 400 KeyTooLongError — the object key exceeds S3's 1024-byte limit. Enforced
+ * once at the shared routing seam (`RouteResolver.resolve`) so PUT/GET/DELETE/LIST
+ * share it, converting an over-length key into a deterministic 400 instead of
+ * letting it reach `fs.mkdir` and surface as an opaque `ENAMETOOLONG` 500
+ * (TASK-2160, CWE-770). Distinct from the per-segment `KeyTooLongError` in
+ * `storage/key-codec.ts`, which guards the 255-byte-per-segment filesystem cap.
+ */
+export class KeyTooLongError extends S3Error {
+  readonly code = 'KeyTooLongError';
+  readonly httpStatus = 400;
+  constructor(byteLength?: number) {
+    super('Your key is too long.');
+    if (byteLength !== undefined) this.extra.Size = byteLength;
+    this.extra.MaxSizeAllowed = 1024;
+  }
+}
 export class MalformedXMLError extends S3Error {
   readonly code = 'MalformedXML';
   readonly httpStatus = 400;
@@ -259,6 +276,22 @@ export class NotImplementedError extends S3Error {
   constructor(op: string) {
     super(`The ${op} operation is not implemented by OpenBucket.`);
     this.extra.Operation = op;
+  }
+}
+
+// -- 507 --------------------------------------------------------------
+/**
+ * 507 InsufficientStorage — the write can't be accepted because the DATA_DIR
+ * volume is at/under its free-space reserve or a configured storage quota is
+ * exhausted (TASK-2140, CWE-770). Not in the classic S3 taxonomy but understood
+ * by the SDKs as a retriable server-storage condition; rendered with an XML
+ * `<Code>` body by the S3 exception filter like every other S3Error.
+ */
+export class InsufficientStorageError extends S3Error {
+  readonly code = 'InsufficientStorage';
+  readonly httpStatus = 507;
+  constructor(message = 'Not enough storage available to complete the request.') {
+    super(message);
   }
 }
 

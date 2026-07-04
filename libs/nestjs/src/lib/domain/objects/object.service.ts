@@ -44,6 +44,45 @@ import {
 } from '../../s3/xml/s3-config-docs';
 import { XmlSerializer } from '../../s3/xml/xml.serializer';
 
+/**
+ * Content types a browser will execute/interpret as active content if served
+ * inline on the app origin (stored XSS, CWE-79). `obj.contentType` is stored
+ * verbatim from the PUT request, so an attacker can upload markup declared as
+ * `text/html` and have it run as script when previewed inline.
+ */
+const ACTIVE_CONTENT_TYPES = new Set([
+  'text/html',
+  'application/xhtml+xml',
+  'image/svg+xml',
+]);
+
+/** True if `contentType` (ignoring any `; charset=…` params) is active content. */
+export function isActiveContentType(contentType: string): boolean {
+  return ACTIVE_CONTENT_TYPES.has(contentType.split(';', 1)[0].trim().toLowerCase());
+}
+
+/**
+ * Neutralize active content on a raw S3 object response before the first body
+ * byte (TASK-2110, CWE-79). Every object read gets a locked-down CSP + `nosniff`;
+ * for a stored `Content-Type` a browser would execute inline (HTML/XHTML/SVG) the
+ * type is overridden to a non-rendering `application/octet-stream` and an
+ * `attachment` disposition is forced, so uploaded markup can't run as script on
+ * the admin/app origin. Returns the `Content-Type` value the caller should emit.
+ * A pre-existing `attachment` disposition (e.g. the admin `?download` filename
+ * variant) is preserved.
+ */
+export function applySafeObjectResponseHeaders(res: Response, contentType: string): string {
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (!isActiveContentType(contentType)) return contentType;
+
+  const existing = res.getHeader('Content-Disposition');
+  if (typeof existing !== 'string' || !existing.toLowerCase().startsWith('attachment')) {
+    res.setHeader('Content-Disposition', 'attachment');
+  }
+  return 'application/octet-stream';
+}
+
 /** Admin object-listing input (§5.6). */
 export interface AdminObjectListInput {
   bucket: string;
@@ -331,11 +370,25 @@ export class ObjectService {
       : src.contentType;
     const userMetadata = replace ? extractUserMetadata(req.headers) : src.userMetadata;
 
+    // Decrypt the source before handing bytes to the writer (TASK-2130,
+    // CWE-325). getBlob returns the raw on-disk stream, which is ciphertext for
+    // an SSE-encrypted source; streaming that straight into the writer would
+    // hash + re-encrypt ciphertext-as-plaintext, corrupting the copy. Mirror the
+    // GetObject/openObjectStream decrypt so the writer sees true plaintext: the
+    // ETag/contentSha256 come out over plaintext and the destination bucket's own
+    // encryption policy is applied cleanly.
     const blob = await this.blobs.getBlob(srcBucket, srcKey);
+    let body: Readable = blob.stream;
+    if (src.encryption) {
+      const sk = this.sseKey.key();
+      const iv = Buffer.from(src.encryption.iv, 'base64');
+      body = blob.stream.pipe(createSseDecipher(sk, iv));
+      body.on('error', () => blob.stream.destroy());
+    }
     const row = await this.writer.put({
       bucket,
       key,
-      body: blob.stream as unknown as Readable,
+      body,
       contentType,
       userMetadata,
     });
@@ -428,8 +481,10 @@ export class ObjectService {
       throw err;
     }
 
-    // Headers must precede the first body byte (Node throws otherwise).
-    res.setHeader('Content-Type', obj.contentType);
+    // Headers must precede the first body byte (Node throws otherwise). Neutralize
+    // active content (CSP + nosniff + attachment/octet-stream for HTML/SVG) before
+    // emitting the stored Content-Type (TASK-2110, CWE-79).
+    res.setHeader('Content-Type', applySafeObjectResponseHeaders(res, obj.contentType));
     res.setHeader('ETag', `"${obj.etag}"`);
     res.setHeader('Last-Modified', obj.modifiedAt.toUTCString());
     res.setHeader('Accept-Ranges', 'bytes');
@@ -518,7 +573,9 @@ export class ObjectService {
   async headObject(_req: Request, res: Response, bucket: string, key: string): Promise<undefined> {
     const obj = await this.objects.findCurrentVersion(bucket, key);
     if (!obj) throw new NoSuchKeyError(key);
-    res.setHeader('Content-Type', obj.contentType);
+    // Same active-content neutralization as GET (TASK-2110): a HEAD must advertise
+    // the same safe Content-Type/disposition the body would be served with.
+    res.setHeader('Content-Type', applySafeObjectResponseHeaders(res, obj.contentType));
     res.setHeader('ETag', `"${obj.etag}"`);
     res.setHeader('Last-Modified', obj.modifiedAt.toUTCString());
     res.setHeader('Accept-Ranges', 'bytes');

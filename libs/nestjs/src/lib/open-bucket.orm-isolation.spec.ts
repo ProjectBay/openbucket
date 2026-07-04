@@ -66,7 +66,7 @@ class HostOrmController {
 class HostWithOwnOrmModule {}
 
 const DATA_DIR = join(process.cwd(), 'tmp', `ob-orm-iso-${process.pid}`);
-const JWT_SECRET = 'x'.repeat(40);
+const JWT_SECRET = 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s';
 
 describe('OpenBucketModule.forRoot — MikroORM context isolation (phase 5)', () => {
   let app: INestApplication;
@@ -81,7 +81,7 @@ describe('OpenBucketModule.forRoot — MikroORM context isolation (phase 5)', ()
         HostWithOwnOrmModule,
         OpenBucketModule.forRoot({
           dataDir: DATA_DIR,
-          rootCredentials: { accessKeyId: 'AKIAEXAMPLE000000000', secretAccessKey: 'x'.repeat(40) },
+          rootCredentials: { accessKeyId: 'AKIAEXAMPLE000000000', secretAccessKey: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s' },
           admin: {
             username: 'admin',
             passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$abc$def',

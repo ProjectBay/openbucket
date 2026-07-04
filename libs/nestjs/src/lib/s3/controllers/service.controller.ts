@@ -2,8 +2,10 @@ import { Controller, Get, Req, Res, UseFilters, UseGuards, UseInterceptors } fro
 import type { Request, Response } from 'express';
 
 import { BucketService } from '../../domain/buckets/bucket.service';
+import { PolicyAuthorizationGuard } from '../authz/policy-authorization.guard';
 import { S3ExceptionFilter } from '../errors/s3-exception.filter';
 import { S3Operation } from '../routing/operation.decorator';
+import { S3Throttled } from '../s3-throttle';
 import { SigV4Guard } from '../sigv4/sigv4.guard';
 import { XmlInterceptor } from '../xml/xml.interceptor';
 
@@ -15,7 +17,8 @@ import { XmlInterceptor } from '../xml/xml.interceptor';
  * `XmlInterceptor` envelopes as `<ListAllMyBucketsResult>` (STORY-0107).
  */
 @Controller()
-@UseGuards(SigV4Guard)
+@S3Throttled()
+@UseGuards(SigV4Guard, PolicyAuthorizationGuard)
 @UseFilters(S3ExceptionFilter)
 @UseInterceptors(XmlInterceptor)
 export class ServiceController {

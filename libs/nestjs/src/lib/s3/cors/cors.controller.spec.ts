@@ -3,10 +3,7 @@ import type { Request, Response } from 'express';
 import type { Bucket, CorsRule } from '../../persistence/index';
 
 import { BucketService } from '../../domain/buckets/bucket.service';
-import {
-  AccessDeniedError,
-  NoSuchBucketError,
-} from '../errors/s3-error';
+import { AccessDeniedError } from '../errors/s3-error';
 import { RouteResolver } from '../routing/route-resolver';
 import { CorsController, globMatch, matchHeader, matchOrigin } from './cors.controller';
 
@@ -74,39 +71,68 @@ describe('CorsController.preflight (TEST-0131 cases 5-11)', () => {
     expect(end).toHaveBeenCalled();
   });
 
-  it('case 6: bucket not found → NoSuchBucketError', async () => {
+  // TASK-2112 (CWE-203): the three non-matching cases must be indistinguishable —
+  // a uniform AccessDeniedError with byte-identical Code + Message — so an
+  // anonymous caller can't diff them to enumerate bucket existence.
+  const NO_MATCH_MESSAGE = 'CORSResponse: This CORS request is not allowed.';
+
+  it('case 6: bucket not found → uniform AccessDeniedError (no existence oracle)', async () => {
     const ctrl = makeController(null);
     const { res } = mockRes();
-    await expect(
-      ctrl.objectPreflight(
+    const err = await ctrl
+      .objectPreflight(
         mockReq({ origin: 'https://example.com', 'access-control-request-method': 'GET' }),
         res,
-      ),
-    ).rejects.toBeInstanceOf(NoSuchBucketError);
+      )
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AccessDeniedError);
+    expect((err as AccessDeniedError).message).toBe(NO_MATCH_MESSAGE);
   });
 
-  it('case 7: bucket without CORS config → NoSuchCORSConfigurationError', async () => {
+  it('case 7: bucket without CORS config → uniform AccessDeniedError (no existence oracle)', async () => {
     const ctrl = makeController(bucketWith(undefined));
     const { res } = mockRes();
-    await expect(
-      ctrl.objectPreflight(
+    const err = await ctrl
+      .objectPreflight(
         mockReq({ origin: 'https://example.com', 'access-control-request-method': 'GET' }),
         res,
-      ),
-    ).rejects.toThrow('CORSResponse: CORS is not enabled for this bucket.');
+      )
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AccessDeniedError);
+    expect((err as AccessDeniedError).message).toBe(NO_MATCH_MESSAGE);
   });
 
-  it('case 8: no matching rule → AccessDeniedError', async () => {
+  it('case 8: no matching rule → uniform AccessDeniedError', async () => {
     const ctrl = makeController(
       bucketWith([{ allowedOrigins: ['https://allowed.com'], allowedMethods: ['GET'] }]),
     );
     const { res } = mockRes();
-    await expect(
-      ctrl.objectPreflight(
+    const err = await ctrl
+      .objectPreflight(
         mockReq({ origin: 'https://evil.com', 'access-control-request-method': 'GET' }),
         res,
-      ),
-    ).rejects.toBeInstanceOf(AccessDeniedError);
+      )
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AccessDeniedError);
+    expect((err as AccessDeniedError).message).toBe(NO_MATCH_MESSAGE);
+  });
+
+  it('case 8b: missing / no-CORS / no-match preflights are byte-identical (no discrepancy)', async () => {
+    const req = mockReq({ origin: 'https://evil.com', 'access-control-request-method': 'GET' });
+    const collect = async (bucket: Bucket | null): Promise<{ code: string; message: string }> => {
+      const err = (await makeController(bucket)
+        .objectPreflight(req, mockRes().res)
+        .catch((e: unknown) => e)) as { code: string; message: string };
+      return { code: err.code, message: err.message };
+    };
+    const missing = await collect(null);
+    const noCors = await collect(bucketWith(undefined));
+    const noMatch = await collect(
+      bucketWith([{ allowedOrigins: ['https://allowed.com'], allowedMethods: ['GET'] }]),
+    );
+    expect(missing).toEqual(noMatch);
+    expect(noCors).toEqual(noMatch);
+    expect(missing.code).toBe('AccessDenied');
   });
 
   it('case 9: rule with allowedOrigins ["*"] → Allow-Origin: *', async () => {

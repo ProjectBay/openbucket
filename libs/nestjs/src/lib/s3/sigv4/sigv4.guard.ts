@@ -9,6 +9,7 @@ import {
 } from '../errors/s3-error';
 import { KeyService } from './key.service';
 import { verifyPresigned } from './presigned';
+import { assertMandatorySignedHeaders } from './signed-headers';
 import { Sigv4Verifier } from './sigv4.verifier';
 
 const MAX_SKEW_MS = 15 * 60 * 1000; // AWS default ±15 minutes.
@@ -80,6 +81,9 @@ export class SigV4Guard implements CanActivate {
     this.checkSkew(amzDate);
 
     const parsed = this.parseAuthorization(authz);
+    // Reject a signature that leaves `host` (or a wire-present x-amz-* header)
+    // out of SignedHeaders, so those headers cannot be left unbound (TASK-2121).
+    assertMandatorySignedHeaders(parsed.signedHeaders, req.headers);
     const key = await this.keys.getSecret(parsed.accessKeyId);
     if (!key) throw new SignatureDoesNotMatchError();
 

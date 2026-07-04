@@ -10,7 +10,7 @@ import { SpawnedApp, spawnApp } from './support/spawn-app';
  */
 const PORT = 9269;
 const HOST = `127.0.0.1:${PORT}`;
-const CREDS = { accessKeyId: 'AKIA1234567890ABCD', secretAccessKey: 'x'.repeat(40) };
+const CREDS = { accessKeyId: 'AKIA1234567890ABCD', secretAccessKey: 'e2eRootSecretAccessKey9f3a7c1e5b2d08X6Yk' };
 const BUCKET = 'ol-bucket';
 const KEY = 'locked.txt';
 const RETAIN_UNTIL = '2035-06-01T00:00:00.000Z';

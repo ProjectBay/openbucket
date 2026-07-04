@@ -34,7 +34,8 @@ describe('resolveOptions', () => {
 });
 
 describe('validateSecurityCriticalOptions', () => {
-  const SECRET = 'x'.repeat(40);
+  // High-entropy 40-char fixture that passes the strong-secret guard (TASK-2151).
+  const SECRET = 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s';
   const HASH = '$argon2id$v=19$m=65536,t=3,p=4$abc$def';
   const validBase = {
     dataDir: '/data',
@@ -72,6 +73,24 @@ describe('validateSecurityCriticalOptions', () => {
     expect(() => validate({ ...validBase, admin: { ...validBase.admin, jwtSecret: 'short' } })).toThrow(
       /jwtSecret/,
     );
+  });
+
+  it('rejects a low-entropy (all-identical) secret access key (TASK-2151, CWE-521)', () => {
+    expect(() =>
+      validate({
+        ...validBase,
+        rootCredentials: { accessKeyId: 'AKIAEXAMPLE000000000', secretAccessKey: 'x'.repeat(40) },
+      }),
+    ).toThrow(/secretAccessKey/);
+  });
+
+  it('rejects a placeholder / low-entropy jwtSecret in the library path (TASK-2151)', () => {
+    expect(() =>
+      validate({ ...validBase, admin: { ...validBase.admin, jwtSecret: 'a'.repeat(32) } }),
+    ).toThrow(/jwtSecret/);
+    expect(() =>
+      validate({ ...validBase, admin: { ...validBase.admin, jwtSecret: 'changeme'.padEnd(32, 'e') } }),
+    ).toThrow(/jwtSecret/);
   });
 
   it('does NOT enforce the AWS access-key-id format (library callers may use arbitrary keys)', () => {

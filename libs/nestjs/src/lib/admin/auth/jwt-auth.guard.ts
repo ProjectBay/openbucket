@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Inject,
   Injectable,
   Optional,
@@ -12,6 +13,7 @@ import type { Request } from 'express';
 
 import { IS_PUBLIC_KEY } from '../../common/auth/public.decorator';
 import { OPEN_BUCKET_OPTIONS, type ResolvedOpenBucketOptions } from '../../open-bucket-options';
+import { AdminUserRepository } from '../../persistence/index';
 
 /** The decoded admin access token attached to `req.user` on success (§5.3). */
 export interface AdminJwtPayload {
@@ -33,9 +35,22 @@ export class JwtAuthGuard implements CanActivate {
   /** Admin API prefix, mount-aware: `<mountPath>/api/admin/` (e.g. `/storage/api/admin/`). */
   private readonly adminPrefix: string;
 
+  /**
+   * Sub-paths (relative to {@link adminPrefix}, lower-cased) a mustChangePassword
+   * principal may still reach, so a forced-rotation user can actually recover:
+   * change the password, log out, or read `/me` (TASK-2102). Everything else is
+   * 403'd until the flag clears.
+   */
+  private static readonly FORCED_ROTATION_ALLOWLIST = new Set([
+    'settings/change-password',
+    'auth/logout',
+    'auth/me',
+  ]);
+
   constructor(
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
+    private readonly users: AdminUserRepository,
     @Optional() @Inject(OPEN_BUCKET_OPTIONS) options?: ResolvedOpenBucketOptions,
   ) {
     // Lower-cased: the prefix test below is case-INSENSITIVE because Express
@@ -66,15 +81,33 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     const token = header.slice('Bearer '.length).trim();
+    let payload: AdminJwtPayload;
     try {
-      const payload = await this.jwt.verifyAsync<AdminJwtPayload>(token, {
+      payload = await this.jwt.verifyAsync<AdminJwtPayload>(token, {
         issuer: 'openbucket',
         audience: 'openbucket-admin',
       });
-      (req as Request & { user?: AdminJwtPayload }).user = payload;
-      return true;
     } catch {
       throw new UnauthorizedException('invalid token');
     }
+    (req as Request & { user?: AdminJwtPayload }).user = payload;
+
+    // Forced-password-rotation enforcement (TASK-2102, CWE-620). Decide against a
+    // FRESH DB read of `mustChangePassword`, not the JWT claim: the claim can go
+    // stale (it's baked in at login and survived across a pre-fix refresh), so a
+    // guard that trusted the token could be bypassed. A principal still flagged
+    // must-change is confined to the recovery routes until they rotate.
+    const user = await this.users.findByUsername(payload.sub);
+    if (user?.mustChangePassword === true && !this.isForcedRotationAllowed(req.path)) {
+      throw new ForbiddenException('password change required');
+    }
+    return true;
+  }
+
+  /** True if `path` is one of the recovery routes a must-change principal may use. */
+  private isForcedRotationAllowed(path: string): boolean {
+    const lower = path.toLowerCase();
+    if (!lower.startsWith(this.adminPrefix)) return false;
+    return JwtAuthGuard.FORCED_ROTATION_ALLOWLIST.has(lower.slice(this.adminPrefix.length));
   }
 }

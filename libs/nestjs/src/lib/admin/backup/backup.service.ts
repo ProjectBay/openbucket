@@ -13,6 +13,7 @@ import yauzl from 'yauzl';
 import { BucketService } from '../../domain/buckets/bucket.service';
 import { ObjectService } from '../../domain/objects/object.service';
 import { ObjectWriterService } from '../../storage/object-writer.service';
+import { MaxBlobSizeExceededError } from '../../storage/blob-store';
 import { BucketRepository } from '../../persistence/repositories/bucket.repository';
 import { ObjectRepository } from '../../persistence/repositories/object.repository';
 import { VersioningState } from '../../persistence/index';
@@ -163,6 +164,10 @@ export class BackupService {
       // A bucket backup carries exactly one source bucket; restore its objects
       // into `target` (remapping the bucket name), resetting `target` first.
       const source = manifest.buckets[0];
+      // Validate the whole archive (decompression caps + entry count) BEFORE any
+      // destructive wipe (TASK-2143), so a bomb/oversize archive is rejected with
+      // the existing objects still intact.
+      await this.validateArchive(zipPath);
       await this.ensureBucket(target, source);
       await this.wipeBucketObjects(target);
 
@@ -187,6 +192,11 @@ export class BackupService {
     const zipPath = await this.spool(upload);
     try {
       const manifest = await this.readManifest(zipPath);
+      // Validate decompression caps BEFORE wiping the live instance (TASK-2143):
+      // the prior code wiped every bucket first, so a bomb that tripped mid-write
+      // left the instance both wiped AND un-restored (data loss). Fully validating
+      // the archive up front makes a hostile archive a no-op against live data.
+      await this.validateArchive(zipPath);
       // Reset: wipe every existing bucket, then recreate from the manifest.
       const existing = await this.bucketRepo.listAll();
       for (const b of existing) {
@@ -301,13 +311,33 @@ export class BackupService {
       throw new BadRequestException(`unsafe path in backup archive: ${JSON.stringify(`${bucket}/${key}`)}`);
     }
     const meta = manifest.objects.find((o) => o.bucket === bucket && o.key === key);
-    await this.writer.put({
-      bucket,
-      key,
-      body: stream,
-      contentType: meta?.contentType,
-      userMetadata: meta?.userMetadata,
-    });
+    // Per-entry decompression cap (TASK-2143): abort + unlink the staging file if
+    // the entry decompresses past the limit, so a bomb can't fill the disk.
+    let row;
+    try {
+      row = await this.writer.put({
+        bucket,
+        key,
+        body: stream,
+        contentType: meta?.contentType,
+        userMetadata: meta?.userMetadata,
+        maxSize: this.config.getOrThrow<number>('RESTORE_MAX_ENTRY_BYTES'),
+      });
+    } catch (err) {
+      if (err instanceof MaxBlobSizeExceededError) {
+        throw new BadRequestException(
+          `object '${bucket}/${key}' in backup archive exceeds the per-entry size limit`,
+        );
+      }
+      throw err;
+    }
+    // Cross-check the observed plaintext size against the manifest's declared size
+    // (TASK-2143): catches a manifest that under-declares a bomb entry.
+    if (meta && row.size !== BigInt(meta.size)) {
+      throw new BadRequestException(
+        `object '${bucket}/${key}' size (${row.size}) does not match manifest (${meta.size})`,
+      );
+    }
     if (meta?.tagging && Object.keys(meta.tagging).length > 0) {
       await this.objects.setTaggingMap(bucket, key, meta.tagging).catch(() => undefined);
     }
@@ -338,9 +368,23 @@ export class BackupService {
         return; // don't open payload streams during the manifest pass
       }
       if (name !== 'manifest.json') return;
+      // Cap the buffered manifest read (TASK-2144, CWE-400/789): unlike object
+      // payloads (streamed), manifest.json is fully buffered before JSON.parse,
+      // so a hostile archive could ship a manifest that decompresses to many GB
+      // and OOM-crashes the process. Abort mid-stream once the cap is exceeded so
+      // the oversized buffer never materializes.
+      const cap = this.config.getOrThrow<number>('RESTORE_MAX_MANIFEST_BYTES');
+      let total = 0;
       const chunks: Buffer[] = [];
       const rs = await openStream();
-      for await (const c of rs) chunks.push(c as Buffer);
+      for await (const c of rs) {
+        total += (c as Buffer).length;
+        if (total > cap) {
+          rs.destroy();
+          throw new BadRequestException('manifest.json in backup archive is too large');
+        }
+        chunks.push(c as Buffer);
+      }
       try {
         manifest = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       } catch {
@@ -371,6 +415,45 @@ export class BackupService {
       this.assertSafeKey(key);
       const rs = await openStream();
       await handler(bucket, key, rs);
+    });
+  }
+
+  /**
+   * Dry-run pass over every payload entry that enforces the decompression caps
+   * (TASK-2143, CWE-409/400) WITHOUT writing anything: per-entry byte cap, total
+   * decompressed byte cap, and entry-count cap. Streams (and discards) each entry
+   * so the caps are enforced against the ACTUAL decompressed byte count, not a
+   * (spoofable) zip header. Run before any destructive wipe so a bomb archive is
+   * rejected with the live instance untouched.
+   */
+  private async validateArchive(zipPath: string): Promise<void> {
+    const maxEntry = BigInt(this.config.getOrThrow<number>('RESTORE_MAX_ENTRY_BYTES'));
+    const maxTotal = BigInt(this.config.getOrThrow<number>('RESTORE_MAX_TOTAL_BYTES'));
+    const maxEntries = this.config.getOrThrow<number>('RESTORE_MAX_ENTRIES');
+    let total = 0n;
+    let count = 0;
+
+    await this.forEachObjectEntry(zipPath, async (bucket, key, stream) => {
+      count += 1;
+      if (count > maxEntries) {
+        stream.destroy();
+        throw new BadRequestException(`backup archive has too many entries (limit ${maxEntries})`);
+      }
+      let observed = 0n;
+      for await (const chunk of stream) {
+        observed += BigInt((chunk as Buffer).length);
+        if (observed > maxEntry) {
+          stream.destroy();
+          throw new BadRequestException(
+            `object '${bucket}/${key}' in backup archive exceeds the per-entry size limit`,
+          );
+        }
+        if (total + observed > maxTotal) {
+          stream.destroy();
+          throw new BadRequestException('backup archive exceeds the total decompressed size limit');
+        }
+      }
+      total += observed;
     });
   }
 

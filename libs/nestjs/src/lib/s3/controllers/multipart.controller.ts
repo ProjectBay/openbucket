@@ -1,6 +1,8 @@
 import { Controller, UseFilters, UseGuards, UseInterceptors } from '@nestjs/common';
 
+import { PolicyAuthorizationGuard } from '../authz/policy-authorization.guard';
 import { S3ExceptionFilter } from '../errors/s3-exception.filter';
+import { S3Throttled } from '../s3-throttle';
 import { SigV4Guard } from '../sigv4/sigv4.guard';
 import { XmlInterceptor } from '../xml/xml.interceptor';
 
@@ -15,7 +17,8 @@ import { XmlInterceptor } from '../xml/xml.interceptor';
  * (e.g. `GET /?uploads` ListMultipartUploads at service scope) — STORY-0110.
  */
 @Controller()
-@UseGuards(SigV4Guard)
+@S3Throttled()
+@UseGuards(SigV4Guard, PolicyAuthorizationGuard)
 @UseFilters(S3ExceptionFilter)
 @UseInterceptors(XmlInterceptor)
 export class MultipartController {}

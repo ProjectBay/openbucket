@@ -40,7 +40,7 @@ describe('ListBuckets (e2e, TEST-0111)', () => {
     };
     aws4.sign(opts, {
       accessKeyId: 'AKIA1234567890ABCD',
-      secretAccessKey: 'x'.repeat(40),
+      secretAccessKey: 'e2eRootSecretAccessKey9f3a7c1e5b2d08X6Yk',
     });
     const headers: Record<string, string> = {};
     for (const [k, v] of Object.entries(opts.headers ?? {})) headers[k] = String(v);

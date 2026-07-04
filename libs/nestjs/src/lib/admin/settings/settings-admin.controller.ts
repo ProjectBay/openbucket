@@ -6,6 +6,7 @@ import { AdminUserRepository } from '../../persistence/index';
 
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AuditService } from '../audit/audit.service';
+import { RefreshTokenService } from '../auth/refresh-token.service';
 
 /** The decoded admin JWT the guard attaches to `req.user` (§5.3). */
 interface AdminPrincipal {
@@ -23,6 +24,7 @@ export class SettingsAdminController {
   constructor(
     private readonly users: AdminUserRepository,
     private readonly audit: AuditService,
+    private readonly refreshTokens: RefreshTokenService,
   ) {}
 
   @Post('change-password')
@@ -39,8 +41,19 @@ export class SettingsAdminController {
     const newHash = await argon2.hash(dto.newPassword, { type: argon2.argon2id });
     await this.users.update(user.username, { passwordHash: newHash, mustChangePassword: false });
 
+    // Evict every outstanding session for this subject (TASK-2101, CWE-613):
+    // changing the password is the canonical account-recovery action, so a stolen
+    // `ob_refresh` cookie must stop working immediately instead of rotating to a
+    // fresh 7-day token indefinitely.
+    await this.refreshTokens.revokeAllForSubject(user.username);
+
     this.audit.emit({
       event: 'admin.password.changed',
+      subject: user.username,
+      requestId: req.openbucket.requestId,
+    });
+    this.audit.emit({
+      event: 'admin.sessions.revoked',
       subject: user.username,
       requestId: req.openbucket.requestId,
     });

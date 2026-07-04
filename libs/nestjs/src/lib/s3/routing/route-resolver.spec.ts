@@ -1,6 +1,6 @@
 import type { Request } from 'express';
 
-import { InvalidBucketNameError } from '../errors/s3-error';
+import { InvalidBucketNameError, KeyTooLongError } from '../errors/s3-error';
 import { RouteResolver } from './route-resolver';
 
 const ob = (
@@ -74,5 +74,43 @@ describe('RouteResolver (TEST-0101)', () => {
 
   it('case 8: bucket=ok + keyRaw=null → key=""', () => {
     expect(r.resolve(ob({ bucket: 'okbucket', keyRaw: null }))).toEqual({ bucket: 'okbucket', key: '' });
+  });
+
+  // TASK-2160 (CWE-770): aggregate 1024-byte key-length cap at the routing seam.
+  it('case 9: a key of exactly 1024 bytes is accepted (boundary)', () => {
+    const key = 'a'.repeat(1024);
+    expect(r.resolve(ob({ bucket: 'okbucket', keyRaw: key }))).toEqual({
+      bucket: 'okbucket',
+      key,
+    });
+  });
+
+  it('case 10: a 1025-byte key is rejected with KeyTooLongError', () => {
+    const key = 'a'.repeat(1025);
+    try {
+      r.resolve(ob({ bucket: 'okbucket', keyRaw: key }));
+      fail('expected throw');
+    } catch (e) {
+      expect(e).toBeInstanceOf(KeyTooLongError);
+      expect((e as KeyTooLongError).httpStatus).toBe(400);
+      expect((e as KeyTooLongError).extra.Size).toBe(1025);
+    }
+  });
+
+  it('case 11: over-length is measured by UTF-8 byte length, not string length', () => {
+    // 600 × "é" = 1200 bytes but 600 code units → must be rejected by byte length.
+    const key = 'é'.repeat(600);
+    expect(key.length).toBe(600);
+    expect(Buffer.byteLength(key, 'utf8')).toBe(1200);
+    expect(() => r.resolve(ob({ bucket: 'okbucket', keyRaw: key }))).toThrow(KeyTooLongError);
+  });
+
+  it('case 12: a 512-char multi-byte key (1024 bytes) is accepted at the boundary', () => {
+    const key = 'é'.repeat(512); // 1024 bytes
+    expect(Buffer.byteLength(key, 'utf8')).toBe(1024);
+    expect(r.resolve(ob({ bucket: 'okbucket', keyRaw: key }))).toEqual({
+      bucket: 'okbucket',
+      key,
+    });
   });
 });
