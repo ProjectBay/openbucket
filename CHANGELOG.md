@@ -9,6 +9,27 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.9] — 2026-07-04
+
+Feature release — the developer upload pipeline (EPIC-09).
+
+### Added
+
+- **On-the-fly image transformations.** `GET /bucket/photo.jpg?w=&h=&fit=&format=&q=`
+  resizes/crops/converts images (via `sharp`), served from a content-addressed
+  derivative cache with bounded parameters (no transform-bomb DoS) and a GC tick.
+  Access control is unchanged — a transform GET still authorizes as `s3:GetObject`.
+- **Object event notifications.** In-process typed NestJS events
+  (`@OnObjectCreated()` / `@OnObjectDeleted()` / `@OnMultipartCompleted()`) emitted
+  at the storage commit point for both the S3 and admin write paths, plus optional
+  **signed HTTP webhooks** backed by a transactional outbox with retry/backoff.
+- **Direct browser uploads.** Presigned POST policy support (`OpenBucketService`
+  helper + a streaming `PostObject` endpoint) so browsers upload straight to the
+  store, bypassing the app server.
+- **Upload DX helpers on `OpenBucketService`** — magic-byte content-type sniffing,
+  image-dimension probing, size/type validation, key strategies, and a one-call
+  `uploadFrom()`. The README upload recipe is rewritten to use them.
+
 ## [0.1.0-alpha.8] — 2026-07-04
 
 Security release — remediates a white-box security audit (EPIC-08, 22 confirmed findings).
