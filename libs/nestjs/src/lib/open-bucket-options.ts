@@ -1,7 +1,7 @@
 import type { ModuleMetadata, Type } from '@nestjs/common';
 import { z } from 'zod';
 
-import { strongSecret } from './common/config/env.schema';
+import { strongSecret, validateWebhookUrl } from './common/config/env.schema';
 
 /**
  * Configuration for {@link OpenBucketModule}. Replaces the standalone app's
@@ -64,6 +64,26 @@ export interface OpenBucketModuleOptions {
     /** Abandoned-multipart TTL in hours. Default 24. */
     multipartTtlHours?: number;
   };
+
+  /**
+   * Durable, signed object-event webhooks (STORY-0801). Omit to disable webhook
+   * delivery entirely (in-process `@OnObject*` handlers still work). Presence of
+   * `url` enables the transactional outbox + the delivery runner.
+   */
+  webhooks?: {
+    /** Target endpoint. `https` required unless the host is loopback. */
+    url: string;
+    /** HMAC-SHA256 signing key — validated by `strongSecret()` at boot. */
+    secret: string;
+    /** Event filter. Default: all three. */
+    events?: Array<'object.created' | 'object.deleted' | 'multipart.completed'>;
+    /** Max delivery attempts before dead-letter. Default 8. */
+    maxAttempts?: number;
+    /** Per-request timeout (ms). Default 5000. */
+    timeoutMs?: number;
+    /** Delivery tick interval (ms). Default 15000. */
+    pollMs?: number;
+  };
 }
 
 /** Async variant for DI'd secrets (e.g. from the host's ConfigService). */
@@ -113,6 +133,14 @@ export interface ResolvedOpenBucketOptions {
     maxMultipartParts: number;
     multipartTtlHours: number;
   };
+  webhooks?: {
+    url: string;
+    secret: string;
+    events?: Array<'object.created' | 'object.deleted' | 'multipart.completed'>;
+    maxAttempts?: number;
+    timeoutMs?: number;
+    pollMs?: number;
+  };
 }
 
 const DEFAULT_MOUNT = '/storage';
@@ -154,6 +182,10 @@ export function resolveOptions(o: OpenBucketModuleOptions): ResolvedOpenBucketOp
       maxMultipartParts: o.limits?.maxMultipartParts ?? 10_000,
       multipartTtlHours: o.limits?.multipartTtlHours ?? 24,
     },
+    // Pass the webhooks block through as-is (numeric defaults are applied in
+    // config-source when mapping to the env-shaped config). `undefined` keeps
+    // webhooks disabled.
+    webhooks: o.webhooks,
   };
 }
 
@@ -186,6 +218,18 @@ export function validateSecurityCriticalOptions(o: ResolvedOpenBucketOptions): v
         passwordHash: z
           .string()
           .regex(/^\$argon2id\$/, 'admin.passwordHash must be an argon2id hash'),
+      })
+      .optional(),
+    // When a webhook URL is configured, the HMAC secret must be strong and the
+    // URL must be https (or loopback) — same fail-closed contract as
+    // admin.jwtSecret / rootCredentials.secretAccessKey (STORY-0801, EPIC-08).
+    webhooks: z
+      .object({
+        url: z.string().superRefine((u, ctx) => {
+          const err = validateWebhookUrl(u);
+          if (err) ctx.addIssue({ code: z.ZodIssueCode.custom, message: err });
+        }),
+        secret: strongSecret('webhooks.secret'),
       })
       .optional(),
   });

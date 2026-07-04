@@ -98,4 +98,29 @@ describe('validateSecurityCriticalOptions', () => {
       validate({ ...validBase, rootCredentials: { accessKeyId: 'my-lowercase-key', secretAccessKey: SECRET } }),
     ).not.toThrow();
   });
+
+  // --- object-event webhooks (STORY-0801) ---
+  it('passes with a well-formed webhooks block (https + strong secret)', () => {
+    expect(() =>
+      validate({ ...validBase, webhooks: { url: 'https://hooks.example.com/ob', secret: SECRET } }),
+    ).not.toThrow();
+  });
+
+  it('allows an http webhook URL for a loopback host', () => {
+    expect(() =>
+      validate({ ...validBase, webhooks: { url: 'http://127.0.0.1:4000/hooks', secret: SECRET } }),
+    ).not.toThrow();
+  });
+
+  it('rejects a non-https, non-loopback webhook URL', () => {
+    expect(() =>
+      validate({ ...validBase, webhooks: { url: 'http://hooks.example.com/ob', secret: SECRET } }),
+    ).toThrow(/https/);
+  });
+
+  it('rejects a weak/short webhook secret (fail-closed, never sign with a weak key)', () => {
+    expect(() =>
+      validate({ ...validBase, webhooks: { url: 'https://hooks.example.com/ob', secret: 'short' } }),
+    ).toThrow(/webhooks\.secret/);
+  });
 });

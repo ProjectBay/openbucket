@@ -82,8 +82,17 @@ export class VersionStoreService {
    * Write a delete-marker version. No blob is created. The current pointer
    * file is moved to trash so subsequent GETs return 404; historical version
    * blobs under `<key>.v/` are untouched.
+   *
+   * `beforeCommit` (STORY-0801) runs on the SAME transaction, after the marker is
+   * created and before `em.commit()`, so a caller can enqueue a durable webhook
+   * row atomically with the delete-marker (transactional outbox). It receives the
+   * marker so the caller can read `marker.versionId`.
    */
-  async writeDeleteMarker(bucket: string, key: string): Promise<ObjectVersion> {
+  async writeDeleteMarker(
+    bucket: string,
+    key: string,
+    beforeCommit?: (em: EntityManager, marker: ObjectVersion) => void,
+  ): Promise<ObjectVersion> {
     const em = this.em.fork();
     await em.begin();
     try {
@@ -114,6 +123,7 @@ export class VersionStoreService {
       em.persist(row);
 
       await this.blobs.deleteBlob(bucket, key); // move pointer file to trash
+      beforeCommit?.(em, marker);
       await em.commit();
       return marker;
     } catch (err) {

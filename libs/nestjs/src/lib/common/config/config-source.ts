@@ -50,5 +50,24 @@ export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
     RESTORE_MAX_ENTRY_BYTES: 5 * 1024 * 1024 * 1024,
     RESTORE_MAX_ENTRIES: 1_000_000,
     RESTORE_MAX_MANIFEST_BYTES: 4 * 1024 * 1024,
+    // Image transforms (STORY-0800). Library hosts get the same DoS-bounded
+    // defaults as the env schema; the env-driven standalone path can tune them.
+    IMAGE_TRANSFORM_ENABLED: true,
+    MAX_TRANSFORM_DIMENSION: 4_096,
+    MAX_TRANSFORM_INPUT_BYTES: 50 * 1024 * 1024,
+    IMAGE_TRANSFORM_LIMIT_INPUT_PIXELS: 24_000 * 24_000,
+    IMAGE_TRANSFORM_CONCURRENCY: 4,
+    DERIVATIVE_CACHE_MAX_BYTES: 5 * 1024 * 1024 * 1024,
+    // Object-event webhooks (STORY-0801). Off unless the host passes a `webhooks`
+    // block; the resolved defaults mirror the env schema. Mirrors OPENBUCKET_REGION
+    // / MAX_OBJECT_SIZE_MB above (options → env-shaped source).
+    WEBHOOK_URL: opts.webhooks?.url,
+    WEBHOOK_SECRET: opts.webhooks?.secret,
+    WEBHOOK_MAX_ATTEMPTS: opts.webhooks?.maxAttempts ?? 8,
+    WEBHOOK_TIMEOUT_MS: opts.webhooks?.timeoutMs ?? 5_000,
+    WEBHOOK_POLL_MS: opts.webhooks?.pollMs ?? 15_000,
+    WEBHOOK_EVENTS:
+      opts.webhooks?.events?.join(',') ??
+      'object.created,object.deleted,multipart.completed',
   };
 }

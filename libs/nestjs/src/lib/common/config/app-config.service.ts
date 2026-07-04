@@ -39,4 +39,27 @@ export class AppConfigService {
   get restoreMaxEntries(): number { return this.raw.get('RESTORE_MAX_ENTRIES', { infer: true }); }
   get restoreMaxManifestBytes(): number { return this.raw.get('RESTORE_MAX_MANIFEST_BYTES', { infer: true }); }
   get shutdownDrainMs(): number { return this.raw.get('SHUTDOWN_DRAIN_MS', { infer: true }); }
+  // --- image transforms (STORY-0800) ---
+  get imageTransformEnabled(): boolean { return this.raw.get('IMAGE_TRANSFORM_ENABLED', { infer: true }); }
+  get maxTransformDimension(): number { return this.raw.get('MAX_TRANSFORM_DIMENSION', { infer: true }); }
+  get maxTransformInputBytes(): number { return this.raw.get('MAX_TRANSFORM_INPUT_BYTES', { infer: true }); }
+  get transformLimitInputPixels(): number { return this.raw.get('IMAGE_TRANSFORM_LIMIT_INPUT_PIXELS', { infer: true }); }
+  get imageTransformConcurrency(): number { return this.raw.get('IMAGE_TRANSFORM_CONCURRENCY', { infer: true }); }
+  get derivativeCacheMaxBytes(): number { return this.raw.get('DERIVATIVE_CACHE_MAX_BYTES', { infer: true }); }
+  // --- object-event webhooks (STORY-0801) ---
+  get webhookUrl(): string | undefined { return this.raw.get('WEBHOOK_URL', { infer: true }); }
+  /** True when a webhook URL is configured; gates the outbox + delivery runner. */
+  get webhooksEnabled(): boolean { return !!this.webhookUrl; }
+  get webhookSecret(): string { return this.raw.get('WEBHOOK_SECRET', { infer: true }) ?? ''; }
+  get webhookMaxAttempts(): number { return this.raw.get('WEBHOOK_MAX_ATTEMPTS', { infer: true }); }
+  get webhookTimeoutMs(): number { return this.raw.get('WEBHOOK_TIMEOUT_MS', { infer: true }); }
+  get webhookPollMs(): number { return this.raw.get('WEBHOOK_POLL_MS', { infer: true }); }
+  /** The CSV event filter parsed to a trimmed, non-empty list. */
+  get webhookEvents(): string[] {
+    return this.raw
+      .get('WEBHOOK_EVENTS', { infer: true })
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
 }

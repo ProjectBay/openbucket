@@ -137,6 +137,101 @@ describe('loadEnv', () => {
     expect(env.RESTORE_MAX_MANIFEST_BYTES).toBe(4 * 1024 * 1024);
     expect(env.RESTORE_MAX_ENTRIES).toBe(1_000_000);
   });
+
+  it('case 13: image-transform knobs apply their documented defaults (TASK-2403)', () => {
+    const env = loadEnv({ ...baseEnv });
+    expect(env.IMAGE_TRANSFORM_ENABLED).toBe(true);
+    expect(env.MAX_TRANSFORM_DIMENSION).toBe(4_096);
+    expect(env.MAX_TRANSFORM_INPUT_BYTES).toBe(50 * 1024 * 1024);
+    expect(env.IMAGE_TRANSFORM_LIMIT_INPUT_PIXELS).toBe(24_000 * 24_000);
+    expect(env.IMAGE_TRANSFORM_CONCURRENCY).toBe(4);
+    expect(env.DERIVATIVE_CACHE_MAX_BYTES).toBe(5 * 1024 * 1024 * 1024);
+  });
+
+  it('case 14: MAX_TRANSFORM_DIMENSION out of range is rejected at boot (TASK-2403)', () => {
+    expect(() => loadEnv({ ...baseEnv, MAX_TRANSFORM_DIMENSION: '0' })).toThrow(
+      'Refusing to boot: invalid environment.',
+    );
+    expect(() => loadEnv({ ...baseEnv, MAX_TRANSFORM_DIMENSION: '999999' })).toThrow(
+      'Refusing to boot: invalid environment.',
+    );
+  });
+
+  it('case 15: IMAGE_TRANSFORM_ENABLED=false coerces to boolean false (TASK-2403)', () => {
+    // z.coerce.boolean() would wrongly yield `true` for the string "false"; the
+    // custom envBoolean coercion makes the kill-switch actually disable-able.
+    expect(loadEnv({ ...baseEnv, IMAGE_TRANSFORM_ENABLED: 'false' }).IMAGE_TRANSFORM_ENABLED).toBe(
+      false,
+    );
+    expect(loadEnv({ ...baseEnv, IMAGE_TRANSFORM_ENABLED: '0' }).IMAGE_TRANSFORM_ENABLED).toBe(
+      false,
+    );
+    expect(loadEnv({ ...baseEnv, IMAGE_TRANSFORM_ENABLED: 'true' }).IMAGE_TRANSFORM_ENABLED).toBe(
+      true,
+    );
+  });
+
+  it('case 16: DERIVATIVE_CACHE_MAX_BYTES=0 is accepted (unbounded opt-in) (TASK-2403)', () => {
+    expect(loadEnv({ ...baseEnv, DERIVATIVE_CACHE_MAX_BYTES: '0' }).DERIVATIVE_CACHE_MAX_BYTES).toBe(
+      0,
+    );
+  });
+
+  // --- object-event webhooks (STORY-0801) ---
+  it('case 17: webhooks off by default (no WEBHOOK_URL) with documented delivery defaults', () => {
+    const env = loadEnv({ ...baseEnv });
+    expect(env.WEBHOOK_URL).toBeUndefined();
+    expect(env.WEBHOOK_MAX_ATTEMPTS).toBe(8);
+    expect(env.WEBHOOK_TIMEOUT_MS).toBe(5_000);
+    expect(env.WEBHOOK_POLL_MS).toBe(15_000);
+    expect(env.WEBHOOK_EVENTS).toBe('object.created,object.deleted,multipart.completed');
+  });
+
+  it('case 18: WEBHOOK_URL with a strong secret boots and enables webhooks', () => {
+    const env = loadEnv({
+      ...baseEnv,
+      WEBHOOK_URL: 'https://hooks.example.com/ob',
+      WEBHOOK_SECRET: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h',
+    });
+    expect(env.WEBHOOK_URL).toBe('https://hooks.example.com/ob');
+  });
+
+  it('case 19: WEBHOOK_URL set with a missing/weak secret refuses to boot (fail-closed)', () => {
+    expect(() =>
+      loadEnv({ ...baseEnv, WEBHOOK_URL: 'https://hooks.example.com/ob' }),
+    ).toThrow('Refusing to boot: invalid environment.');
+    expect(errSpy.mock.calls[0][0]).toContain('WEBHOOK_SECRET');
+
+    errSpy.mockClear();
+    expect(() =>
+      loadEnv({
+        ...baseEnv,
+        WEBHOOK_URL: 'https://hooks.example.com/ob',
+        WEBHOOK_SECRET: 'short',
+      }),
+    ).toThrow('Refusing to boot: invalid environment.');
+    expect(errSpy.mock.calls[0][0]).toContain('WEBHOOK_SECRET must be at least 32 characters');
+  });
+
+  it('case 20: a non-https, non-loopback WEBHOOK_URL is rejected at config time', () => {
+    expect(() =>
+      loadEnv({
+        ...baseEnv,
+        WEBHOOK_URL: 'http://hooks.example.com/ob',
+        WEBHOOK_SECRET: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h',
+      }),
+    ).toThrow('Refusing to boot: invalid environment.');
+    expect(errSpy.mock.calls[0][0]).toContain('WEBHOOK_URL must use https');
+  });
+
+  it('case 21: http is allowed for a loopback host (dev)', () => {
+    const env = loadEnv({
+      ...baseEnv,
+      WEBHOOK_URL: 'http://localhost:4000/hooks',
+      WEBHOOK_SECRET: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h',
+    });
+    expect(env.WEBHOOK_URL).toBe('http://localhost:4000/hooks');
+  });
 });
 
 describe('AppConfigService', () => {
@@ -174,6 +269,56 @@ describe('AppConfigService', () => {
     expect(service.maxMultipartParts).toBe(10_000);
     expect(service.multipartTtlHours).toBe(24);
     expect(service.shutdownDrainMs).toBe(30_000);
+    // image-transform getters (TASK-2403)
+    expect(service.imageTransformEnabled).toBe(true);
+    expect(service.maxTransformDimension).toBe(4_096);
+    expect(service.maxTransformInputBytes).toBe(50 * 1024 * 1024);
+    expect(service.transformLimitInputPixels).toBe(24_000 * 24_000);
+    expect(service.imageTransformConcurrency).toBe(4);
+    expect(service.derivativeCacheMaxBytes).toBe(5 * 1024 * 1024 * 1024);
+    // webhook getters (STORY-0801): off by default.
+    expect(service.webhooksEnabled).toBe(false);
+    expect(service.webhookUrl).toBeUndefined();
+    expect(service.webhookSecret).toBe('');
+    expect(service.webhookMaxAttempts).toBe(8);
+    expect(service.webhookTimeoutMs).toBe(5_000);
+    expect(service.webhookPollMs).toBe(15_000);
+    expect(service.webhookEvents).toEqual([
+      'object.created',
+      'object.deleted',
+      'multipart.completed',
+    ]);
+
+    await moduleRef.close();
+  });
+
+  it('webhook getters reflect a configured webhook + parse the CSV filter', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          ignoreEnvFile: true,
+          load: [
+            () =>
+              loadEnv({
+                ...baseEnv,
+                WEBHOOK_URL: 'https://hooks.example.com/ob',
+                WEBHOOK_SECRET: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h',
+                WEBHOOK_EVENTS: 'object.created, object.deleted , bogus.event',
+              }),
+          ],
+        }),
+      ],
+      providers: [AppConfigService],
+    }).compile();
+
+    const service = moduleRef.get(AppConfigService);
+    expect(service.webhooksEnabled).toBe(true);
+    expect(service.webhookUrl).toBe('https://hooks.example.com/ob');
+    expect(service.webhookSecret).toHaveLength(32);
+    // CSV parse trims whitespace + drops empties; an unknown name is kept as-is
+    // here (the enqueue gate is what ignores it), so just assert trimming.
+    expect(service.webhookEvents).toEqual(['object.created', 'object.deleted', 'bogus.event']);
 
     await moduleRef.close();
   });

@@ -22,6 +22,7 @@ import { PutObjectInterceptor } from '../object/put-object.interceptor';
 import { RouteResolver } from '../routing/route-resolver';
 import { S3Throttled } from '../s3-throttle';
 import { SigV4Guard } from '../sigv4/sigv4.guard';
+import { ImageTransformService } from '../transforms/image-transform.service';
 import { XmlInterceptor } from '../xml/xml.interceptor';
 
 /**
@@ -48,6 +49,7 @@ export class ObjectController {
     private readonly objects: ObjectService,
     private readonly multipart: MultipartService,
     private readonly routes: RouteResolver,
+    private readonly transforms: ImageTransformService,
   ) {}
 
   // --- PUT family --------------------------------------------------------
@@ -96,6 +98,12 @@ export class ObjectController {
     if (q.uploadId !== undefined) {
       return this.multipart.listParts(req, res, bucket, key, q.uploadId);
     }
+    // On-the-fly image transform (STORY-0800): intercept a transform GET
+    // (?w=/?h=/?format=) before the plain read. isCandidate is false when the
+    // feature is disabled or a sub-resource/version flag is present, so every
+    // other GET reaches getObject untouched. Authz is unchanged — the op
+    // resolver returns GetObject for these params.
+    if (this.transforms.isCandidate(q)) return this.transforms.get(req, res, bucket, key);
     return this.objects.getObject(req, res, bucket, key);
   }
 
@@ -118,7 +126,11 @@ export class ObjectController {
     }
     if ('restore' in q) return this.objects.restoreObject(req, res, bucket, key);
     if ('select' in q) throw new NotImplementedError('SelectObjectContent');
-    return this.objects.postObject(req, res, bucket, key); // browser form upload
+    // Browser-form direct upload (PostObject) is bucket-scope: S3 targets
+    // `POST /{bucket}` with the key in a form field (STORY-0802, handled by
+    // BucketController). An object-scope POST with no recognised sub-resource is
+    // not a valid S3 operation.
+    throw new NotImplementedError('PostObject');
   }
 
   /**

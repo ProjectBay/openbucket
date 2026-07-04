@@ -18,15 +18,19 @@ import {
   AdminUser,
   RefreshToken,
   LifecycleState,
+  EventDeliveryEntity,
   VersioningState,
 } from '../persistence/index';
 
 import { BlobStore } from './blob-store';
 import { ObjectWriterService } from './object-writer.service';
 import { decryptBuffer } from './sse-cipher';
+import { ObjectEventsService } from '../events/object-events.service';
+import type { ObjectEvent } from '../events/object-event.types';
 import { Migration20260520000001_initial } from '../migrations/Migration20260520000001_initial';
 import { Migration20260625000001_object_encryption } from '../migrations/Migration20260625000001_object_encryption';
 import { Migration20260701000001_object_content_sha256 } from '../migrations/Migration20260701000001_object_content_sha256';
+import { Migration20260702000001_event_deliveries } from '../migrations/Migration20260702000001_event_deliveries';
 
 const ENTITIES = [
   Bucket,
@@ -38,6 +42,7 @@ const ENTITIES = [
   AdminUser,
   RefreshToken,
   LifecycleState,
+  EventDeliveryEntity,
 ];
 
 const stubConfig = (dataDir: string): ConfigService =>
@@ -70,6 +75,7 @@ describe('ObjectWriterService (TEST-0209)', () => {
           { name: 'Migration20260520000001_initial', class: Migration20260520000001_initial },
           { name: 'Migration20260625000001_object_encryption', class: Migration20260625000001_object_encryption },
           { name: 'Migration20260701000001_object_content_sha256', class: Migration20260701000001_object_content_sha256 },
+          { name: 'Migration20260702000001_event_deliveries', class: Migration20260702000001_event_deliveries },
         ],
       },
       pool: {
@@ -210,5 +216,102 @@ describe('ObjectWriterService (TEST-0209)', () => {
     commitSpy.mockRestore();
     unlinkSpy.mockRestore();
     warnSpy.mockRestore();
+  });
+
+  // --- object events + transactional outbox (STORY-0801) ---
+  describe('events (STORY-0801)', () => {
+    const eventsConfig = () =>
+      ({
+        webhooksEnabled: true,
+        webhookEvents: ['object.created', 'object.deleted', 'multipart.completed'],
+      }) as never;
+
+    it('emits exactly one object.created (post-commit) with the right payload', async () => {
+      const emitted: ObjectEvent[] = [];
+      const events = { emitInProcess: (e: ObjectEvent) => emitted.push(e), enqueueInTx: () => undefined } as unknown as ObjectEventsService;
+      const w = new ObjectWriterService(
+        orm.em as EntityManager,
+        blobs,
+        { key: () => Buffer.alloc(32) } as never,
+        undefined,
+        events,
+      );
+
+      const row = await w.put({ bucket: 'b', key: 'ev', body: Readable.from(['hello']) });
+
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0]).toMatchObject({
+        type: 'object.created',
+        bucket: 'b',
+        key: 'ev',
+        size: 5,
+        etag: row.etag,
+        eventTime: row.modifiedAt.toISOString(),
+      });
+    });
+
+    it('does NOT emit when the commit rolls back', async () => {
+      const emitted: ObjectEvent[] = [];
+      const events = { emitInProcess: (e: ObjectEvent) => emitted.push(e), enqueueInTx: () => undefined } as unknown as ObjectEventsService;
+      const w = new ObjectWriterService(
+        orm.em as EntityManager,
+        blobs,
+        { key: () => Buffer.alloc(32) } as never,
+        undefined,
+        events,
+      );
+      const commitSpy = jest
+        .spyOn(EntityManager.prototype, 'commit')
+        .mockRejectedValueOnce(new Error('synthetic-commit-fail'));
+
+      await expect(
+        w.put({ bucket: 'b', key: 'ev-rb', body: Readable.from(['x']) }),
+      ).rejects.toThrow(/synthetic-commit-fail/);
+
+      expect(emitted).toHaveLength(0);
+      commitSpy.mockRestore();
+    });
+
+    it('transactional outbox: a committed write inserts one pending event_deliveries row', async () => {
+      const real = new ObjectEventsService({ emitAsync: () => Promise.resolve([]) } as never, eventsConfig());
+      const w = new ObjectWriterService(
+        orm.em as EntityManager,
+        blobs,
+        { key: () => Buffer.alloc(32) } as never,
+        undefined,
+        real,
+      );
+
+      await w.put({ bucket: 'b', key: 'ob', body: Readable.from(['data']) });
+
+      const em = orm.em.fork();
+      const rows = await em.find(EventDeliveryEntity, {});
+      expect(rows).toHaveLength(1);
+      expect(rows[0].status).toBe('pending');
+      expect(rows[0].eventType).toBe('object.created');
+      expect(JSON.parse(rows[0].payload).key).toBe('ob');
+    });
+
+    it('transactional outbox: a rolled-back write leaves zero event_deliveries rows', async () => {
+      const real = new ObjectEventsService({ emitAsync: () => Promise.resolve([]) } as never, eventsConfig());
+      const w = new ObjectWriterService(
+        orm.em as EntityManager,
+        blobs,
+        { key: () => Buffer.alloc(32) } as never,
+        undefined,
+        real,
+      );
+      const commitSpy = jest
+        .spyOn(EntityManager.prototype, 'commit')
+        .mockRejectedValueOnce(new Error('synthetic-commit-fail'));
+
+      await expect(
+        w.put({ bucket: 'b', key: 'ob-rb', body: Readable.from(['data']) }),
+      ).rejects.toThrow(/synthetic-commit-fail/);
+
+      const em = orm.em.fork();
+      expect(await em.count(EventDeliveryEntity, {})).toBe(0);
+      commitSpy.mockRestore();
+    });
   });
 });

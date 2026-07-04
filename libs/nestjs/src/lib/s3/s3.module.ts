@@ -13,10 +13,12 @@ import { CorsController } from './cors/cors.controller';
 import { S3ExceptionFilter } from './errors/s3-exception.filter';
 import { OperationDispatcherInterceptor } from './routing/operation.decorator';
 import { RouteResolver } from './routing/route-resolver';
+import { PostObjectInterceptor } from './object/post-object.interceptor';
 import { PutObjectInterceptor } from './object/put-object.interceptor';
 import { AccessKey, KeyService } from './sigv4/key.service';
 import { SigV4Guard } from './sigv4/sigv4.guard';
 import { Sigv4Verifier } from './sigv4/sigv4.verifier';
+import { ImageTransformService } from './transforms/image-transform.service';
 import { XmlInterceptor } from './xml/xml.interceptor';
 import { XmlParser } from './xml/xml.parser';
 import { XmlSerializer } from './xml/xml.serializer';
@@ -62,10 +64,12 @@ import { XmlSerializer } from './xml/xml.serializer';
         },
       }),
     },
+    ImageTransformService,
     XmlParser,
     XmlSerializer,
     XmlInterceptor,
     PutObjectInterceptor,
+    PostObjectInterceptor,
     S3ExceptionFilter,
     OperationDispatcherInterceptor,
     // Resolve req.openbucket.operation globally — runs before the

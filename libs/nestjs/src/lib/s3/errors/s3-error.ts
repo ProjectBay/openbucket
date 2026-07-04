@@ -93,6 +93,19 @@ export class InvalidRequestError extends S3Error {
   readonly code = 'InvalidRequest';
   readonly httpStatus = 400;
 }
+/**
+ * 400 MalformedPOSTRequest — the browser `multipart/form-data` POST body could
+ * not be parsed as a valid S3 POST upload (STORY-0802): missing/ordered form
+ * parts, too many parts/fields, or an over-large field. AWS returns this for a
+ * malformed presigned-POST form submission.
+ */
+export class MalformedPOSTRequestError extends S3Error {
+  readonly code = 'MalformedPOSTRequest';
+  readonly httpStatus = 400;
+  constructor(detail = 'The body of your POST request is not well-formed multipart/form-data.') {
+    super(detail);
+  }
+}
 export class EntityTooSmallError extends S3Error {
   readonly code = 'EntityTooSmall';
   readonly httpStatus = 400;

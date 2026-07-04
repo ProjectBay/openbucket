@@ -39,4 +39,17 @@ export class PathResolver {
   trashDir(): string {
     return join(this.dataDir, 'trash');
   }
+  /** Root of the content-addressed derivative (image-transform) cache. */
+  derivativesDir(): string {
+    return join(this.dataDir, 'derivatives');
+  }
+  /**
+   * On-disk path for a cached derivative. Fans out by the first 2 hex chars of
+   * the (hex-only) hash to avoid a single mega-directory. `hash` is always a
+   * server-produced sha256 hex string and `ext` a fixed format extension, so
+   * there is no user-controlled path segment here (no traversal surface).
+   */
+  derivativePath(hash: string, ext: string): string {
+    return join(this.derivativesDir(), hash.slice(0, 2), `${hash}.${ext}`);
+  }
 }

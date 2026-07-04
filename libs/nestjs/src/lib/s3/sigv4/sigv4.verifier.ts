@@ -53,21 +53,16 @@ export class Sigv4Verifier {
    * Derive the AWS4 signing key (`kSigning`) from the secret and credential
    * scope (`date/region/service/aws4_request`). Exposed so chunked-upload
    * signing (STORY-0119) can verify the per-chunk signature chain with the same
-   * key that produced the seed signature.
+   * key that produced the seed signature. Delegates to the free
+   * {@link deriveSigningKey} so the pure POST-policy crypto (STORY-0802) shares
+   * one implementation.
    */
   deriveSigningKey(secretAccessKey: string, credentialScope: string): Buffer {
-    const [date, region, service] = credentialScope.split('/');
-    const kDate = hmac(`AWS4${secretAccessKey}`, date);
-    const kRegion = hmac(kDate, region);
-    const kService = hmac(kRegion, service);
-    return hmac(kService, 'aws4_request');
+    return deriveSigningKey(secretAccessKey, credentialScope);
   }
 
   constantTimeEquals(a: string, b: string): boolean {
-    const ab = Buffer.from(a, 'utf8');
-    const bb = Buffer.from(b, 'utf8');
-    if (ab.length !== bb.length) return false;
-    return crypto.timingSafeEqual(ab, bb);
+    return constantTimeEquals(a, b);
   }
 
   private originalPath(req: Request): string {
@@ -91,4 +86,32 @@ function hmac(key: string | Buffer, data: string): Buffer {
 }
 function hmacHex(key: Buffer, data: string): string {
   return crypto.createHmac('sha256', key).update(data, 'utf8').digest('hex');
+}
+
+/**
+ * Derive the AWS4 signing key (`kSigning`) from a secret + credential scope
+ * (`date/region/service/aws4_request`). A pure free function (no Nest deps) so
+ * the presigned-URL minting (`presigned.ts`) and the POST-policy crypto module
+ * (`presigned-post.ts`, STORY-0802) can reuse the exact derivation the
+ * `Sigv4Verifier` uses to reverse-verify header signatures.
+ */
+export function deriveSigningKey(secretAccessKey: string, credentialScope: string): Buffer {
+  const [date, region, service] = credentialScope.split('/');
+  const kDate = hmac(`AWS4${secretAccessKey}`, date);
+  const kRegion = hmac(kDate, region);
+  const kService = hmac(kRegion, service);
+  return hmac(kService, 'aws4_request');
+}
+
+/**
+ * Constant-time string comparison over UTF-8 bytes (length-mismatch short
+ * circuits). Free-function twin of {@link Sigv4Verifier.constantTimeEquals} so
+ * the pure POST-policy verifier can compare signatures without leaking their
+ * length/content through timing.
+ */
+export function constantTimeEquals(a: string, b: string): boolean {
+  const ab = Buffer.from(a, 'utf8');
+  const bb = Buffer.from(b, 'utf8');
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
 }
