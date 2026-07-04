@@ -2,6 +2,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { MikroORM, RequestContext } from '@mikro-orm/core';
 import { InjectMikroORM } from '@mikro-orm/nestjs';
 import { Readable } from 'node:stream';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { AppConfigService } from './common/config/app-config.service';
 import { BucketService } from './domain/buckets/bucket.service';
@@ -10,12 +11,84 @@ import { OPEN_BUCKET_OPTIONS, type ResolvedOpenBucketOptions } from './open-buck
 import { OPEN_BUCKET_ORM_CONTEXT } from './persistence/orm-context';
 import { NoSuchKeyError } from './s3/errors/s3-error';
 import { buildPresignedUrl, MAX_EXPIRES } from './s3/sigv4/presigned';
+import {
+  buildPresignedPost,
+  type PostPolicyCondition,
+} from './s3/sigv4/presigned-post';
+import { SNIFF_BYTES, sniffContentType } from './storage/content-sniff';
+import { imageInfo, type ImageInfo } from './storage/image-info';
+import {
+  assertValid,
+  resolveContentType,
+  resolveKey,
+  sanitizeFilename,
+  type KeyStrategy,
+  type KeyStrategyContext,
+  type UploadValidateOptions,
+} from './open-bucket-upload';
 
 /** Result of an in-process object write. */
 export interface PutObjectResult {
   etag: string;
   /** Present on versioning-enabled buckets. */
   versionId?: string;
+}
+
+/**
+ * A structural subset of a multer (`Express.Multer.File`) upload — enough for
+ * {@link OpenBucketService.uploadFrom} to consume both memory-storage (`buffer`)
+ * and disk/stream-storage files without a hard `@types/multer` dependency.
+ */
+export interface MulterFileLike {
+  /** Memory-storage body. */
+  buffer?: Buffer;
+  /** Disk/stream-storage body. */
+  stream?: Readable;
+  /** Declared MIME type (used as the fallback content-type hint). */
+  mimetype?: string;
+  /** Original client filename (hint for the `'original'` key strategy / extension). */
+  originalname?: string;
+  /** Byte length, when known (multer sets it for disk storage). */
+  size?: number;
+}
+
+/** Accepted upload body for {@link OpenBucketService.uploadFrom}. */
+export type UploadSource = Buffer | Readable | MulterFileLike;
+
+/** Options for {@link OpenBucketService.uploadFrom}. */
+export interface UploadOptions {
+  /** Destination bucket. */
+  bucket: string;
+  /** Explicit key — wins over `keyStrategy`. */
+  key?: string;
+  /** Key-generation strategy. Default `'uuid'`. */
+  keyStrategy?: KeyStrategy;
+  /** Declarative validation (size cap, allowlist, active-content, sniff mode). */
+  validate?: UploadValidateOptions;
+  /** Declared content-type hint (a multer `mimetype` is used when omitted). */
+  contentType?: string;
+  /** Filename hint for the `'original'` strategy / extension (multer `originalname` used when omitted). */
+  filename?: string;
+  /** Probe image dimensions. Default: auto for `image/*` resolved types. */
+  image?: boolean;
+  /** Mint a GET url; default: mint iff an origin (`baseUrl`/`endpoint`) is resolvable. `false` disables. */
+  presign?: PresignOptions | false;
+}
+
+/** Result of {@link OpenBucketService.uploadFrom}. */
+export interface UploadResult {
+  bucket: string;
+  key: string;
+  /** Present when an origin was resolvable (or `presign.baseUrl` was given). */
+  url?: string;
+  etag: string;
+  size: number;
+  /** The RESOLVED content type (sniffed over declared). */
+  contentType: string;
+  /** Present on versioning-enabled buckets. */
+  versionId?: string;
+  /** Present when the body was probed as an image. */
+  image?: ImageInfo;
 }
 
 /** One object (or rolled-up prefix) in a listing. */
@@ -52,6 +125,32 @@ export interface ObjectInfo {
 export interface BucketInfo {
   name: string;
   createdAt: Date;
+}
+
+/** Options for minting a presigned browser POST (direct upload form). */
+export interface PresignPostOptions {
+  /** Object key. May contain the literal `${filename}` placeholder. */
+  key: string;
+  /** Lifetime in seconds (1 … 7 days). Default 900. */
+  expiresIn?: number;
+  /** Public origin (scheme + host); defaults to `endpoint` like the other presign methods. */
+  baseUrl?: string;
+  /** Restrict the accepted byte size of the uploaded file. */
+  contentLengthRange?: { min: number; max: number };
+  /** Pin (`string`) or prefix-restrict (`{ startsWith }`) the content type. */
+  contentType?: string | { startsWith: string };
+  /** `starts-with` the key instead of an exact match (folder-scoped upload tokens). */
+  keyStartsWith?: boolean;
+  /** Extra raw conditions passed straight through (escape hatch). */
+  conditions?: PostPolicyCondition[];
+  successActionStatus?: '200' | '201' | '204';
+  successActionRedirect?: string;
+}
+
+/** A minted browser-POST form: `url` to POST to, plus the hidden `fields`. */
+export interface PresignedPost {
+  url: string;
+  fields: Record<string, string>;
 }
 
 /** Options for minting a presigned URL. */
@@ -164,6 +263,190 @@ export class OpenBucketService {
   }
 
   /**
+   * One-call upload helper (STORY-0803): sniffs the real content type from the
+   * body's magic bytes, enforces size/type/active-content validation, derives a
+   * safe key, streams the body through the same two-phase writer `putObject`
+   * uses, optionally probes image dimensions, and (when an origin is resolvable)
+   * mints a GET url — returning the stable `{ bucket, key, etag, size,
+   * contentType, … }` you should persist.
+   *
+   * Accepts a multer file (`{ buffer | stream, mimetype, originalname, size }`),
+   * a `Readable`, or a `Buffer`; a stream is never fully buffered (only a bounded
+   * `SNIFF_BYTES` head is held). The byte cap is enforced two ways: pre-write for
+   * known-size sources and mid-write via the writer's `maxSize` for streams (an
+   * oversize stream aborts and its staged blob is unlinked — no object committed).
+   *
+   * Security: the sniffed type wins over the caller-declared type and active
+   * content (HTML/XHTML/SVG) is rejected by default — defense in depth for the
+   * stored-XSS surface `applySafeObjectResponseHeaders` also guards on read.
+   * `uploadFrom`, like `putObject`, is the in-process host-app facade and sits
+   * *inside* the SigV4 + policy perimeter (EPIC-08); it adds no network surface
+   * and is not rate-limited by the wire throttle — host apps own request-level
+   * authz / limits for their own routes.
+   *
+   * Throws `UploadValidationError` (map its `statusHint` 400 to a
+   * `BadRequestException`) on a rejected upload, or `NoSuchBucketError` if the
+   * bucket is absent.
+   */
+  async uploadFrom(source: UploadSource, opts: UploadOptions): Promise<UploadResult> {
+    const norm = normalizeUploadSource(source);
+    const mode = opts.validate?.sniffContentType ?? 'prefer';
+    const maxBytes = opts.validate?.maxBytes ?? this.config.maxObjectSizeMb * 1024 * 1024;
+
+    return this.withContext(async () => {
+      const { head, stream } = await this.peekHead(norm.body, SNIFF_BYTES);
+
+      const sniffed = sniffContentType(head);
+      const declared = opts.contentType ?? norm.declared;
+      const resolvedType = resolveContentType(declared, sniffed, mode);
+
+      const wantImage = opts.image ?? resolvedType.startsWith('image/');
+      const image = wantImage ? imageInfo(head) : undefined;
+
+      // Early reject before any write for known-size sources; the stream path's
+      // byte cap is enforced by the writer's maxSize below.
+      assertValid(resolvedType, norm.knownSize, { ...(opts.validate ?? {}), maxBytes });
+
+      const filename = opts.filename ?? norm.filename;
+      const ext = sanitizeFilename(filename).ext;
+      const strategy = opts.keyStrategy ?? 'uuid';
+      const ctx: KeyStrategyContext = { filename, contentType: resolvedType, ext };
+
+      let key: string;
+      let write: { etag: string; versionId?: string; size: number; sha256?: string };
+
+      if (opts.key) {
+        key = opts.key;
+        write = await this.objects.putFromStream(opts.bucket, key, stream, resolvedType, maxBytes);
+      } else if (strategy === 'sha256' && Buffer.isBuffer(norm.body)) {
+        // Content-addressed, buffer fast path: hash directly, write once.
+        const sha256 = createHash('sha256').update(norm.body).digest('hex');
+        key = resolveKey('sha256', { ...ctx, sha256 });
+        write = await this.objects.putFromStream(opts.bucket, key, stream, resolvedType, maxBytes);
+      } else if (strategy === 'sha256') {
+        // Content-addressed, stream path: the digest is only known post-write, so
+        // stage under a temp key, then relocate to the digest key (idempotent on
+        // repeat — identical content lands on the same key).
+        const staged = await this.uploadShaFromStream(
+          opts.bucket,
+          stream,
+          resolvedType,
+          maxBytes,
+          ctx,
+        );
+        key = staged.key;
+        write = staged;
+      } else {
+        key = resolveKey(strategy, ctx);
+        write = await this.objects.putFromStream(opts.bucket, key, stream, resolvedType, maxBytes);
+      }
+
+      const url = this.resolveUploadUrl(opts.bucket, key, opts.presign);
+
+      const result: UploadResult = {
+        bucket: opts.bucket,
+        key,
+        etag: write.etag,
+        size: write.size,
+        contentType: resolvedType,
+      };
+      if (url) result.url = url;
+      if (write.versionId) result.versionId = write.versionId;
+      if (image) result.image = image;
+      return result;
+    });
+  }
+
+  /**
+   * Stage a streamed body under a temp key, then key it by its post-write SHA-256
+   * digest (content-addressed). If an object already exists at the digest key the
+   * upload is idempotent — the staging copy is dropped and the existing object is
+   * returned. Otherwise the staged bytes are re-streamed to the digest key and the
+   * staging copy removed.
+   */
+  private async uploadShaFromStream(
+    bucket: string,
+    stream: Readable,
+    resolvedType: string,
+    maxBytes: number,
+    ctx: KeyStrategyContext,
+  ): Promise<{ key: string; etag: string; versionId?: string; size: number; sha256?: string }> {
+    const stagingKey = `_ob-staging/${randomUUID()}`;
+    const staged = await this.objects.putFromStream(bucket, stagingKey, stream, resolvedType, maxBytes);
+    const key = resolveKey('sha256', { ...ctx, sha256: staged.sha256 });
+
+    const existing = await this.objects.head(bucket, key);
+    if (existing) {
+      await this.objects.delete(bucket, stagingKey);
+      return {
+        key,
+        etag: existing.etag,
+        versionId: existing.versionId,
+        size: existing.size,
+        sha256: staged.sha256,
+      };
+    }
+
+    const opened = await this.objects.openObjectStream(bucket, stagingKey);
+    if (!opened) throw new NoSuchKeyError(stagingKey);
+    const finalWrite = await this.objects.putFromStream(bucket, key, opened.stream, resolvedType);
+    await this.objects.delete(bucket, stagingKey);
+    return { key, ...finalWrite };
+  }
+
+  /** Mint a GET url for an upload result, or `undefined` when no origin resolves. */
+  private resolveUploadUrl(
+    bucket: string,
+    key: string,
+    presign: PresignOptions | false | undefined,
+  ): string | undefined {
+    if (presign === false) return undefined;
+    const hasOrigin = Boolean(presign?.baseUrl) || Boolean(this.config.endpoint);
+    if (!hasOrigin) return undefined;
+    return this.presignGetUrl(bucket, key, presign ?? {});
+  }
+
+  /**
+   * Read at most `n` bytes off the front of `body` for sniffing, then hand back a
+   * stream that replays those bytes followed by the untouched remainder — so a
+   * `Readable` is never fully buffered (only the `SNIFF_BYTES` head is held).
+   */
+  private async peekHead(
+    body: Readable | Buffer,
+    n: number,
+  ): Promise<{ head: Buffer; stream: Readable; knownEnd: boolean }> {
+    if (Buffer.isBuffer(body)) {
+      return { head: body.subarray(0, n), stream: Readable.from(body), knownEnd: true };
+    }
+    const collected: Buffer[] = [];
+    let total = 0;
+    // destroyOnReturn:false is REQUIRED — the default async iterator destroys the
+    // stream when we break, which would lose the tail we still need to write.
+    const iterator = body.iterator({ destroyOnReturn: false });
+    try {
+      while (total < n) {
+        const next = await iterator.next();
+        if (next.done) break;
+        const chunk = Buffer.isBuffer(next.value) ? next.value : Buffer.from(next.value);
+        collected.push(chunk);
+        total += chunk.length;
+      }
+    } catch (err) {
+      body.destroy();
+      throw err;
+    }
+    const head = Buffer.concat(collected).subarray(0, n);
+    const source = body;
+    const rebuilt = Readable.from(
+      (async function* () {
+        for (const c of collected) yield c;
+        yield* source;
+      })(),
+    );
+    return { head, stream: rebuilt, knownEnd: false };
+  }
+
+  /**
    * Open a readable stream of an object's (decrypted) bytes. Throws
    * `NoSuchKeyError` if absent. The stream may be consumed after this resolves —
    * it needs no MikroORM context.
@@ -238,6 +521,58 @@ export class OpenBucketService {
     return this.presign('PUT', bucket, key, opts);
   }
 
+  /**
+   * Mint a browser-form direct upload (presigned POST, WHITEPAPER §2.5.1). Returns
+   * `{ url, fields }` — hand every `fields` entry to a browser `FormData`, append
+   * the `file` part LAST, and POST it to `url`. The policy is signed with the
+   * root credential and authorises exactly the `key`/prefix, content-type, and
+   * size range in its conditions until it expires. A `content-length-range` is
+   * defaulted to the server's `maxObjectSizeMb` cap when the caller omits one, so
+   * a minted token can never authorise an object larger than the server allows
+   * (the wire interceptor re-enforces on streamed bytes). Pure crypto — no DB/FS.
+   */
+  createPresignedPost(bucket: string, opts: PresignPostOptions): PresignedPost {
+    if (opts.contentLengthRange) {
+      const { min, max } = opts.contentLengthRange;
+      if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < 0 || min > max) {
+        throw new Error(
+          'OpenBucketService.createPresignedPost: contentLengthRange must be 0 ≤ min ≤ max.',
+        );
+      }
+    }
+    const expiresIn = Math.min(Math.max(opts.expiresIn ?? 900, 1), MAX_EXPIRES);
+    const { scheme, host } = this.resolveOrigin(opts.baseUrl);
+
+    // Default a content-length-range to the server cap (defence in depth) unless
+    // the caller pinned one; then fold in any raw escape-hatch conditions.
+    const lengthRange = opts.contentLengthRange ?? {
+      min: 0,
+      max: this.config.maxObjectSizeMb * 1024 * 1024,
+    };
+    const extraConditions: PostPolicyCondition[] = [
+      ['content-length-range', lengthRange.min, lengthRange.max],
+      ...(opts.conditions ?? []),
+    ];
+
+    return buildPresignedPost({
+      accessKeyId: this.config.rootAccessKeyId,
+      secretAccessKey: this.config.rootSecretAccessKey,
+      region: this.config.region,
+      scheme,
+      host,
+      bucket,
+      key: opts.key,
+      expiresIn,
+      now: new Date(),
+      basePath: this.mountPath,
+      keyStartsWith: opts.keyStartsWith,
+      contentType: opts.contentType,
+      successActionStatus: opts.successActionStatus,
+      successActionRedirect: opts.successActionRedirect,
+      extraConditions,
+    });
+  }
+
   private presign(method: 'GET' | 'PUT', bucket: string, key: string, opts: PresignOptions): string {
     const expiresIn = Math.min(Math.max(opts.expiresIn ?? 900, 1), MAX_EXPIRES);
     const { scheme, host } = this.resolveOrigin(opts.baseUrl);
@@ -268,4 +603,35 @@ export class OpenBucketService {
     const u = new URL(raw.includes('://') ? raw : `https://${raw}`);
     return { scheme: u.protocol.replace(/:$/, ''), host: u.host };
   }
+}
+
+/** Normalize an {@link UploadSource} to a common `{ body, declared, filename, knownSize }`. */
+function normalizeUploadSource(source: UploadSource): {
+  body: Readable | Buffer;
+  declared?: string;
+  filename?: string;
+  knownSize?: number;
+} {
+  if (Buffer.isBuffer(source)) {
+    return { body: source, knownSize: source.length };
+  }
+  if (source instanceof Readable) {
+    return { body: source };
+  }
+  // MulterFileLike (memory-storage `buffer` or disk/stream-storage `stream`).
+  const file = source as MulterFileLike;
+  const body = file.buffer ?? file.stream;
+  if (!body) {
+    throw new TypeError('uploadFrom: multer file has neither a `buffer` nor a `stream`');
+  }
+  return {
+    body,
+    declared: file.mimetype,
+    filename: file.originalname,
+    knownSize: Buffer.isBuffer(file.buffer)
+      ? file.buffer.length
+      : typeof file.size === 'number'
+        ? file.size
+        : undefined,
+  };
 }

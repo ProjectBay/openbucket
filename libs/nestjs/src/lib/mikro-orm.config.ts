@@ -12,6 +12,7 @@ import {
   AdminUser,
   RefreshToken,
   LifecycleState,
+  EventDeliveryEntity,
 } from './persistence/index';
 
 /**
@@ -44,6 +45,7 @@ export default defineConfig({
     AdminUser,
     RefreshToken,
     LifecycleState,
+    EventDeliveryEntity,
   ],
 
   // ReflectMetadataProvider (not TsMorph): every entity property declares its

@@ -1,44 +1,23 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
-import { createHash } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { Transform, TransformCallback } from 'node:stream';
 import { Observable, throwError } from 'rxjs';
 
 import { AppConfigService } from '../../common/config/app-config.service';
 import {
-  BadDigestError,
   EntityTooLargeError,
   IncompleteBodyError,
   InvalidArgumentError,
   InvalidRequestError,
-  XAmzContentSHA256MismatchError,
 } from '../errors/s3-error';
 import type { ChunkSigningContext } from '../sigv4/chunk-signing';
+import { createBodyVerifier } from './body-verifier';
 import { ChunkedDecoder } from './chunked-decoder';
-import { declaredChecksum, makeChecksummer, type Checksummer } from './checksums';
+import { declaredChecksum } from './checksums';
 
-/** Hashes and byte count, settled when the verified stream ends. */
-export interface PutObjectHashes {
-  md5Hex: string;
-  md5Base64: string;
-  sha256Hex: string;
-}
-
-export interface PutObjectStreamContext {
-  /** A Readable that emits the verified, size-capped body. */
-  readonly stream: NodeJS.ReadableStream;
-  /** Lazily-resolved hashes; settle when the stream ends successfully. */
-  readonly hashes: Promise<PutObjectHashes>;
-  /** Total bytes that flowed through the stream. Set when `hashes` resolves. */
-  readonly size: Promise<number>;
-}
-
-declare module 'http' {
-  interface IncomingMessage {
-    /** Populated by PutObjectInterceptor for the handler to consume. */
-    openbucketPutCtx?: PutObjectStreamContext;
-  }
-}
+// Re-export the shared verifier types from their historical import site so
+// existing consumers (`object.service.ts`, TEST-0301/0316) keep importing them
+// from `put-object.interceptor`.
+export type { PutObjectHashes, PutObjectStreamContext } from './body-verifier';
 
 /**
  * True for body-streaming PUTs that this interceptor should verify: PutObject
@@ -160,61 +139,20 @@ export class PutObjectInterceptor implements NestInterceptor {
     // The STREAMING sentinels are not a body hash, so don't compare sha256 to them.
     const verifySha = !isStreaming && expectedSha256 !== UNSIGNED;
 
-    const md5 = createHash('md5');
-    const sha256 = createHash('sha256');
     // S3 flexible checksum (x-amz-checksum-*): verify the declared digest against
     // the received body and reject a mismatch with BadDigest (was previously
     // ignored for regular PUTs — silent ingest corruption).
     const checksum = declaredChecksum(req.headers as Record<string, string | string[] | undefined>);
-    const checksummer: Checksummer | undefined = checksum ? makeChecksummer(checksum.algo) : undefined;
-    let bytes = 0;
-    let aborted = false;
 
-    let resolveHashes!: (v: PutObjectHashes) => void;
-    let rejectHashes!: (e: unknown) => void;
-    const hashes = new Promise<PutObjectHashes>((res, rej) => {
-      resolveHashes = res;
-      rejectHashes = rej;
-    });
-    let resolveSize!: (n: number) => void;
-    let rejectSize!: (e: unknown) => void;
-    const size = new Promise<number>((res, rej) => {
-      resolveSize = res;
-      rejectSize = rej;
-    });
-
-    const verifier = new Transform({
+    // The shared md5/sha256/size-cap verifier (extracted so PostObject reuses the
+    // identical write path — STORY-0802). HIGH_WATER_MARK stays local so
+    // TEST-0316 can pin the 256 KB literal in this file.
+    const { verifier, hashes, size, rejectPending } = createBodyVerifier({
+      maxBytes,
       highWaterMark: HIGH_WATER_MARK,
-      transform(chunk: Buffer, _enc, cb: TransformCallback) {
-        bytes += chunk.length;
-        if (bytes > maxBytes) {
-          aborted = true;
-          return cb(new EntityTooLargeError(bytes, maxBytes));
-        }
-        md5.update(chunk);
-        sha256.update(chunk);
-        checksummer?.update(chunk);
-        cb(null, chunk);
-      },
-      flush(cb: TransformCallback) {
-        if (aborted) return cb();
-        const md5Hex = md5.digest('hex');
-        const md5Base64 = Buffer.from(md5Hex, 'hex').toString('base64');
-        const sha256Hex = sha256.digest('hex');
-
-        if (expectedMd5Base64 && expectedMd5Base64 !== md5Base64) {
-          return cb(new BadDigestError());
-        }
-        if (verifySha && expectedSha256.toLowerCase() !== sha256Hex) {
-          return cb(new XAmzContentSHA256MismatchError());
-        }
-        if (checksum && checksummer && checksummer.digestBase64() !== checksum.expected) {
-          return cb(new BadDigestError());
-        }
-        resolveHashes({ md5Hex, md5Base64, sha256Hex });
-        resolveSize(bytes);
-        cb();
-      },
+      expectedMd5Base64,
+      expectedSha256Hex: verifySha ? expectedSha256 : undefined,
+      checksum,
     });
 
     // For chunked uploads, the ChunkedDecoder sits between req and the verifier:
@@ -232,8 +170,7 @@ export class PutObjectInterceptor implements NestInterceptor {
     const fail = (err: unknown): void => {
       decoder?.destroy(err as Error);
       verifier.destroy(err as Error);
-      rejectHashes(err);
-      rejectSize(err);
+      rejectPending(err);
     };
 
     // Per-request stall watchdog (TASK-2111, CWE-400). Bound the body phase via
@@ -258,10 +195,7 @@ export class PutObjectInterceptor implements NestInterceptor {
     // Node sometimes emits 'aborted' but not 'error' on client close.
     req.on('aborted', () => fail(new IncompleteBodyError('Client aborted the request')));
     decoder?.on('error', fail);
-    verifier.on('error', (err) => {
-      rejectHashes(err);
-      rejectSize(err);
-    });
+    verifier.on('error', (err) => rejectPending(err));
 
     // pipe() handles backpressure: the 256 KB hwm pauses req when BlobStore lags.
     req.pipe(head);

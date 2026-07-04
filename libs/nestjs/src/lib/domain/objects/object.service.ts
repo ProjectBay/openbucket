@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { raw, type EntityManager } from '@mikro-orm/core';
 import type { Request, Response } from 'express';
@@ -14,6 +14,8 @@ import {
 
 import { BlobStore } from '../../storage/blob-store';
 import { ObjectWriterService } from '../../storage/object-writer.service';
+import { ObjectEventsService } from '../../events/object-events.service';
+import { OBJECT_EVENTS, type ObjectEvent } from '../../events/object-event.types';
 import {
   alignedStart,
   createRangeDecipher,
@@ -25,13 +27,15 @@ import { VersionStoreService } from '../../storage/version-store.service';
 import {
   AccessDeniedError,
   InternalError,
+  InvalidArgumentError,
   NoSuchBucketError,
   NoSuchKeyError,
   NoSuchObjectLockConfigurationError,
-  NotImplementedError,
   PreconditionFailedError,
 } from '../../s3/errors/s3-error';
+import { evaluatePolicy } from '../../s3/authz/policy-evaluator';
 import type { PutObjectStreamContext } from '../../s3/object/put-object.interceptor';
+import type { PostObjectContext } from '../../s3/object/post-object.interceptor';
 import { parseRange, RangeSpec } from '../../s3/object/range';
 import {
   legalHoldDoc,
@@ -171,6 +175,10 @@ export class ObjectService {
     private readonly versions: VersionStoreService,
     private readonly serializer: XmlSerializer,
     private readonly sseKey: SseKeyService,
+    // Optional (STORY-0801): emits object.deleted at the delete choke point.
+    // @Optional so existing unit tests can construct ObjectService without it and
+    // a missing/throwing handler can never break a delete.
+    @Optional() private readonly events?: ObjectEventsService,
   ) {}
 
   /**
@@ -288,10 +296,16 @@ export class ObjectService {
     key: string,
     body: Readable,
     contentType?: string,
-  ): Promise<{ etag: string; versionId?: string }> {
+    maxSize?: number,
+  ): Promise<{ etag: string; versionId?: string; size: number; sha256?: string }> {
     if (!(await this.buckets.exists(bucket))) throw new NoSuchBucketError(bucket);
-    const row = await this.writer.put({ bucket, key, body, contentType });
-    return { etag: row.etag, versionId: row.currentVersionId };
+    const row = await this.writer.put({ bucket, key, body, contentType, maxSize });
+    return {
+      etag: row.etag,
+      versionId: row.currentVersionId,
+      size: Number(row.size),
+      sha256: row.contentSha256,
+    };
   }
 
   /**
@@ -335,10 +349,84 @@ export class ObjectService {
     };
   }
 
-  postObject(_req: Request, _res: Response, _bucket: string, _key: string): unknown {
-    // Browser multipart/form-data upload needs the EPIC-04 streaming form parser
-    // + POST-policy signature verification; not used by aws-cli/mc/s3cmd. Deferred.
-    throw new NotImplementedError('PostObject');
+  /**
+   * POST /:bucket — browser-form direct upload (WHITEPAPER §2.5.1, STORY-0802).
+   * Bucket-scope: the key arrives as a form field, not a path segment. The
+   * `PostObjectInterceptor` has already streaming-parsed the multipart body,
+   * authenticated it against the submitted POST policy + signature, and stamped
+   * the verified stream on `req.openbucketPutCtx` + `{ key, contentType,
+   * accessKeyId, successAction }` on `req.openbucketPost`. Here we assert the
+   * bucket exists, re-run the EPIC-08 bucket-policy check with the form-resolved
+   * credential (SigV4Guard/PolicyAuthorizationGuard deferred it — auth wasn't
+   * known pre-parse), persist through the same two-phase writer, and emit the
+   * S3-correct success response (303 redirect / 201 XML / 204).
+   */
+  async postObject(req: Request, res: Response, bucket: string): Promise<unknown> {
+    const ctx = (req as unknown as { openbucketPutCtx?: PutObjectStreamContext }).openbucketPutCtx;
+    const post = (req as unknown as { openbucketPost?: PostObjectContext }).openbucketPost;
+    if (!ctx || !post) throw new InternalError();
+    // The writer consumes the same verified stream, so a digest/size failure
+    // surfaces there; mark these mirror promises handled to avoid an unhandled
+    // rejection (identical to putObject).
+    ctx.hashes.catch(() => undefined);
+    ctx.size.catch(() => undefined);
+
+    const key = post.key;
+    if (!key) throw new InvalidArgumentError('The key form field is required.', 'key');
+
+    const bkt = await this.buckets.getByName(bucket);
+    if (!bkt) throw new NoSuchBucketError(bucket);
+
+    // EPIC-08 bucket policy, evaluated here (not the guard) because the principal
+    // was unknown until the body was parsed. Identical semantics to
+    // PolicyAuthorizationGuard: single-root default-allow, explicit Deny blocks.
+    if (bkt.policy) {
+      const decision = evaluatePolicy(
+        bkt.policy,
+        {
+          action: 's3:PutObject',
+          resource: `arn:aws:s3:::${bucket}/${key}`,
+          principal: post.accessKeyId,
+          secureTransport: req.secure === true,
+          sourceIp: req.ip ?? '',
+        },
+        { defaultAllow: true },
+      );
+      if (decision === 'deny') throw new AccessDeniedError('Access Denied by bucket policy');
+    }
+
+    const row = await this.writer.put({
+      bucket,
+      key,
+      body: ctx.stream as Readable,
+      contentType: post.contentType,
+    });
+
+    const etag = `"${row.etag}"`;
+    res.setHeader('ETag', etag);
+    if (row.currentVersionId) res.setHeader('x-amz-version-id', row.currentVersionId);
+
+    const location = `${req.protocol}://${req.get('host') ?? bucket}/${bucket}/${encodeURIComponent(
+      key,
+    )}`;
+
+    // success_action_redirect wins: 303 with bucket/key/etag query params.
+    if (post.successAction.redirect) {
+      const target = new URL(post.successAction.redirect);
+      target.searchParams.set('bucket', bucket);
+      target.searchParams.set('key', key);
+      target.searchParams.set('etag', row.etag);
+      res.setHeader('Location', target.toString());
+      res.status(303);
+      return undefined;
+    }
+    // Else success_action_status: 201 → <PostResponse> XML; 200/204/absent → 204.
+    if (post.successAction.status === '201') {
+      res.status(201);
+      return { __root: 'PostResponse', Location: location, Bucket: bucket, Key: key, ETag: etag };
+    }
+    res.status(204);
+    return undefined;
   }
 
   /**
@@ -619,10 +707,26 @@ export class ObjectService {
   ): Promise<{ versionId?: string; deleteMarker?: boolean }> {
     if (await this.buckets.hasVersionHistory(bucket)) {
       const current = await this.objects.findCurrentVersion(bucket, key);
-      if (!current) return {}; // already hidden / never existed
+      if (!current) return {}; // already hidden / never existed — no event (no-op)
       // A delete marker hides the current version without removing the locked
       // version, so object-lock does not gate it (AWS semantics).
-      const marker = await this.versions.writeDeleteMarker(bucket, key);
+      // STORY-0801: enqueue the durable webhook row IN the marker's transaction
+      // (transactional outbox) via the beforeCommit hook, then emit in-process
+      // after the marker commits. Build the event once so both carry identical bytes.
+      let deletedEvent: ObjectEvent | undefined;
+      const marker = await this.versions.writeDeleteMarker(bucket, key, (em, mk) => {
+        deletedEvent = {
+          type: OBJECT_EVENTS.deleted,
+          bucket,
+          key,
+          size: 0,
+          etag: '',
+          versionId: mk.versionId,
+          eventTime: new Date().toISOString(),
+        };
+        this.events?.enqueueInTx(em, deletedEvent);
+      });
+      if (deletedEvent) this.events?.emitInProcess(deletedEvent);
       return { deleteMarker: true, versionId: marker.versionId };
     }
 
@@ -637,7 +741,7 @@ export class ObjectService {
       });
       if (!row) {
         await em.commit();
-        return {};
+        return {}; // idempotent no-op on an absent key — emit nothing
       }
       // This path actually removes the object — enforce object-lock (STORY-0121).
       this.assertDeletable(row, bypassGovernance);
@@ -645,7 +749,21 @@ export class ObjectService {
       row.modifiedAt = new Date();
       em.persist(row);
       await this.blobs.deleteBlob(bucket, key); // move pointer file to trash
+
+      // STORY-0801: enqueue the durable webhook row in this same transaction
+      // (pre-commit), emit in-process only after a successful commit.
+      const deletedEvent: ObjectEvent = {
+        type: OBJECT_EVENTS.deleted,
+        bucket,
+        key,
+        size: 0,
+        etag: '',
+        eventTime: row.modifiedAt.toISOString(),
+      };
+      this.events?.enqueueInTx(em, deletedEvent);
+
       await em.commit();
+      this.events?.emitInProcess(deletedEvent);
       return {};
     } catch (err) {
       await em.rollback().catch(() => undefined);

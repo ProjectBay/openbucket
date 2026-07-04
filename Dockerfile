@@ -13,6 +13,16 @@
 # it alone no longer forces glibc — but argon2 still does; don't switch to
 # alpine without benchmarking argon2 there.) Node 22.x (>=22.12) also satisfies
 # Angular's require(ESM); libsql's N-API binding is ABI-stable across Node majors.
+#
+# ---- sharp (image transforms, STORY-0800) --------------------------------
+# sharp is a NATIVE module: it pulls a prebuilt libvips binary for the build
+# platform via optionalDependencies (@img/sharp-linux-x64 / -linuxmusl-x64 …).
+# On this glibc (bookworm) image the linux-x64 prebuild installs cleanly with no
+# system libvips required, and `npm prune --omit=dev` keeps it (it's a runtime
+# dependency) — the prebuilt .node is copied to the runtime stage in node_modules.
+# Because `npm ci` runs INSIDE this linux container, it fetches the linux binary
+# regardless of the host arch. Do NOT add --ignore-scripts (would skip the
+# prebuild fetch); if you ever move to alpine, sharp needs the -linuxmusl prebuild.
 # --------------------------------------------------------------------------
 
 # ---------- stage 1 : build ----------

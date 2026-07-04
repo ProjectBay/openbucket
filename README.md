@@ -162,6 +162,18 @@ export class FilesService {
       expiresIn: 900,
     });
   }
+
+  // Direct browser uploads: mint a scoped HTML-form token (presigned POST).
+  // The browser appends every `fields` entry + the `file` part LAST, then POSTs
+  // to `url` — no S3 SDK in the browser, no bytes through your server.
+  uploadForm() {
+    return this.ob.createPresignedPost('avatars', {
+      key: 'users/${filename}',
+      contentLengthRange: { min: 1, max: 5 * 1024 * 1024 },
+      contentType: { startsWith: 'image/' },
+      successActionStatus: '201',
+    }); // → { url, fields }
+  }
 }
 ```
 

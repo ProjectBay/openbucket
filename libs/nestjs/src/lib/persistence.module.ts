@@ -13,6 +13,7 @@ import { Migration20260603000002_refresh_token_redesign } from './migrations/Mig
 import { Migration20260609000001_access_key_admin_fields } from './migrations/Migration20260609000001_access_key_admin_fields';
 import { Migration20260625000001_object_encryption } from './migrations/Migration20260625000001_object_encryption';
 import { Migration20260701000001_object_content_sha256 } from './migrations/Migration20260701000001_object_content_sha256';
+import { Migration20260702000001_event_deliveries } from './migrations/Migration20260702000001_event_deliveries';
 import {
   Bucket,
   ObjectEntity,
@@ -23,10 +24,12 @@ import {
   AdminUser,
   RefreshToken,
   LifecycleState,
+  EventDeliveryEntity,
   BucketRepository,
   ObjectRepository,
   AdminUserRepository,
   RefreshTokenRepository,
+  EventDeliveryRepository,
 } from './persistence/index';
 import { OPEN_BUCKET_ORM_CONTEXT } from './persistence/orm-context';
 
@@ -40,6 +43,7 @@ const ENTITIES = [
   AdminUser,
   RefreshToken,
   LifecycleState,
+  EventDeliveryEntity,
 ];
 
 /**
@@ -121,6 +125,10 @@ const ENTITIES = [
               name: 'Migration20260701000001_object_content_sha256',
               class: Migration20260701000001_object_content_sha256,
             },
+            {
+              name: 'Migration20260702000001_event_deliveries',
+              class: Migration20260702000001_event_deliveries,
+            },
           ],
           transactional: true,
           allOrNothing: true,
@@ -161,8 +169,9 @@ const ENTITIES = [
     { provide: ObjectRepository, inject: [getRepositoryToken(ObjectEntity, OPEN_BUCKET_ORM_CONTEXT)], useFactory: (r: ObjectRepository) => r },
     { provide: AdminUserRepository, inject: [getRepositoryToken(AdminUser, OPEN_BUCKET_ORM_CONTEXT)], useFactory: (r: AdminUserRepository) => r },
     { provide: RefreshTokenRepository, inject: [getRepositoryToken(RefreshToken, OPEN_BUCKET_ORM_CONTEXT)], useFactory: (r: RefreshTokenRepository) => r },
+    { provide: EventDeliveryRepository, inject: [getRepositoryToken(EventDeliveryEntity, OPEN_BUCKET_ORM_CONTEXT)], useFactory: (r: EventDeliveryRepository) => r },
   ],
-  exports: [MikroOrmModule, BucketRepository, ObjectRepository, AdminUserRepository, RefreshTokenRepository],
+  exports: [MikroOrmModule, BucketRepository, ObjectRepository, AdminUserRepository, RefreshTokenRepository, EventDeliveryRepository],
 })
 export class PersistenceModule implements OnModuleInit {
   private readonly logger = new Logger(PersistenceModule.name);

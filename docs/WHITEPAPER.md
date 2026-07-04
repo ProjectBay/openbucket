@@ -2128,6 +2128,65 @@ unless the client opted-in by including `X-Amz-Content-Sha256` in the
 SignedHeaders list — in which case the verifier picks it up like any other
 signed header.
 
+### 2.5.1. Browser-based uploads (PostObject / presigned POST)
+
+A presigned **POST** lets a browser upload a file straight to the store from an
+HTML `<form>` — no S3 SDK, no SigV4 in the browser, no proxying bytes through
+your app. The embedding app mints a short-lived, tightly-scoped policy with the
+root credential and hands the browser a `url` + a set of hidden form `fields`.
+
+```ts
+// Server (your NestJS app), STORY-0802:
+const { url, fields } = openBucket.createPresignedPost('avatars', {
+  key: 'users/${filename}',        // ${filename} is substituted from the file part
+  keyStartsWith: true,             // folder-scoped token
+  contentLengthRange: { min: 1, max: 5 * 1024 * 1024 },
+  contentType: { startsWith: 'image/' },
+  expiresIn: 900,                  // 1 … 604800 s (7 days max)
+  successActionStatus: '201',      // 201 → <PostResponse> XML, else 204
+});
+// Browser: build a FormData with every `fields` entry, append `file` LAST, POST to `url`.
+```
+
+**Wire shape.** The POST targets the **bucket root** (`POST /{bucket}`) with the
+key carried as a `key` form field — so PostObject is a *bucket-scope* operation,
+not object-scope. The `file` part **must be the last** field; any field arriving
+after it is ignored, and `${filename}` in `key` is replaced with the (sanitised,
+path-stripped) upload filename.
+
+**Security model.**
+
+- The policy is signed with the **root credential**; `signature =
+  HMAC-SHA256(kSigning, base64(policy))` (the StringToSign for a POST is the
+  base64 policy itself, unlike the query presign which hashes a canonical
+  request). A minted token authorises exactly the `key`/prefix, `Content-Type`,
+  and byte-size range named in its `conditions`, until `expiration` (≤ 7 days).
+- `SigV4Guard` and `PolicyAuthorizationGuard` **defer** for this one shape
+  (`POST` + bucket-scope + `multipart/form-data` + no `?delete`): authentication
+  lives in the form body, verified fail-closed by `PostObjectInterceptor`, which
+  streaming-parses the body with `busboy` under hard limits (`files: 1`,
+  `fields: 20`, 8 KB per field, 20 KB policy cap), re-derives the signature, and
+  evaluates every condition. Any submitted field not covered by a condition
+  fails closed (mirrors S3's "Invalid according to Policy").
+- The `content-length-range` is enforced on **streamed bytes** — the server
+  never trusts the multipart `Content-Length` header (which covers the whole
+  envelope, not the file). `createPresignedPost` also defaults a range to the
+  server's `maxObjectSizeMb` cap when the caller omits one, so a token can never
+  authorise an object larger than the server allows.
+- The bucket policy (EPIC-08) still applies: it is evaluated inside
+  `objects.postObject` once the credential + key are known (the guard couldn't,
+  pre-parse), with identical `s3:PutObject` semantics — an explicit `Deny` → 403.
+- Response: `success_action_redirect` → `303` with `bucket`/`key`/`etag` query
+  params; else `success_action_status: 201` → a `<PostResponse>` XML body; `200`
+  / `204` / absent → `204 No Content`. An `ETag` header is set in every case.
+
+**CORS caveat.** A cross-origin browser POST of `multipart/form-data` is a CORS
+"simple request" (no preflight), so the upload itself works, but *reading* a
+non-2xx error body or a `201` response cross-origin requires the bucket to allow
+the origin. Per-bucket CORS is a separate concern (the `PutBucketCors` surface);
+for a pure browser flow prefer `success_action_redirect`, which navigates the
+browser and needs no CORS to observe the outcome.
+
 ---
 
 ## 2.6. S3 error taxonomy

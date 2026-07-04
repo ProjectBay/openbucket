@@ -132,17 +132,57 @@ export class FilesService {
 }
 ```
 
-The facade covers: `putObject`, `getObjectStream`, `getObjectBuffer`, `headObject`,
-`deleteObject`, `listObjects`; `createBucket`, `deleteBucket`, `bucketExists`,
-`listBuckets`; and `presignGetUrl` / `presignPutUrl`. Methods throw OpenBucket's S3
-domain errors (`NoSuchBucketError`, `NoSuchKeyError`, …) — catch them or pre-check
-with `bucketExists` / `headObject`.
+The facade covers: `putObject`, `uploadFrom`, `getObjectStream`, `getObjectBuffer`,
+`headObject`, `deleteObject`, `listObjects`; `createBucket`, `deleteBucket`,
+`bucketExists`, `listBuckets`; `presignGetUrl` / `presignPutUrl`; and
+`createPresignedPost`. Methods throw OpenBucket's S3 domain errors
+(`NoSuchBucketError`, `NoSuchKeyError`, …) — catch them or pre-check with
+`bucketExists` / `headObject`. `uploadFrom` additionally throws
+`UploadValidationError` (map its `statusHint` `400`) on a rejected upload.
 
 > **Presigned URLs** are signed for the public origin you pass as `baseUrl` (scheme
 > + host); the configured `mountPath` and the object path are appended for you, so
 > the URL verifies against the mounted S3 routes. `baseUrl` defaults to the
 > `endpoint` option (over https) when set. The generated link is a normal S3 URL —
 > hand it to any HTTP client or `<img src>` / `fetch(url, { method: 'PUT' })`.
+
+### Direct browser uploads (presigned POST)
+
+`createPresignedPost` mints a short-lived, tightly-scoped HTML-form upload token so
+a browser can upload straight to the store — no S3 SDK in the browser, no proxying
+bytes through your server:
+
+```ts
+// Server: mint the form. Signed with the root credential; scoped to the
+// key/prefix, content-type, and size range you specify.
+const { url, fields } = this.ob.createPresignedPost('avatars', {
+  key: 'users/${filename}',                // ${filename} filled from the file part
+  keyStartsWith: true,                     // folder-scoped upload token
+  contentLengthRange: { min: 1, max: 5 * 1024 * 1024 },
+  contentType: { startsWith: 'image/' },
+  expiresIn: 900,                          // 1 … 604800 s (7 days max)
+  successActionStatus: '201',              // 201 → <PostResponse> XML, else 204
+});
+```
+
+```js
+// Browser: append every `fields` entry, then the `file` part LAST, and POST to `url`.
+const form = new FormData();
+for (const [k, v] of Object.entries(fields)) form.append(k, v);
+form.append('file', fileInput.files[0]); // MUST be last
+await fetch(url, { method: 'POST', body: form });
+```
+
+> **Security & limits.** The server re-enforces the size range on the *streamed*
+> bytes (never the client-declared `Content-Length`), the token expires (≤ 7 days),
+> and the bucket policy still applies. A `content-length-range` defaults to the
+> server's `maxObjectSizeMb` cap when you omit one. The `file` part must be last.
+>
+> **CORS.** A cross-origin `multipart/form-data` POST is a CORS "simple request"
+> (no preflight), so the upload works, but reading a non-2xx error or `201` body
+> cross-origin needs per-bucket CORS (`PutBucketCors`). For pure browser flows,
+> prefer `successActionRedirect` — the browser navigates and needs no CORS to see
+> the result.
 
 ### Over the wire: the AWS S3 SDK
 
@@ -200,7 +240,9 @@ export class UploadsBootstrap implements OnApplicationBootstrap {
 ```
 
 **2 — the upload endpoint** — parse the multipart file (multer, via
-`FileInterceptor`), `putObject` it into OpenBucket, then persist it with your ORM:
+`FileInterceptor`) and hand it to `uploadFrom`. One call sniffs the real content
+type, enforces your size/type rules, picks a safe key, and streams the body in —
+then persist the stable `{ bucket, key }` with your ORM:
 
 ```ts
 import {
@@ -211,9 +253,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { OpenBucketService } from '@openbucket/nestjs';
-import { randomUUID } from 'node:crypto';
-import { extname } from 'node:path';
+import { OpenBucketService, UploadValidationError } from '@openbucket/nestjs';
 import { PrismaService } from './prisma.service'; // ← your DB; swap for TypeORM / MikroORM / Drizzle
 
 const BUCKET = 'uploads';
@@ -231,11 +271,12 @@ export class FilesController {
   async upload(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('file is required');
 
-    // A stable, collision-free key. Keep the extension for tidy URLs.
-    const key = `${new Date().getFullYear()}/${randomUUID()}${extname(file.originalname)}`;
-
-    // Stream straight into OpenBucket — in-process, no HTTP round-trip.
-    await this.ob.putObject(BUCKET, key, file.buffer, { contentType: file.mimetype });
+    // Sniffs the real content type, enforces size/type, picks a safe key — one call.
+    const { key, contentType, size, image } = await this.ob.uploadFrom(file, {
+      bucket: BUCKET,
+      keyStrategy: 'uuid', // → `${year}/${uuid}${ext}` (same stable, collision-free shape)
+      validate: { maxBytes: 10 * 1024 * 1024, allowedContentTypes: ['image/*'] },
+    });
 
     // Persist the STABLE identity (bucket + key) — NOT a signed URL (those expire).
     const saved = await this.db.file.create({
@@ -243,8 +284,10 @@ export class FilesController {
         bucket: BUCKET,
         key,
         name: file.originalname,
-        size: file.size,
-        contentType: file.mimetype,
+        size,
+        contentType, // the RESOLVED (sniffed) type, not the client's claim
+        width: image?.width, // image metadata, when the body probed as an image
+        height: image?.height,
       },
     });
 
@@ -261,6 +304,11 @@ export class FilesController {
   }
 }
 ```
+
+> **Rejected uploads → 400.** A too-large, disallowed-type, or active-content
+> (HTML/SVG masquerading as an image) upload throws `UploadValidationError`. Map it
+> to a `400` — e.g. a one-line filter `if (err instanceof UploadValidationError)
+> throw new BadRequestException(err.message)`, or read its `statusHint` (`400`).
 
 **3 — serve it back.** Because you stored the **key** (not a URL), mint a fresh
 presigned URL whenever you read the row — nothing leaks or goes stale:
@@ -280,8 +328,15 @@ return files.map((f) => this.toDto(f)); // each gets a fresh 1-hour URL
 Notes:
 
 - `FileInterceptor` buffers the file in memory (`file.buffer`), which is fine for
-  typical uploads. For large files, pass a `Readable` stream to `putObject`
-  instead of a buffer.
+  typical uploads. For large files, `uploadFrom` also accepts a `Readable` (or a
+  disk-storage multer file) and streams it straight to disk without buffering —
+  only a small header is peeked for sniffing, and the `validate.maxBytes` cap
+  aborts an oversize stream mid-write (no partial object is committed).
+- `uploadFrom` sniffs the content type from the body's magic bytes and rejects
+  mismatched active content (HTML/SVG posing as an image) as defense in depth — it
+  complements the locked-down response headers every object read already gets.
+- `putObject` remains the low-level primitive if you want no validation/sniffing
+  and to pick the key yourself; `uploadFrom` is sugar on top of it.
 - Your app’s multipart parsing is independent of OpenBucket — its S3 routes mount
   under `mountPath` and handle their own request bodies.
 

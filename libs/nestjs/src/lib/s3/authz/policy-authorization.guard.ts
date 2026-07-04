@@ -3,6 +3,7 @@ import type { Request } from 'express';
 
 import { BucketService } from '../../domain/buckets/bucket.service';
 import { AccessDeniedError } from '../errors/s3-error';
+import { isPostObjectForm } from '../routing/operation-resolver';
 import { operationToAction } from './operation-action';
 import { evaluatePolicy } from './policy-evaluator';
 
@@ -27,6 +28,12 @@ export class PolicyAuthorizationGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<Request>();
     if (req.openbucket?.kind !== 's3') return true;
+
+    // Browser POST-policy upload (STORY-0802): this guard runs before the body is
+    // parsed, so `accessKeyId` (the principal) isn't known yet. Skip here and
+    // evaluate the bucket policy inside `objects.postObject` once the credential
+    // + key are resolved — identical `evaluatePolicy` semantics, no authz gap.
+    if (isPostObjectForm(req)) return true;
 
     const bucket = req.openbucket.bucket;
     if (!bucket) return true; // service-scope op — no bucket policy applies

@@ -3,6 +3,25 @@ import { z } from 'zod';
 const portNumber = z.coerce.number().int().min(1).max(65_535);
 
 /**
+ * Boolean env coercion that treats the *string* `"false"` (and `"0"`/`"no"`/
+ * `"off"`) as `false` — unlike `z.coerce.boolean()`, whose `Boolean("false")`
+ * is `true`, which would make a `FLAG=false` kill-switch impossible to disable.
+ * Accepts real booleans through, and defaults to `dflt` when the key is absent.
+ */
+const envBoolean = (dflt: boolean) =>
+  z
+    .preprocess((v) => {
+      if (typeof v === 'boolean') return v;
+      if (typeof v === 'string') {
+        const s = v.trim().toLowerCase();
+        if (['true', '1', 'yes', 'on'].includes(s)) return true;
+        if (['false', '0', 'no', 'off', ''].includes(s)) return false;
+      }
+      return v;
+    }, z.boolean())
+    .default(dflt);
+
+/**
  * Case-insensitive denylist of well-known placeholder / example secrets. A 32+
  * char value that is one of these boots cleanly under a bare `.min(32)` but is
  * trivially guessable, so it is refused (CWE-521). Kept small and high-signal to
@@ -36,6 +55,33 @@ export const strongSecret = (label: string) =>
       `${label} must not be a known placeholder value`,
     )
     .refine((v) => new Set(v).size >= 8, `${label} has too few distinct characters`);
+
+/**
+ * True when `host` is a loopback address (dev only). A non-https webhook URL is
+ * accepted ONLY for loopback so a plaintext delivery can't leak the signature/
+ * payload over the network in production (EPIC-08 posture).
+ */
+export const isLoopbackHost = (host: string): boolean => {
+  const h = host.toLowerCase();
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]';
+};
+
+/**
+ * Validate a webhook target URL: parseable, and `https:` unless the host is
+ * loopback. Returns an error message, or `null` when valid.
+ */
+export const validateWebhookUrl = (url: string): string | null => {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return 'WEBHOOK_URL must be a valid URL';
+  }
+  if (parsed.protocol !== 'https:' && !isLoopbackHost(parsed.hostname)) {
+    return 'WEBHOOK_URL must use https (http is allowed only for a loopback host)';
+  }
+  return null;
+};
 
 export const EnvSchema = z
   .object({
@@ -115,8 +161,64 @@ export const EnvSchema = z
     // Max bytes read for the buffered manifest.json entry before aborting (400).
     RESTORE_MAX_MANIFEST_BYTES: z.coerce.number().int().positive().default(4 * 1024 * 1024), // 4 MiB
 
+    // --- image transforms (STORY-0800) — DoS-bounded on-the-fly derivatives ---
+    // Master kill-switch: false makes every GET fall through to the plain path,
+    // so an operator who doesn't want the sharp CPU/RAM exposure can disable it.
+    IMAGE_TRANSFORM_ENABLED: envBoolean(true),
+    // Hard ceiling on requested output width/height (px). Bounds the output
+    // canvas. Capped at 16384 so an operator cannot set an unbounded value.
+    MAX_TRANSFORM_DIMENSION: z.coerce.number().int().positive().max(16_384).default(4_096),
+    // Refuse to transform a source larger than this (bytes) — pre-decode guard.
+    MAX_TRANSFORM_INPUT_BYTES: z.coerce.number().int().positive().default(50 * 1024 * 1024), // 50 MiB
+    // sharp limitInputPixels — decoded-canvas ceiling (decompression-bomb guard).
+    IMAGE_TRANSFORM_LIMIT_INPUT_PIXELS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(24_000 * 24_000),
+    // Max concurrent sharp operations in-flight (CPU/RAM governor).
+    IMAGE_TRANSFORM_CONCURRENCY: z.coerce.number().int().positive().max(64).default(4),
+    // Derivative cache size ceiling (bytes); GC tick evicts LRU past this.
+    // 0 = unbounded (discouraged — the disk-fill backstop is disabled).
+    DERIVATIVE_CACHE_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .nonnegative()
+      .default(5 * 1024 * 1024 * 1024), // 5 GiB
+
+    // --- object-event webhooks (STORY-0801) ---
+    // Presence of WEBHOOK_URL enables durable, signed webhook delivery. The
+    // secret is required (and strong) only when a URL is set — enforced by the
+    // superRefine below (Zod field-level `.optional()` can't express the
+    // cross-field requirement). Defaults keep webhooks OFF, so pure in-process
+    // embedders pay nothing.
+    WEBHOOK_URL: z.string().url().optional(),
+    WEBHOOK_SECRET: z.string().optional(), // validated by superRefine when URL set
+    WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(50).default(8),
+    WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(500).max(60_000).default(5_000),
+    WEBHOOK_POLL_MS: z.coerce.number().int().min(1_000).max(300_000).default(15_000),
+    WEBHOOK_EVENTS: z
+      .string()
+      .default('object.created,object.deleted,multipart.completed'),
+
     // --- shutdown ---
     SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
+  })
+  .superRefine((env, ctx) => {
+    // Cross-field: when a webhook URL is configured, require a strong secret
+    // (fail-closed — never sign with a weak/empty key, CWE-521) and enforce the
+    // https/loopback rule on the URL.
+    if (!env.WEBHOOK_URL) return;
+    const secretResult = strongSecret('WEBHOOK_SECRET').safeParse(env.WEBHOOK_SECRET);
+    if (!secretResult.success) {
+      for (const issue of secretResult.error.issues) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['WEBHOOK_SECRET'], message: issue.message });
+      }
+    }
+    const urlError = validateWebhookUrl(env.WEBHOOK_URL);
+    if (urlError) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['WEBHOOK_URL'], message: urlError });
+    }
   });
 // NOTE (white-paper §1.7 correction): the spec called for `.strict()`, but
 // `ConfigModule.forRoot({ validate: loadEnv })` runs validation against the

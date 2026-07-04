@@ -14,6 +14,7 @@ import { AppConfigService } from './common/config/app-config.service';
 import { CommonModule } from './common/common.module';
 import { ClockModule } from './common/clock/clock.module';
 import { PersistenceModule } from './persistence.module';
+import { EventsModule } from './events/events.module';
 import { StorageModule } from './storage/storage.module';
 import { DomainModule } from './domain/domain.module';
 import { BackgroundModule } from './common/background/background.module';
@@ -73,6 +74,12 @@ function buildCoreImports(adminEnabled: boolean): Array<Type | DynamicModule> {
               'req.headers["x-amz-security-token"]',
               'req.headers.cookie',
               'res.headers["set-cookie"]',
+              // Webhook HMAC secret (STORY-0801). Defence-in-depth: the secret
+              // lives only in config and is never intentionally logged, but redact
+              // any field named `webhookSecret` (top-level or one level deep) so a
+              // stray config dump can't leak it (EPIC-08 / STORY-0705 secrets hygiene).
+              'webhookSecret',
+              '*.webhookSecret',
             ],
             censor: '[redacted]',
           },
@@ -103,6 +110,12 @@ function buildCoreImports(adminEnabled: boolean): Array<Type | DynamicModule> {
 
     // 3a. Global Clock (SystemClock in prod, TestClock when OPENBUCKET_TEST_MODE=1).
     ClockModule,
+
+    // 3b. In-process object-event core (STORY-0801). @Global, so the writer
+    //     (StorageModule) and ObjectService (DomainModule) can inject
+    //     ObjectEventsService below without an import cycle. Calls
+    //     EventEmitterModule.forRoot() exactly once app-wide.
+    EventsModule,
 
     // 4. Lower layers. PersistenceModule is live (EPIC-03); Storage/Domain
     //    remain placeholders until later EPIC-03/02 stories fill them.

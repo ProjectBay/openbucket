@@ -282,3 +282,103 @@ describe('ObjectService.headObject safe headers (TASK-2110)', () => {
     expect(res._headers['content-security-policy']).toBe("default-src 'none'; sandbox");
   });
 });
+
+// --- deleteOne object.deleted events (STORY-0801) ---
+describe('ObjectService.deleteOne events (STORY-0801)', () => {
+  interface Emitted {
+    emitInProcess: jest.Mock;
+    enqueueInTx: jest.Mock;
+  }
+  const mkEvents = (): Emitted => ({ emitInProcess: jest.fn(), enqueueInTx: jest.fn() });
+
+  it('unversioned delete of an existing key emits one object.deleted (no versionId) + enqueues in-tx', async () => {
+    const events = mkEvents();
+    const row = { softDeleted: false, modifiedAt: new Date('2026-07-02T00:00:00.000Z'), lock: undefined };
+    const em = {
+      begin: jest.fn(),
+      findOne: jest.fn().mockResolvedValue(row),
+      persist: jest.fn(),
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn(),
+    };
+    const objects = { getEntityManager: () => ({ fork: () => em }) } as unknown as ObjectRepository;
+    const buckets = { hasVersionHistory: jest.fn().mockResolvedValue(false) } as unknown as BucketRepository;
+    const blobs = { deleteBlob: jest.fn().mockResolvedValue(undefined) } as unknown as BlobStore;
+    const svc = new ObjectService({} as ObjectWriterService, buckets, objects, blobs, VERSIONS, SERIALIZER, SSE, events as never);
+
+    await svc.deleteOne('b', 'k');
+
+    // enqueue happened before commit (in-tx), emit after commit.
+    expect(events.enqueueInTx).toHaveBeenCalledTimes(1);
+    expect(em.commit).toHaveBeenCalledTimes(1);
+    expect(events.emitInProcess).toHaveBeenCalledTimes(1);
+    expect(events.emitInProcess.mock.calls[0][0]).toMatchObject({
+      type: 'object.deleted',
+      bucket: 'b',
+      key: 'k',
+      size: 0,
+      etag: '',
+    });
+    expect(events.emitInProcess.mock.calls[0][0].versionId).toBeUndefined();
+  });
+
+  it('unversioned delete of an absent key emits nothing (idempotent no-op)', async () => {
+    const events = mkEvents();
+    const em = {
+      begin: jest.fn(),
+      findOne: jest.fn().mockResolvedValue(null),
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn(),
+    };
+    const objects = { getEntityManager: () => ({ fork: () => em }) } as unknown as ObjectRepository;
+    const buckets = { hasVersionHistory: jest.fn().mockResolvedValue(false) } as unknown as BucketRepository;
+    const svc = new ObjectService({} as ObjectWriterService, buckets, objects, BLOBS, VERSIONS, SERIALIZER, SSE, events as never);
+
+    const result = await svc.deleteOne('b', 'missing');
+
+    expect(result).toEqual({});
+    expect(events.enqueueInTx).not.toHaveBeenCalled();
+    expect(events.emitInProcess).not.toHaveBeenCalled();
+  });
+
+  it('versioned delete emits object.deleted carrying the marker versionId + enqueues in the marker tx', async () => {
+    const events = mkEvents();
+    const marker = { versionId: 'marker-v7' };
+    const fakeEm = {} as never;
+    const versions = {
+      writeDeleteMarker: jest.fn().mockImplementation(async (_b, _k, cb?: (em: unknown, m: unknown) => void) => {
+        cb?.(fakeEm, marker); // runs the in-tx enqueue hook
+        return marker;
+      }),
+    } as unknown as VersionStoreService;
+    const objects = { findCurrentVersion: jest.fn().mockResolvedValue({ versionId: 'cur' }) } as unknown as ObjectRepository;
+    const buckets = { hasVersionHistory: jest.fn().mockResolvedValue(true) } as unknown as BucketRepository;
+    const svc = new ObjectService({} as ObjectWriterService, buckets, objects, BLOBS, versions, SERIALIZER, SSE, events as never);
+
+    const result = await svc.deleteOne('bv', 'k');
+
+    expect(result).toEqual({ deleteMarker: true, versionId: 'marker-v7' });
+    expect(events.enqueueInTx).toHaveBeenCalledWith(fakeEm, expect.objectContaining({
+      type: 'object.deleted',
+      versionId: 'marker-v7',
+      size: 0,
+      etag: '',
+    }));
+    expect(events.emitInProcess).toHaveBeenCalledTimes(1);
+    expect(events.emitInProcess.mock.calls[0][0]).toMatchObject({ type: 'object.deleted', versionId: 'marker-v7' });
+  });
+
+  it('versioned delete of an already-hidden key emits nothing', async () => {
+    const events = mkEvents();
+    const versions = { writeDeleteMarker: jest.fn() } as unknown as VersionStoreService;
+    const objects = { findCurrentVersion: jest.fn().mockResolvedValue(null) } as unknown as ObjectRepository;
+    const buckets = { hasVersionHistory: jest.fn().mockResolvedValue(true) } as unknown as BucketRepository;
+    const svc = new ObjectService({} as ObjectWriterService, buckets, objects, BLOBS, versions, SERIALIZER, SSE, events as never);
+
+    const result = await svc.deleteOne('bv', 'gone');
+
+    expect(result).toEqual({});
+    expect(versions.writeDeleteMarker).not.toHaveBeenCalled();
+    expect(events.emitInProcess).not.toHaveBeenCalled();
+  });
+});

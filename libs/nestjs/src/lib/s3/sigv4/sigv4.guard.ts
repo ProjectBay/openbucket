@@ -7,6 +7,7 @@ import {
   RequestTimeTooSkewedError,
   SignatureDoesNotMatchError,
 } from '../errors/s3-error';
+import { isPostObjectForm } from '../routing/operation-resolver';
 import { KeyService } from './key.service';
 import { verifyPresigned } from './presigned';
 import { assertMandatorySignedHeaders } from './signed-headers';
@@ -42,6 +43,17 @@ export class SigV4Guard implements CanActivate {
     // than a misleading 403 from SigV4. (Preserved from the STORY-0100 stub.)
     if (req.openbucket?.kind !== 's3') {
       throw new NotFoundException();
+    }
+
+    // Browser POST-policy upload (STORY-0802): authentication lives in the form
+    // body (POST policy + signature), not in a header/query signature. Defer the
+    // SigV4 check to `PostObjectInterceptor`, which is the fail-closed auth for
+    // this one shape (verifies the signature + policy over the streamed body and
+    // rejects with a generic SignatureDoesNotMatch on any mismatch). Kept tightly
+    // scoped to `POST` + bucket-scope + `multipart/form-data` + no `?delete`; every
+    // other request still flows through checkHeader/checkPresigned (no bypass).
+    if (isPostObjectForm(req)) {
+      return true;
     }
 
     // Chunked-upload signing: STREAMING-AWS4-HMAC-SHA256-PAYLOAD (signed chunks,

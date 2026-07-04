@@ -10,6 +10,7 @@ import { LifecycleService } from '../domain/lifecycle/lifecycle.service';
 import { MultipartService } from '../domain/multipart/multipart.service';
 import { ObjectService } from '../domain/objects/object.service';
 import { BlobStore } from '../storage/blob-store';
+import { DerivativeCacheService } from '../storage/derivative-cache.service';
 import { KeyService as StorageKeyService } from '../storage/key.service';
 import { ObjectWriterService } from '../storage/object-writer.service';
 import { RecoveryService } from '../storage/recovery.service';
@@ -65,6 +66,8 @@ describe('S3 controller topology (TEST-0100)', () => {
       .overrideProvider(RecoveryService)
       .useValue({})
       .overrideProvider(VersionStoreService)
+      .useValue({})
+      .overrideProvider(DerivativeCacheService)
       .useValue({})
       .overrideProvider(StorageKeyService)
       .useValue({ getSecret: async () => null })
@@ -131,6 +134,11 @@ describe('S3 controller topology (TEST-0100)', () => {
     }) as unknown as import('express').Request;
   const fakeRes = () => ({}) as unknown as import('express').Response;
   const routes = new RouteResolver();
+  // Transform dispatch isn't exercised by the PUT/POST cases below; a stub that
+  // never claims a request keeps the GET path unaffected.
+  const transforms = {
+    isCandidate: () => false,
+  } as unknown as import('./transforms/image-transform.service').ImageTransformService;
 
   it('case 3: PUT /b/k?uploadId=u&partNumber=1 → MultipartService.uploadPart', () => {
     const objects = {} as ObjectService;
@@ -138,7 +146,7 @@ describe('S3 controller topology (TEST-0100)', () => {
       uploadPart: jest.fn().mockReturnValue('mp-uploadPart'),
       uploadPartCopy: jest.fn(),
     } as unknown as MultipartService;
-    const ctrl = new ObjectController(objects, multipart, routes);
+    const ctrl = new ObjectController(objects, multipart, routes, transforms);
     const result = ctrl.put(fakeReq({ uploadId: 'u', partNumber: '1' }), fakeRes());
     expect(result).toBe('mp-uploadPart');
     expect((multipart as unknown as { uploadPartCopy: jest.Mock }).uploadPartCopy).not.toHaveBeenCalled();
@@ -150,7 +158,7 @@ describe('S3 controller topology (TEST-0100)', () => {
       uploadPart: jest.fn(),
       uploadPartCopy: jest.fn().mockReturnValue('mp-uploadPartCopy'),
     } as unknown as MultipartService;
-    const ctrl = new ObjectController(objects, multipart, routes);
+    const ctrl = new ObjectController(objects, multipart, routes, transforms);
     const result = ctrl.put(
       fakeReq({ uploadId: 'u', partNumber: '1' }, { 'x-amz-copy-source': 'src/key' }),
       fakeRes(),
@@ -164,13 +172,13 @@ describe('S3 controller topology (TEST-0100)', () => {
     const multipart = {
       createUpload: jest.fn().mockReturnValue('mp-createUpload'),
     } as unknown as MultipartService;
-    const ctrl = new ObjectController(objects, multipart, routes);
+    const ctrl = new ObjectController(objects, multipart, routes, transforms);
     const result = await ctrl.post(fakeReq({ uploads: '' }), fakeRes());
     expect(result).toBe('mp-createUpload');
   });
 
   it('case 6: POST /b/k?select → throws NotImplementedError("SelectObjectContent")', async () => {
-    const ctrl = new ObjectController({} as ObjectService, {} as MultipartService, routes);
+    const ctrl = new ObjectController({} as ObjectService, {} as MultipartService, routes, transforms);
     await expect(ctrl.post(fakeReq({ select: '' }), fakeRes())).rejects.toBeInstanceOf(
       NotImplementedError,
     );

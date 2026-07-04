@@ -15,8 +15,10 @@ import type { Request, Response } from 'express';
 
 import { BucketService, DeleteEntry } from '../../domain/buckets/bucket.service';
 import { MultipartService } from '../../domain/multipart/multipart.service';
+import { ObjectService } from '../../domain/objects/object.service';
 import { PolicyAuthorizationGuard } from '../authz/policy-authorization.guard';
 import { S3ExceptionFilter } from '../errors/s3-exception.filter';
+import { PostObjectInterceptor } from '../object/post-object.interceptor';
 import { RouteResolver } from '../routing/route-resolver';
 import { S3Throttled } from '../s3-throttle';
 import { SigV4Guard } from '../sigv4/sigv4.guard';
@@ -38,6 +40,7 @@ export class BucketController {
   constructor(
     private readonly buckets: BucketService,
     private readonly multipart: MultipartService,
+    private readonly objects: ObjectService,
     private readonly routes: RouteResolver,
   ) {}
 
@@ -84,12 +87,20 @@ export class BucketController {
   }
 
   @Post()
+  @UseInterceptors(PostObjectInterceptor)
   async post(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<unknown> {
     const { bucket } = this.routes.resolve(req);
     const q = req.query as Record<string, string | undefined>;
     if ('delete' in q) {
       const { entries, quiet } = this.readDeleteBody(req);
       return this.buckets.bulkDelete(res, bucket, entries, quiet);
+    }
+    // Browser-form direct upload (STORY-0802): the key rides in a form field, so
+    // this is bucket-scope. PostObjectInterceptor (above) has already parsed +
+    // authenticated the multipart body onto req.openbucketPutCtx/openbucketPost.
+    const ct = req.headers['content-type'];
+    if (typeof ct === 'string' && ct.toLowerCase().startsWith('multipart/form-data')) {
+      return this.objects.postObject(req, res, bucket);
     }
     return this.buckets.createBucket(req, res, bucket);
   }
