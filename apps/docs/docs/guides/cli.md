@@ -23,7 +23,7 @@ npx openbucket buckets ls
 
 That's it. The password is exchanged for a short-lived bearer token in memory, the request goes out, and you get a table back.
 
-:::note The endpoint is your admin base URL
+:::note[The endpoint is your admin base URL]
 `OPENBUCKET_ENDPOINT` is the host **plus `mountPath`** — the same base the admin API lives under (`<endpoint>/api/admin/*`). Standalone at the root is `http://your-host:9000`; embedded is `http://your-host/storage`. The default `http://127.0.0.1:3900` matches a local dev server.
 :::
 
@@ -40,7 +40,7 @@ Everything is set by env var or flag, with **flag over env** precedence:
 
 **The password is never a flag.** It's read only from `OPENBUCKET_PASSWORD` or an interactive, non-echoing prompt — so it can't land on `argv` or in `ps` output. Set `OPENBUCKET_TOKEN` to reuse an existing bearer token and skip login entirely (handy in CI, where there's no TTY to prompt).
 
-:::warning Plaintext credentials
+:::warning[Plaintext credentials]
 The CLI refuses to send credentials over plain `http://` to a **non-loopback** host. Use `https`, or — if you really mean it on a trusted network — pass `--insecure`.
 :::
 
@@ -84,7 +84,7 @@ scope           prefix:reports/2026/
 
 Omit `--scope` for an unrestricted (root-role) key. The scope shorthand is parsed and validated client-side, so a malformed shape fails fast without hitting the API.
 
-:::tip Capture the secret in CI
+:::tip[Capture the secret in CI]
 Use `--json` and read the field: `openbucket keys create --label ci --json | jq -r .secretAccessKey`. The redactor still keeps the secret out of every error path — it only ever appears on this one success line.
 :::
 
@@ -124,7 +124,7 @@ Scriptable and stable:
 
 Data goes to **stdout**; human-readable errors go to **stderr**, run through a central redactor that strips bearer tokens, JWTs, and `secretAccessKey` / `password` values before anything is printed. A `429` is surfaced but never auto-retried (that would only deepen the login throttle).
 
-:::note Zero dependencies
+:::note[Zero dependencies]
 The CLI is built entirely on Node built-ins (`fetch`, `parseArgs`, `readline`) — installing `@openbucket/nestjs` drags nothing extra into your tree for it.
 :::
 

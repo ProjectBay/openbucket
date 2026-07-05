@@ -15,7 +15,13 @@ import { type Env, loadEnv } from './env.schema';
  * the env schema only make sense for raw string env input.
  */
 export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
-  if (!opts) return loadEnv(process.env);
+  // Standalone marker: no options, OR a mount-only options object (the standalone
+  // MOUNT_PATH boot provides `OPEN_BUCKET_OPTIONS` carrying just `mountPath` so
+  // the mount-aware consumers read the prefix from the same token as the library
+  // — that object deliberately omits `rootCredentials`). Either way, source the
+  // whole config from `process.env` as before; the mapping below is only for a
+  // real `forRoot(options)` host, which always resolves `rootCredentials`.
+  if (!opts || !opts.rootCredentials) return loadEnv(process.env);
   return {
     // App-level (the host owns its process/listener/logger; sensible defaults).
     NODE_ENV: (process.env.NODE_ENV as Env['NODE_ENV']) || 'production',
@@ -23,6 +29,11 @@ export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
     LOG_LEVEL: 'info',
     SHUTDOWN_DRAIN_MS: 30_000,
 
+    // Route prefix everything mounts under. The library carries it on the
+    // OPEN_BUCKET_OPTIONS token (mount-aware consumers read it there); mapping it
+    // into the env-shaped config keeps `AppConfigService.mountPath` consistent in
+    // both modes.
+    MOUNT_PATH: opts.mountPath,
     DATA_DIR: opts.dataDir,
     JWT_SECRET: opts.admin?.jwtSecret ?? '',
     JWT_ACCESS_TTL_SECONDS: opts.admin?.jwtAccessTtl ?? 900,

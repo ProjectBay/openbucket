@@ -20,7 +20,7 @@ The password is read from `$OPENBUCKET_PASSWORD` or an interactive non-echoing
 prompt — **never** a flag. Set `$OPENBUCKET_TOKEN` to reuse a bearer token and
 skip login entirely.
 
-:::note Default endpoint
+:::note[Default endpoint]
 `--endpoint` defaults to `http://127.0.0.1:3900` (the dev-serve port). For a
 standalone Docker instance, pass `--endpoint http://127.0.0.1:9000` or set
 `$OPENBUCKET_ENDPOINT`.
@@ -69,7 +69,7 @@ openbucket buckets ls --json
 openbucket keys create --label tenant-42 --scope prefix:uploads/tenant-42/
 ```
 
-:::warning The secret is shown once
+:::warning[The secret is shown once]
 `keys create` prints `secretAccessKey` exactly once — capture it immediately.
 Under `--json` the whole created-key DTO is emitted so it can be captured
 machine-readably.
@@ -87,7 +87,7 @@ openbucket backup create -o nightly.zip
 openbucket backup restore -f nightly.zip --yes
 ```
 
-:::warning Restore resets the target
+:::warning[Restore resets the target]
 `backup restore` resets the instance (or the named bucket) before restoring. It
 issues **no request at all** — not even a login — unless you pass `--yes`.
 :::

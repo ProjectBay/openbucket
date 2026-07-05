@@ -89,7 +89,7 @@ validate: {
 
 A rejected upload throws `UploadValidationError` with a stable `code` (`too_large`, `active_content`, `type_not_allowed`, `no_content_type`, `invalid_key`) and a `statusHint` of `400`.
 
-:::warning Map rejections to HTTP 400
+:::warning[Map rejections to HTTP 400]
 `UploadValidationError` is not an HTTP exception. Catch it and map it, or use the ready-made filter (see the multer section):
 
 ```ts
@@ -118,7 +118,7 @@ keyStrategy: (ctx) => `tenant/${tenantId}/${randomUUID()}${ctx.ext}`,
 
 The `sha256` strategy is idempotent: re-uploading identical bytes lands on the same key and returns the existing object. Give an explicit `key` instead of a strategy to write to a fixed path (it wins over `keyStrategy`).
 
-:::info Every key is sanitized
+:::info[Every key is sanitized]
 Custom key functions and the `'original'` strategy pass through `assertSafeKey`, which rejects empty keys, a leading `/`, `.`/`..` traversal segments, control characters, and over-long keys/segments. A raw client filename is never used verbatim.
 :::
 
@@ -203,7 +203,7 @@ export function OpenBucketFileInterceptor(
 
 The engine's `bucket`, `key`, and `validate` options can each be a static value or a `(req, file) => …` function, so you can derive the bucket or key per request. If a later part of the request fails, multer calls the engine's rollback, which deletes the already-committed object.
 
-:::tip Pair the two size caps
+:::tip[Pair the two size caps]
 Set `validate.maxBytes` (enforced mid-write, after busboy) alongside multer's own `limits.fileSize` (an early busboy-layer cut-off) for defense in depth.
 :::
 

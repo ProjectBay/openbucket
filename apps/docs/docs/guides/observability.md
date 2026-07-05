@@ -41,7 +41,7 @@ curl http://localhost:3000/storage/metrics
 
 You get standard Prometheus text exposition (`Content-Type: text/plain; version=0.0.4`) with every `openbucket_*` family below.
 
-:::note Where the endpoint lives
+:::note[Where the endpoint lives]
 The route is always `<mountPath>/metrics`. Standalone mounts at the root, so it is `/metrics`. Embedded, it sits under your `mountPath` (default `/storage`) — e.g. `/storage/metrics`.
 :::
 
@@ -72,7 +72,7 @@ Then scrape with the bearer header:
 curl -H "Authorization: Bearer $METRICS_TOKEN" http://localhost:9000/metrics
 ```
 
-:::tip The token is never logged
+:::tip[The token is never logged]
 The bearer header is redacted by the same pino redaction path as every other credential — it never lands in a log line, an error message, or a span attribute.
 :::
 
@@ -126,7 +126,7 @@ scrape_configs:
       - targets: ['openbucket:9000']
 ```
 
-:::warning Rate limits apply
+:::warning[Rate limits apply]
 The scrape is subject to the admin throttler (100 requests/min). A 15–30s scrape interval is plenty and stays well under the bound.
 :::
 
@@ -196,7 +196,7 @@ Even with the api installed, spans do nothing until an SDK registers a global tr
 
 OpenBucket wraps request handling in a span named against the `openbucket` tracer. Span attributes hold to the **same redaction posture as logs**: only bounded, non-sensitive dimensions (`method`, `route_class`, `surface`) and the final `http.status_code` — never the URL, object key, bucket, or any header or credential.
 
-:::info Why the eval require
+:::info[Why the eval require]
 The library resolves `@opentelemetry/api` dynamically at runtime so neither `tsc` nor a host webpack bundle needs the (possibly absent) package. Hosts that never opt in pay nothing and the bundle builds and boots without OTel installed.
 :::
 

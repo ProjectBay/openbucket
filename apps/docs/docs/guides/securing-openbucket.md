@@ -38,7 +38,7 @@ Generate real ones:
 openssl rand -base64 48
 ```
 
-:::tip Set KEY_ENCRYPTION_SECRET before you mint scoped keys
+:::tip[Set KEY_ENCRYPTION_SECRET before you mint scoped keys]
 Scoped sub-key secrets are encrypted at rest with the instance KEK derived from
 `KEY_ENCRYPTION_SECRET`. Set it early — rotating it later invalidates existing
 encrypted sub-key secrets.
@@ -105,7 +105,7 @@ sending an `X-Forwarded-Proto` header from off-box. Terminate TLS in nginx /
 Caddy / your load balancer on the same host (or a trusted network path) and
 forward to OpenBucket over loopback.
 
-:::warning Don't widen the proxy trust blindly
+:::warning[Don't widen the proxy trust blindly]
 The `loopback`-only trust is deliberate. If you front OpenBucket from a proxy on a
 different host, make sure the network path is trusted before relying on
 `aws:SecureTransport` — a spoofable forwarded-proto header would let a plaintext
@@ -162,7 +162,7 @@ encryption of secrets, a restrictive CSP, and fail-closed authorization. It is a
 solid baseline for a self-hosted store — not a substitute for your own threat
 model, network segmentation, and OS-level hardening of the data volume.
 
-:::note Lock down the observability surface too
+:::note[Lock down the observability surface too]
 Leave `METRICS_MODE=off` unless you need a Prometheus scrape; when you do, prefer
 `token` mode with a strong `METRICS_TOKEN` over `public`. The `/metrics` endpoint
 never emits raw URLs, keys, or IPs, but the token keeps casual scrapers out.

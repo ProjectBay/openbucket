@@ -36,7 +36,7 @@ interface PresignOptions {
 - `expiresIn` is clamped to `[1, 7 days]` — 7 days is the S3 maximum for a presigned URL.
 - `baseUrl` is the origin your clients actually reach the store at (scheme + host); the bucket, key, and configured `mountPath` are appended for you. It defaults to `` `https://${endpoint}` `` when the module's `endpoint` option is set; otherwise `baseUrl` is required (a call without either throws).
 
-:::note Store the key, presign on read
+:::note[Store the key, presign on read]
 Persist the stable `{ bucket, key }` in your database — never a signed URL, which expires. Mint a fresh URL each time you read the row. It's a pure hash, so there's no cost to re-minting, and nothing ever goes stale.
 :::
 
@@ -89,7 +89,7 @@ await fetch(url, { method: 'POST', body: form });
 | `successActionStatus` / `successActionRedirect` | The `2xx` status or redirect the browser gets on success. |
 | `conditions` | Raw extra policy conditions (an escape hatch). |
 
-:::info Every POST token is size-capped
+:::info[Every POST token is size-capped]
 If you omit `contentLengthRange`, OpenBucket injects one defaulted to the server's `maxObjectSizeMb` cap, so a minted token can never authorize an object larger than the server allows. The size range is re-enforced on the streamed bytes on the wire.
 :::
 
@@ -119,7 +119,7 @@ https://files.example.com/<mountPath>/my-bucket/<key>
 
 (In the standalone app `mountPath` is empty, so the URL is `https://host/my-bucket/<key>`.) These URLs are also what let [image transforms](./image-transforms.md) work from a plain `<img>` tag.
 
-:::warning A public bucket is public
+:::warning[A public bucket is public]
 Anonymous `s3:GetObject` means every object in the bucket is world-readable — put only assets you're happy to expose there. For anything private, use the **store the key, presign on read** pattern instead. And remember: a presigned URL signs its full query string, so you can't append extra params (like transform `?w=`) to one after minting.
 :::
 

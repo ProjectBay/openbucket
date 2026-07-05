@@ -11,7 +11,7 @@ Cloudflare R2, Backblaze B2, MinIO), and — optionally — offload cold objects
 that same target while still serving them transparently on read. Both features
 share one remote target and are off by default.
 
-:::info One-way, not a cluster
+:::info[One-way, not a cluster]
 Replication is **asynchronous, one-way mirroring** of your visible object state
 to a remote target. It is not multi-primary clustering, not a quorum, and not a
 read replica you can serve from. OpenBucket stays the single source of truth; the
@@ -76,7 +76,7 @@ Tuning knobs: `OB_REPLICATION_DRAIN_INTERVAL_MS` (default 5000),
 `OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES` (switch to multipart streaming above
 this size, default 64 MiB).
 
-:::warning The wire carries plaintext
+:::warning[The wire carries plaintext]
 The worker sends object **plaintext** (SSE-S3 is decrypted before the object
 leaves the box). Use an `https` endpoint — a plaintext `http://` endpoint logs a
 boot-time warning because replicated bytes would traverse the network
@@ -146,14 +146,14 @@ local free space are bounded so a hot key — or a lying remote — can't exhaus
 box. Objects at or under `OPENBUCKET_TIER_INLINE_MAX_BYTES` are proxied inline;
 larger objects are served via a short-lived presigned redirect to the remote.
 
-:::note Tiering is env-only and needs a remote
+:::note[Tiering is env-only and needs a remote]
 There's no `forRoot` option for tiering — configure it with the `OPENBUCKET_TIER_*`
 environment variables. Tiering reuses the replication target, so a remote must be
 configured; with no remote the feature reports disabled and both offload and
 read-through are inert (a single-node install behaves exactly as before).
 :::
 
-:::warning Cold reads are slower and metered
+:::warning[Cold reads are slower and metered]
 A read of a tiered object pays a remote round-trip (and, for `GLACIER` /
 `DEEP_ARCHIVE`-class targets, whatever retrieval latency and cost that tier
 imposes). Tier objects you rarely read — not your hot path.

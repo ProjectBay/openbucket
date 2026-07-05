@@ -45,7 +45,7 @@ export class AppModule {}
 
 Start your app and point any S3 client at `http://your-host:3000/storage` (path-style, root credentials). The admin console is at `http://your-host:3000/storage/admin`.
 
-:::tip Generating the argon2id hash
+:::tip[Generating the argon2id hash]
 `admin.passwordHash` is an argon2id hash, never a plaintext password. Generate one with the repo helper: `node scripts/hash-password.mjs 'your-admin-password'`. `jwtSecret` and `rootCredentials.secretAccessKey` must each be at least 32 chars, and `passwordHash` must be a real argon2id string — the module validates all of this at boot and throws if it's wrong.
 :::
 
@@ -62,7 +62,7 @@ Everything lives under `mountPath`, so OpenBucket's greedy S3 routes never shado
 
 Your own routes are untouched, and OpenBucket's exception filter only renders errors for requests under `mountPath`.
 
-:::warning Don't body-parse the mount
+:::warning[Don't body-parse the mount]
 The S3 protocol needs raw, unbuffered request bodies. Do **not** apply a global JSON/body parser to `mountPath` in your host app. Also call `app.enableShutdownHooks()` in your bootstrap so OpenBucket's in-flight drain runs on `SIGTERM`.
 :::
 
@@ -127,7 +127,7 @@ OpenBucketModule.forRoot({
 });
 ```
 
-:::note Partial admin blocks are rejected
+:::note[Partial admin blocks are rejected]
 A present-but-partial `admin` block fails at startup — it would otherwise sign JWTs with an empty secret. Supply all three of `username`, `passwordHash`, and `jwtSecret`, or omit the block entirely.
 :::
 
@@ -153,7 +153,7 @@ export class FilesService {
 }
 ```
 
-:::info Requirements
+:::info[Requirements]
 `@openbucket/nestjs` targets **Node 20.19+** and NestJS 11 (`@nestjs/common`, `@nestjs/core`, and `@nestjs/platform-express` are peer dependencies).
 :::
 

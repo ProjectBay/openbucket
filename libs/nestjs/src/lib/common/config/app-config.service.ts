@@ -14,6 +14,14 @@ export class AppConfigService {
   get nodeEnv(): Env['NODE_ENV'] { return this.raw.get('NODE_ENV', { infer: true }); }
   get port(): number { return this.raw.get('PORT', { infer: true }); }
   get logLevel(): Env['LOG_LEVEL'] { return this.raw.get('LOG_LEVEL', { infer: true }); }
+  /**
+   * Route prefix everything mounts under (normalized: leading slash, no trailing
+   * slash; `''` = root). Standalone reads `MOUNT_PATH`; the embedded module maps
+   * `forRoot({ mountPath })` here via config-source. Mount-aware consumers read
+   * the resolved value from the `OPEN_BUCKET_OPTIONS` token, which the standalone
+   * `MOUNT_PATH` boot path provides — this getter is the config-layer twin.
+   */
+  get mountPath(): string { return this.raw.get('MOUNT_PATH', { infer: true }); }
   get dataDir(): string { return this.raw.get('DATA_DIR', { infer: true }); }
   get jwtSecret(): string { return this.raw.get('JWT_SECRET', { infer: true }); }
   get jwtAccessTtl(): number { return this.raw.get('JWT_ACCESS_TTL_SECONDS', { infer: true }); }

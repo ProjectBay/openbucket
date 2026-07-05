@@ -38,7 +38,7 @@ Access tokens are short-lived (default 900 s); refresh tokens live in the
 `ob_refresh` cookie (default 7 days). Send the access token as
 `Authorization: Bearer <token>` on every non-public call.
 
-:::info Typed client & OpenAPI
+:::info[Typed client & OpenAPI]
 The backend exports an OpenAPI document, and [`@openbucket/api-client`](https://github.com/ProjectBay/openbucket/tree/main/libs/api-client)
 is generated from it (openapi-generator, `typescript-angular`) — one typed service
 per endpoint group. The admin console consumes it directly. Regenerate with
@@ -73,7 +73,7 @@ per endpoint group. The admin console consumes it directly. Regenerate with
 - **Rate limiting.** The admin plane is throttled (login is 5/min). A `429`
   carries `Retry-After`; clients should not hammer-retry.
 
-:::note Errors
+:::note[Errors]
 Errors use a JSON envelope (`{ error, message, statusCode }`) with S3-style HTTP
 codes — `401` (unauthenticated), `403` (read-only or forbidden), `404`,
 `409` (e.g. `BucketNotEmpty`), `429` (rate limited).

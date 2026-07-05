@@ -9,14 +9,43 @@ import { getMikroORMToken } from '@mikro-orm/nestjs';
 import { Logger } from 'nestjs-pino';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { AppConfigService, OpenBucketCoreModule, OPEN_BUCKET_ORM_CONTEXT } from '@openbucket/nestjs';
+import {
+  AppConfigService,
+  OpenBucketCoreModule,
+  OpenBucketStandaloneModule,
+  OPEN_BUCKET_ORM_CONTEXT,
+  normalizeMount,
+  rewriteBaseHref,
+} from '@openbucket/nestjs';
 import { configureBodyParsers } from './bootstrap/body-parser';
 
 async function bootstrap(): Promise<void> {
   const expressInstance: Express = express();
+
+  // Optional subpath the whole server mounts under (S3 + admin API + admin SPA +
+  // health/metrics), for running behind a reverse proxy at e.g.
+  // `https://example.com/storage/…`. Read straight from process.env here because
+  // it must be known BEFORE the module graph is built (RouterModule wires the
+  // prefix at module-config time, before ConfigService exists). Normalized with
+  // the SAME helper the env schema uses, so both agree. Empty ⇒ root (unchanged).
+  const mountPath = normalizeMount(process.env.MOUNT_PATH ?? '');
+  // NOTE (trusted-proxy `X-Forwarded-Prefix`): MOUNT_PATH is intentionally the
+  // single, authoritative prefix. Route registration is wired ONCE at boot
+  // (RouterModule) and the admin JWT guard's prefix is derived from it, so a
+  // per-request forwarded header could not relocate the guarded routes and would
+  // be a footgun (a spoofed prefix must never move the admin API out from under
+  // its guard). If forwarded-prefix awareness is ever needed, gate it strictly on
+  // Express `trust proxy` AND keep MOUNT_PATH authoritative for routing — do not
+  // let the header override it. Left as a deliberate non-feature for now.
+  // Root: boot the core module directly (the pre-existing path, unchanged). Under
+  // a mount: the standalone wrapper prefixes every route via RouterModule and
+  // provides the mount-aware OPEN_BUCKET_OPTIONS token. See OpenBucketStandaloneModule.
+  const rootModule = mountPath
+    ? OpenBucketStandaloneModule.forRoot(mountPath)
+    : OpenBucketCoreModule;
 
   // Disable Express's defaults. Body parsing is opt-in per route (§1.2.3).
   expressInstance.disable('x-powered-by');
@@ -34,7 +63,9 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(
     // The standalone app always serves the admin surface — the env schema (§1.7)
     // requires JWT_SECRET + ADMIN_PASSWORD_HASH, so admin is never headless here.
-    OpenBucketCoreModule,
+    // At root this is OpenBucketCoreModule; under a MOUNT_PATH it is the wrapper
+    // that prefixes the whole tree (see above).
+    rootModule,
     new ExpressAdapter(expressInstance),
     {
       bufferLogs: true, // hold logs until Pino is bound
@@ -104,14 +135,24 @@ async function bootstrap(): Promise<void> {
         res.setHeader('Cache-Control', 'public, max-age=300');
       }
     };
+    // Mount the SPA under `<mountPath>/admin` (root ⇒ `/admin`, unchanged). Hashed
+    // assets are served straight from disk; `index: false` routes the shell
+    // through the handler below so its `<base href>` is rewritten to
+    // `<mountPath>/admin/` — the SAME rewrite the embedded SpaController applies,
+    // reused here (a no-op at root, where the build-time href is already
+    // `/admin/`). The shell is read + rewritten once at boot (the bundle is
+    // immutable). Registered BEFORE app.listen() maps the greedy S3 `:bucket`
+    // routes, so `<mountPath>/admin/*` wins over an S3 bucket named "admin".
+    const adminBase = `${mountPath}/admin`;
+    const shellHtml = rewriteBaseHref(readFileSync(indexHtml, 'utf8'), mountPath);
     expressInstance.use(
-      '/admin',
-      express.static(spaRoot, { index: 'index.html', setHeaders: cacheHeaders }),
+      adminBase,
+      express.static(spaRoot, { index: false, setHeaders: cacheHeaders }),
     );
-    // SPA client-side routing: any unmatched /admin/* path falls back to the shell.
-    expressInstance.get('/admin/{*splat}', (_req, res) => {
+    // The mount root + any unmatched client-side route under it → the SPA shell.
+    expressInstance.get([adminBase, `${adminBase}/{*splat}`], (_req, res) => {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.sendFile(indexHtml);
+      res.type('html').send(shellHtml);
     });
   }
 

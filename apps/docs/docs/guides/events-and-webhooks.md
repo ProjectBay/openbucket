@@ -34,7 +34,7 @@ Register the listener class as a provider in your module and you're done. Three 
 | `@OnObjectDeleted()` | `DeleteObject` / bulk delete / delete-marker |
 | `@OnMultipartCompleted()` | `CompleteMultipartUpload` |
 
-:::warning In-process handlers run with your app's full privileges
+:::warning[In-process handlers run with your app's full privileges]
 OpenBucket does **not** sandbox these — they are your code. They are dispatched fire-and-forget (never awaited), so a handler that throws or hangs can't stall or fail the write. But that also means a handler failure is logged and dropped, not retried. For guaranteed delivery, use webhooks.
 :::
 
@@ -87,7 +87,7 @@ WEBHOOK_POLL_MS=15000
 
 Webhooks are **off** unless a `url` (or `WEBHOOK_URL`) is set. When present, the outbox and the delivery runner turn on; in-process handlers keep working either way.
 
-:::note Config is fail-closed at boot
+:::note[Config is fail-closed at boot]
 The URL must be `https` (or a loopback host), and the secret must be at least 32 characters, or the app refuses to boot. This is deliberate — no weak-secret or plaintext webhook can slip into production.
 :::
 
@@ -128,7 +128,7 @@ function verify(rawBody: string, header: string, secret: string): boolean {
 }
 ```
 
-:::warning Sign the raw body, and dedupe on the delivery id
+:::warning[Sign the raw body, and dedupe on the delivery id]
 Compute the HMAC over the **unparsed** request bytes — re-serializing the JSON will change the bytes and break the signature. Because delivery is **at-least-once** (a crash after your `2xx` but before the row is marked delivered re-sends), your receiver must be idempotent: dedupe on the `X-OpenBucket-Delivery` id.
 :::
 
@@ -136,7 +136,7 @@ Compute the HMAC over the **unparsed** request bytes — re-serializing the JSON
 
 A non-`2xx` response, a network error, or a timeout is retried with full-jitter exponential backoff (base 2s, capped at 1h). After `maxAttempts` the row is dead-lettered to a `failed` state and no longer retried. Terminal rows (delivered or failed) are pruned after 7 days. Events are processed in due-time order — **best-effort, not strictly per-key** — so don't rely on strict ordering.
 
-:::info SSRF-safe by construction
+:::info[SSRF-safe by construction]
 The webhook URL is operator-configured (never tenant-controlled) and validated `https`/loopback at config time. Redirects are **not** followed — any `3xx` is treated as a failure. The response body is discarded (only the status matters), and the signing secret is never logged.
 :::
 

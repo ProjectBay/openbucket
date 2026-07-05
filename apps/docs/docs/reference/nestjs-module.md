@@ -10,7 +10,7 @@ embed an **S3-compatible object store** (wire protocol, admin JSON API, and admi
 console SPA) directly inside your own NestJS application, configured in code. For a
 quick orientation, start with [Embedding in NestJS](../getting-started/quickstart-embed.md).
 
-:::tip Deep-dive references
+:::tip[Deep-dive references]
 This page covers wiring the module. For the details, see the focused guides:
 [Configuration](./configuration.md) (every option + env var),
 [OpenBucketService API](./openbucket-service.md) (the injectable facade),
@@ -153,7 +153,7 @@ The facade covers: `putObject`, `getObjectStream`, `getObjectBuffer`, `headObjec
 domain errors (`NoSuchBucketError`, `NoSuchKeyError`, …) — catch them or pre-check
 with `bucketExists` / `headObject`.
 
-:::tip Presigned URLs
+:::tip[Presigned URLs]
 Presigned URLs are signed for the public origin you pass as `baseUrl` (scheme +
 host); the configured `mountPath` and the object path are appended for you, so the
 URL verifies against the mounted S3 routes. `baseUrl` defaults to the `endpoint`
@@ -288,7 +288,7 @@ const files = await this.db.file.findMany({ where: { ownerId } });
 return files.map((f) => this.toDto(f)); // each gets a fresh 1-hour URL
 ```
 
-:::tip Storing a plain URL column
+:::tip[Storing a plain URL column]
 Either store `presignGetUrl(...)` with a longer `expiresIn` (max **7 days**) and
 re-mint it periodically, or — for a bucket you deliberately make public (an
 anonymous-GET bucket policy) — store the stable path-style URL

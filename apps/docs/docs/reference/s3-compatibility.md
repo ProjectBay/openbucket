@@ -114,7 +114,7 @@ against the real `aws` CLI, MinIO's `mc`, and `s3cmd`.
 
 ## Known limitations
 
-:::warning Path-style addressing only
+:::warning[Path-style addressing only]
 Virtual-host-style addressing (`bucket.host/key`) is **not** supported. Always set
 `forcePathStyle: true` in your SDK — requests go to `host/bucket/key`.
 :::
@@ -132,7 +132,7 @@ Virtual-host-style addressing (`bucket.host/key`) is **not** supported. Always s
 - **Region.** OpenBucket reports a single configured region (default `us-east-1`);
   it does not emulate cross-region behaviour or redirects.
 
-:::tip Compatibility beyond the AWS SDK
+:::tip[Compatibility beyond the AWS SDK]
 The conformance suite runs the same object round-trips through the `aws` CLI,
 MinIO's `mc`, and `s3cmd`, so those tools work against OpenBucket out of the box —
 point them at the endpoint with path-style addressing and the root credentials.

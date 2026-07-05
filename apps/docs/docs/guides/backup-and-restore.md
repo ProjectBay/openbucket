@@ -56,7 +56,7 @@ curl -sS -X POST http://localhost:9000/api/admin/buckets/acme-data/restore \
 Both return a small JSON summary — `bucketsRestored` / `objectsRestored` for the
 instance route, `objectsRestored` for the bucket route.
 
-:::warning Restore is a reset, not a merge
+:::warning[Restore is a reset, not a merge]
 Restoring the instance **resets the instance**; restoring a bucket **resets that
 bucket** to exactly the snapshot's contents. It is not additive — anything not in
 the archive is gone. Restore into a fresh instance, or be certain you mean to
@@ -141,13 +141,13 @@ copy each finished snapshot to your configured [replication
 target](./replication-and-tiering.md) under a reserved prefix — so a lost data
 volume doesn't take your backups with it.
 
-:::note Enable replication first
+:::note[Enable replication first]
 If you set the push flag but replication is off, the runner logs a boot-time
 warning and writes snapshots locally only — the push is a no-op until you
 configure `OB_REPLICATION_*`.
 :::
 
-:::warning Snapshots are plaintext
+:::warning[Snapshots are plaintext]
 A `.zip` contains **decrypted** object bytes (SSE-S3 is a rest-encryption of the
 local blobs, not the archive). Snapshots are written `0o600` inside a `0o700`
 directory, but the archive itself inherits your data volume's trust boundary —

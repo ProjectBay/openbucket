@@ -18,7 +18,7 @@ GET /uploads/photo.jpg?w=400&format=webp
 
 That returns `photo.jpg` resized to 400px wide and re-encoded as WebP. The result is content-addressed and served with `Cache-Control: public, max-age=31536000, immutable`, so browsers and CDNs cache it indefinitely.
 
-:::info Transforms run on the GET route
+:::info[Transforms run on the GET route]
 The transform happens on an authorized S3 GET, not through `getObjectStream`. The simplest way to use it from an `<img>` tag is a public-read bucket — see [gotchas](#gotchas) below and [Sharing files](./sharing-files.md#permanent-links-public-buckets).
 :::
 
@@ -76,13 +76,13 @@ Transforms are **on by default** and every knob is a safety bound. In the standa
 
 Defense in depth is layered: the param parser bounds the canvas before decode, an input-byte cap refuses oversized sources, `limitInputPixels` stops decompression bombs, a counting semaphore caps parallelism, and the per-IP request throttle sits in front of all of it.
 
-:::warning Bad input is always a 400, never a 500
+:::warning[Bad input is always a 400, never a 500]
 An out-of-range dimension, an unknown format, a too-large source, or an undecodable image all return an S3-style `400` — never a `500` or an OOM. Authorization is unchanged: a transform request runs through the same `s3:GetObject` checks as a plain GET.
 :::
 
 ## Gotchas
 
-:::warning You can't append params to a presigned URL
+:::warning[You can't append params to a presigned URL]
 A presigned URL signs its entire query string. Tacking `?w=400` onto a minted presigned GET breaks the signature and the request is rejected. To use transforms, either:
 
 - serve from a **public-read bucket** so an anonymous `<img src>` GET works directly, or
@@ -91,7 +91,7 @@ A presigned URL signs its entire query string. Tacking `?w=400` onto a minted pr
 The public-bucket route is the usual choice for `<img>` tags. See [Sharing files](./sharing-files.md#permanent-links-public-buckets).
 :::
 
-:::note Non-images just pass through
+:::note[Non-images just pass through]
 If the object isn't an allow-listed raster type (or is an SVG), the transform params are ignored and the original bytes are served with the usual safe response headers. No error.
 :::
 

@@ -54,7 +54,7 @@ OpenBucket now listens on **`http://localhost:9000`**:
 - **Admin API** — `http://localhost:9000/api/admin`
 - **Health / readiness** — `/api/admin/health`, `/api/admin/ready`
 
-:::note Where the image comes from
+:::note[Where the image comes from]
 The standalone server image is published to **`ghcr.io/<owner>/openbucket`** on
 every `v*` release tag, with `:latest`, `:{major}.{minor}`, and exact `:{version}`
 tags (plus `linux/amd64` and `linux/arm64`). Pin an exact version in production;
@@ -90,7 +90,7 @@ The full, commented list lives in `.env.example` at the repo root (webhooks,
 replication, tiering, backups, metrics, analytics, and the DoS-guard limits). See
 the [configuration reference](../reference/nestjs-module.md) for every key.
 
-:::warning Weak secrets fail the boot, on purpose
+:::warning[Weak secrets fail the boot, on purpose]
 A short, all-same-character, or known-placeholder value for `JWT_SECRET` /
 `ROOT_SECRET_ACCESS_KEY` is rejected at startup (not a warning — a hard refusal).
 Generate real random values.
@@ -142,12 +142,54 @@ server {
 Set `OPENBUCKET_ENDPOINT=storage.example.com` so the store reports a DNS-safe
 public hostname for endpoint discovery.
 
-:::info Embedding under a path prefix
+:::info[Embedding under a path prefix]
 When you embed `@openbucket/nestjs` instead of running the container, everything
 mounts under `mountPath` (default `/storage`) — the S3 endpoint is
 `http(s)://<host>/storage`, the admin API is `<mountPath>/api/admin`, and the
 console is `<mountPath>/admin`. Your proxy just needs to forward that path prefix
 to your app. See the [NestJS module reference](../reference/nestjs-module.md).
+:::
+
+## Running behind a reverse proxy at a subpath
+
+To expose OpenBucket at a **subpath** — `https://example.com/storage/…` instead
+of a dedicated host or subdomain — set [`MOUNT_PATH`](../reference/configuration.md)
+on the container. Every surface moves under the prefix in lockstep: S3 becomes
+`https://example.com/storage/<bucket>/<key>`, the admin API
+`https://example.com/storage/api/admin`, the console
+`https://example.com/storage/admin` (its `<base href>` is rewritten to match),
+and the health/metrics endpoints follow too.
+
+```bash
+docker run -d --name openbucket \
+  -e MOUNT_PATH=/storage \
+  -e DATA_DIR=/data \
+  --env-file .env \
+  -v openbucket-data:/data \
+  ghcr.io/projectbay/openbucket:latest
+```
+
+Forward the prefix **as-is** — do not strip it, because SigV4 signs the full
+request path and the store verifies over the same path:
+
+```nginx
+location /storage/ {
+  proxy_set_header Host              $host;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_request_buffering off;
+  client_max_body_size    0;
+  proxy_pass http://127.0.0.1:9000;   # note: no trailing slash — keeps /storage/… intact
+}
+```
+
+Point your S3 client's `endpoint` at `https://example.com/storage` with path-style
+addressing, and probe health at `https://example.com/storage/api/admin/health`.
+
+:::tip[MOUNT_PATH is the authoritative prefix]
+The prefix comes from `MOUNT_PATH`, not from a forwarded header — so a
+misconfigured proxy can't relocate the admin API out from under its guard. Leave
+`MOUNT_PATH` unset to keep everything at the root, exactly as before. It is the
+standalone twin of `OpenBucketModule.forRoot({ mountPath })`.
 :::
 
 ## A minimal Kubernetes sketch
