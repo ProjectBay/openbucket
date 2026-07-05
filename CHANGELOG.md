@@ -9,6 +9,26 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.11] — 2026-07-05
+
+Feature release — multi-tenant access control (EPIC-11).
+
+### Added
+
+- **Scoped access keys.** An access key can be restricted to a bucket / key-prefix
+  (previously every key was root). Scope is enforced on the S3 path through the
+  bucket-policy evaluator — a request outside the key's scope is denied (403). Root
+  credentials remain unrestricted, so existing single-root deployments are
+  unchanged. The key secret is stored **encrypted at rest** (AES-256-GCM under an
+  HKDF-derived instance key — recoverable only to verify SigV4, never plaintext,
+  redacted from logs).
+- **Per-key management** — rotate/revoke endpoints, an effective-permissions +
+  policy-simulate endpoint, and a console scope builder.
+- **Multi-admin users & roles** — admin users now carry a role; a read-only admin
+  is blocked (403) from state-changing admin operations, while full-admins are
+  unaffected. Admin-users CRUD (API + console) with last-full-admin / no-self-delete
+  guardrails and immediate session eviction on change.
+
 ## [0.1.0-alpha.10] — 2026-07-05
 
 Feature release — durability & cloud replication (EPIC-10).
