@@ -46,8 +46,9 @@ management, **multi-admin users with full-admin / read-only roles**, per-bucket
 versioning / encryption /
 object-lock / lifecycle / CORS / policy editors, a **usage-analytics dashboard**
 (storage-over-time, per-bucket size breakdown, request/error charts, live request
-rate — from a background rollup with bounded retention), i18n (en/de), light/dark
-themes.
+rate — from a background rollup with bounded retention), a **persisted audit log**
+(every state-changing admin action is queryable in the console, keyset-paged, with
+bounded retention), i18n (en/de), light/dark themes.
 
 **Developer file pipeline** — on-the-fly **image transformations** on GET
 (`?w=&h=&fit=&format=&q=`, cached derivatives), **object event notifications**

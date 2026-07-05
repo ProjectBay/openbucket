@@ -58,6 +58,12 @@ export const sidebarConfig: SidebarConfig = {
           icon: 'lucideRefreshCw',
           url: '/replication',
         }),
+        createSidebarConfig.item({
+          id: 'audit',
+          title: 'sidebar.admin.audit',
+          icon: 'lucideScrollText',
+          url: '/audit',
+        }),
       ],
     }),
   ],

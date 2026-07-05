@@ -19,6 +19,7 @@ import {
   ReconcileJob,
   UsageSample,
   RequestMetricSample,
+  AuditLog,
 } from './persistence/index';
 
 /**
@@ -58,6 +59,7 @@ export default defineConfig({
     ReconcileJob,
     UsageSample,
     RequestMetricSample,
+    AuditLog,
   ],
 
   // ReflectMetadataProvider (not TsMorph): every entity property declares its

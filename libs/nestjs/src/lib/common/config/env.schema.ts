@@ -178,6 +178,17 @@ export const EnvSchema = z
     // sole bound on the telemetry tables' growth (EPIC-08 STORY-0704 posture).
     USAGE_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
 
+    // --- durable admin audit log (STORY-1103) ---
+    // Retention window for persisted audit events; the flush tick prunes older
+    // rows once per day. Bounds `audit_logs` growth.
+    AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+    // How often the flush tick drains the in-memory buffer to `audit_logs`.
+    // Floored so a misconfig can't hammer the DB (self-inflicted DoS).
+    AUDIT_FLUSH_MS: z.coerce.number().int().min(250).default(2000),
+    // Max buffered events before the oldest is dropped (drop-oldest DoS bound —
+    // a burst or stalled flusher can't exhaust the heap).
+    AUDIT_BUFFER_MAX: z.coerce.number().int().min(100).default(10_000),
+
     // --- storage quota / free-space guard (TASK-2140, CWE-770) ---
     // Refuse writes once the DATA_DIR volume has less than this many bytes free,
     // so a credential holder can't fill the disk shared with the SQLite metadata

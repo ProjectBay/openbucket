@@ -22,6 +22,7 @@ import { BackgroundModule } from './common/background/background.module';
 import { ShutdownModule } from './common/shutdown/shutdown.module';
 import { S3Module } from './s3/s3.module';
 import { AdminModule } from './admin/admin.module';
+import { AuditModule } from './admin/audit/audit.module';
 import { HealthModule } from './admin/health/health.module';
 import { TestModule } from './admin/_test/test.module';
 import { RequestClassifierMiddleware } from './common/middleware/request-classifier.middleware';
@@ -148,6 +149,12 @@ function buildCoreImports(adminEnabled: boolean): Array<Type | DynamicModule> {
     PersistenceModule,
     StorageModule,
     DomainModule,
+
+    // Durable admin-audit store (§5.9, STORY-1103). @Global — the shared
+    // AuditSink buffer backs every AuditService.emit; its AuditFlushRunner is
+    // collected by BackgroundModule's scheduler. Imported before BackgroundModule
+    // so the runner is resolvable when the SCHEDULED_TASKS factory injects it.
+    AuditModule,
 
     // In-process background tick scheduler (§4.9). Recurring runners register
     // themselves; on its own it schedules nothing.

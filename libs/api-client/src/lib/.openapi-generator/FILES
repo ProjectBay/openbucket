@@ -8,6 +8,8 @@ api/admin-users.serviceInterface.ts
 api/analytics.service.ts
 api/analytics.serviceInterface.ts
 api/api.ts
+api/audit-admin.service.ts
+api/audit-admin.serviceInterface.ts
 api/auth.service.ts
 api/auth.serviceInterface.ts
 api/buckets-admin.service.ts
@@ -27,6 +29,9 @@ encoder.ts
 git_push.sh
 index.ts
 model/admin-user-summary-dto.ts
+model/audit-catalog-dto.ts
+model/audit-event.ts
+model/audit-page-dto.ts
 model/bucket-breakdown-dto.ts
 model/bucket-breakdown-item-dto.ts
 model/bucket-policy-dto.ts

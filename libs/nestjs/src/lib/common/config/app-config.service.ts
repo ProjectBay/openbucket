@@ -32,6 +32,10 @@ export class AppConfigService {
   // --- usage analytics rollup (STORY-1102) ---
   get usageRollupIntervalMs(): number { return this.raw.get('USAGE_ROLLUP_INTERVAL_MS', { infer: true }); }
   get usageRetentionDays(): number { return this.raw.get('USAGE_RETENTION_DAYS', { infer: true }); }
+  // --- durable admin audit log (STORY-1103) ---
+  get auditRetentionDays(): number { return this.raw.get('AUDIT_RETENTION_DAYS', { infer: true }); }
+  get auditFlushMs(): number { return this.raw.get('AUDIT_FLUSH_MS', { infer: true }); }
+  get auditBufferMax(): number { return this.raw.get('AUDIT_BUFFER_MAX', { infer: true }); }
   get dataDirMinFreeBytes(): number { return this.raw.get('DATA_DIR_MIN_FREE_BYTES', { infer: true }); }
   get storageQuotaBytes(): number { return this.raw.get('STORAGE_QUOTA_BYTES', { infer: true }); }
   get storageQuotaObjects(): number { return this.raw.get('STORAGE_QUOTA_OBJECTS', { infer: true }); }

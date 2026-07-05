@@ -13,6 +13,7 @@ import { SettingsAdminModule } from './settings/settings-admin.module';
 import { BackupModule } from './backup/backup.module';
 import { ReplicationAdminModule } from './replication/replication-admin.module';
 import { AnalyticsAdminModule } from './analytics/analytics-admin.module';
+import { AuditAdminModule } from './audit/audit-admin.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { AuditService } from './audit/audit.service';
@@ -36,6 +37,7 @@ export const ADMIN_CONTROLLER_MODULES = [
   BackupModule,
   ReplicationAdminModule,
   AnalyticsAdminModule,
+  AuditAdminModule,
 ];
 
 /**

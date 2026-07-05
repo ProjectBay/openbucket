@@ -1,4 +1,7 @@
 export * from './admin-user-summary-dto';
+export * from './audit-catalog-dto';
+export * from './audit-event';
+export * from './audit-page-dto';
 export * from './bucket-breakdown-dto';
 export * from './bucket-breakdown-item-dto';
 export * from './bucket-policy-dto';

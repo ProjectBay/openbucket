@@ -102,6 +102,12 @@ export const appRoutes: Routes = [
           import('./replication/replication.component').then((m) => m.ReplicationComponent),
       },
       {
+        path: 'audit',
+        data: { breadcrumb: 'sidebar.admin.audit' },
+        loadComponent: () =>
+          import('./audit/audit-log.component').then((m) => m.AuditLogComponent),
+      },
+      {
         path: 'about',
         data: { breadcrumb: 'about.title' },
         loadComponent: () => import('./about/about.component').then((m) => m.AboutComponent),

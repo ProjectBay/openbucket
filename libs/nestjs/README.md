@@ -131,6 +131,29 @@ table growth. A bucket delete does **not** erase its historical samples, so the
 storage line never retroactively drops; the breakdown filters to existing buckets at
 read time.
 
+### Audit log
+
+Every state-changing admin action (`AuditService.emit`) is both logged as a Pino
+record (`audit: true`) **and** persisted to an `audit_logs` table, so the console's
+**Audit log** page (`<mountPath>/audit`) can browse history the log stream can't. Two
+read-only, JWT-guarded endpoints back it (typed `AuditAdminService` in the generated
+client):
+
+| Endpoint | operationId | What it returns |
+| --- | --- | --- |
+| `GET /api/admin/audit?event=&subject=&bucket=&from=&to=&cursor=&limit=` | `listAuditEvents` | A newest-first page `{ items, nextCursor }`. Filters match **exact**, indexed columns (never `LIKE`); `limit ≤ 200` with opaque **keyset** paging bounds every response. |
+| `GET /api/admin/audit/catalog` | `getAuditCatalog` | The static v1 event-name list for the filter dropdown (no `distinct` scan). |
+
+Writes never block the request handler: `emit` pushes onto a bounded in-memory ring
+buffer, and a background **audit-flush** tick (`AUDIT_FLUSH_MS`, default 2 s)
+batch-inserts drained rows inside a per-tick `RequestContext`, then prunes rows older
+than `AUDIT_RETENTION_DAYS` (default 90) once per day. The buffer is capped at
+`AUDIT_BUFFER_MAX` (default 10 000) — past that the **oldest** row is dropped and the
+flusher warns, so a burst or a stalled flusher can never exhaust the heap. Before a
+row is stored, any secret-looking field (`/secret|password|hash|token|authorization|cookie/i`)
+is stripped and the JSON `detail` is dropped if it exceeds ~2 KiB (defense-in-depth;
+the v1 catalogue never carries secrets). Read-only `GET`s are **not** audited.
+
 ## Async configuration
 
 For secrets resolved at runtime (e.g. from the host's `ConfigService`). Note
