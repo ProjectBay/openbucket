@@ -9,6 +9,25 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.15] — 2026-07-05
+
+### Added
+
+- **`MOUNT_PATH` for the standalone image.** The standalone Docker image can now
+  serve under a subpath (e.g. behind a reverse proxy at `https://example.com/storage/`)
+  by setting `MOUNT_PATH`. The S3 API, admin console, and admin API all mount under
+  the prefix, and the auth guard, SigV4 routing, presigned URLs, and the SPA
+  base-href follow it. Unset = root (unchanged). `X-Forwarded-Prefix` is not trusted
+  — `MOUNT_PATH` is the single authoritative prefix.
+
+### Fixed
+
+- **Documentation:** admonition callouts (`:::tip`, `:::warning`, …) rendered as
+  literal text on the docs site — updated to the Docusaurus 3 `:::type[Title]` syntax.
+
+_This is the first Docker image (`ghcr.io/projectbay/openbucket`) published since
+alpha.1 — the standalone image is now current with the library._
+
 ## [0.1.0-alpha.14] — 2026-07-05
 
 Feature release — adoption & observability (EPIC-13).
