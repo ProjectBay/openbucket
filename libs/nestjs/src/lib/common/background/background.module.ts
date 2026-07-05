@@ -6,6 +6,7 @@ import { BackgroundService, SCHEDULED_TASKS, ScheduledTask } from './background.
 import { DerivativeCacheGcRunner } from './derivative-cache-gc.runner';
 import { LifecycleSweepRunner } from './lifecycle-sweep.runner';
 import { MultipartCleanupRunner } from './multipart-cleanup.runner';
+import { ReplicationWorkerRunner } from './replication.runner';
 import { TrashPurgeRunner } from './trash-purge.runner';
 import { WebhookDeliveryRunner } from '../../events/webhook-delivery.runner';
 
@@ -29,6 +30,7 @@ import { WebhookDeliveryRunner } from '../../events/webhook-delivery.runner';
     TrashPurgeRunner,
     DerivativeCacheGcRunner,
     WebhookDeliveryRunner,
+    ReplicationWorkerRunner,
     {
       provide: SCHEDULED_TASKS,
       useFactory: (...tasks: ScheduledTask[]) => tasks,
@@ -38,6 +40,7 @@ import { WebhookDeliveryRunner } from '../../events/webhook-delivery.runner';
         TrashPurgeRunner,
         DerivativeCacheGcRunner,
         WebhookDeliveryRunner,
+        ReplicationWorkerRunner,
       ],
     },
   ],

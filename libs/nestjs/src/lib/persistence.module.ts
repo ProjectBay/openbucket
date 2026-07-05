@@ -14,6 +14,7 @@ import { Migration20260609000001_access_key_admin_fields } from './migrations/Mi
 import { Migration20260625000001_object_encryption } from './migrations/Migration20260625000001_object_encryption';
 import { Migration20260701000001_object_content_sha256 } from './migrations/Migration20260701000001_object_content_sha256';
 import { Migration20260702000001_event_deliveries } from './migrations/Migration20260702000001_event_deliveries';
+import { Migration20260710000001_replication_outbox } from './migrations/Migration20260710000001_replication_outbox';
 import {
   Bucket,
   ObjectEntity,
@@ -25,11 +26,13 @@ import {
   RefreshToken,
   LifecycleState,
   EventDeliveryEntity,
+  ReplicationOutbox,
   BucketRepository,
   ObjectRepository,
   AdminUserRepository,
   RefreshTokenRepository,
   EventDeliveryRepository,
+  ReplicationOutboxRepository,
 } from './persistence/index';
 import { OPEN_BUCKET_ORM_CONTEXT } from './persistence/orm-context';
 
@@ -44,6 +47,7 @@ const ENTITIES = [
   RefreshToken,
   LifecycleState,
   EventDeliveryEntity,
+  ReplicationOutbox,
 ];
 
 /**
@@ -129,6 +133,10 @@ const ENTITIES = [
               name: 'Migration20260702000001_event_deliveries',
               class: Migration20260702000001_event_deliveries,
             },
+            {
+              name: 'Migration20260710000001_replication_outbox',
+              class: Migration20260710000001_replication_outbox,
+            },
           ],
           transactional: true,
           allOrNothing: true,
@@ -170,8 +178,9 @@ const ENTITIES = [
     { provide: AdminUserRepository, inject: [getRepositoryToken(AdminUser, OPEN_BUCKET_ORM_CONTEXT)], useFactory: (r: AdminUserRepository) => r },
     { provide: RefreshTokenRepository, inject: [getRepositoryToken(RefreshToken, OPEN_BUCKET_ORM_CONTEXT)], useFactory: (r: RefreshTokenRepository) => r },
     { provide: EventDeliveryRepository, inject: [getRepositoryToken(EventDeliveryEntity, OPEN_BUCKET_ORM_CONTEXT)], useFactory: (r: EventDeliveryRepository) => r },
+    { provide: ReplicationOutboxRepository, inject: [getRepositoryToken(ReplicationOutbox, OPEN_BUCKET_ORM_CONTEXT)], useFactory: (r: ReplicationOutboxRepository) => r },
   ],
-  exports: [MikroOrmModule, BucketRepository, ObjectRepository, AdminUserRepository, RefreshTokenRepository, EventDeliveryRepository],
+  exports: [MikroOrmModule, BucketRepository, ObjectRepository, AdminUserRepository, RefreshTokenRepository, EventDeliveryRepository, ReplicationOutboxRepository],
 })
 export class PersistenceModule implements OnModuleInit {
   private readonly logger = new Logger(PersistenceModule.name);

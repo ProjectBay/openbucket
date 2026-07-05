@@ -24,6 +24,7 @@ import {
 } from '../../storage/sse-cipher';
 import { SseKeyService } from '../../storage/sse-key.service';
 import { VersionStoreService } from '../../storage/version-store.service';
+import { ReplicationOutboxService } from '../../storage/replication/replication-outbox.service';
 import {
   AccessDeniedError,
   InternalError,
@@ -179,6 +180,10 @@ export class ObjectService {
     // @Optional so existing unit tests can construct ObjectService without it and
     // a missing/throwing handler can never break a delete.
     @Optional() private readonly events?: ObjectEventsService,
+    // Optional (STORY-0900): enqueues a durable DELETE replication intent IN the
+    // delete's transaction (transactional outbox). @Optional so existing unit
+    // tests construct ObjectService without it and a disabled deployment no-ops.
+    @Optional() private readonly outbox?: ReplicationOutboxService,
   ) {}
 
   /**
@@ -725,6 +730,11 @@ export class ObjectService {
           eventTime: new Date().toISOString(),
         };
         this.events?.enqueueInTx(em, deletedEvent);
+        // Async replication (STORY-0900): a versioned delete hides the current
+        // version, so one-way replication reflects the VISIBLE state by deleting
+        // the remote key (per-version history is NOT replicated in v1). Enqueued
+        // on the marker's transaction via the same beforeCommit seam as webhooks.
+        this.outbox?.enqueue(em, { bucket: mk.bucket, key, op: 'DELETE' });
       });
       if (deletedEvent) this.events?.emitInProcess(deletedEvent);
       return { deleteMarker: true, versionId: marker.versionId };
@@ -761,6 +771,10 @@ export class ObjectService {
         eventTime: row.modifiedAt.toISOString(),
       };
       this.events?.enqueueInTx(em, deletedEvent);
+
+      // Async replication (STORY-0900): the object is gone locally, so reflect the
+      // visible state remotely by enqueuing a DELETE intent in this transaction.
+      this.outbox?.enqueue(em, { bucket: row.bucket, key, op: 'DELETE' });
 
       await em.commit();
       this.events?.emitInProcess(deletedEvent);
@@ -829,6 +843,10 @@ export class ObjectService {
     row.softDeleted = true;
     row.modifiedAt = new Date();
     em.persist(row);
+    // Async replication (STORY-0900): a lifecycle expiry removes the visible
+    // object — enqueue a DELETE intent on the runner's transaction so it rides
+    // along on the same atomic commit as the batch of expirations.
+    this.outbox?.enqueue(em, { bucket: row.bucket, key, op: 'DELETE' });
     await this.blobs.deleteBlob(bucket, key);
   }
 

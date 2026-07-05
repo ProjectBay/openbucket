@@ -69,5 +69,20 @@ export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
     WEBHOOK_EVENTS:
       opts.webhooks?.events?.join(',') ??
       'object.created,object.deleted,multipart.completed',
+    // Async replication (STORY-0900). Off unless the host passes a `replication`
+    // block; resolved defaults mirror the env schema. `enabled` is derived from
+    // the block's presence (the library caller never sets it explicitly).
+    OB_REPLICATION_ENABLED: !!opts.replication,
+    OB_REPLICATION_ENDPOINT: opts.replication?.endpoint,
+    OB_REPLICATION_REGION: opts.replication?.region ?? 'us-east-1',
+    OB_REPLICATION_BUCKET: opts.replication?.bucket,
+    OB_REPLICATION_ACCESS_KEY_ID: opts.replication?.credentials.accessKeyId,
+    OB_REPLICATION_SECRET_ACCESS_KEY: opts.replication?.credentials.secretAccessKey,
+    OB_REPLICATION_FORCE_PATH_STYLE: opts.replication?.forcePathStyle ?? true,
+    OB_REPLICATION_MAX_ATTEMPTS: opts.replication?.maxAttempts ?? 12,
+    OB_REPLICATION_DRAIN_INTERVAL_MS: opts.replication?.drainIntervalMs ?? 5_000,
+    OB_REPLICATION_BATCH_KEYS: opts.replication?.batchKeys ?? 50,
+    OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES:
+      opts.replication?.largeObjectThresholdBytes ?? 64 * 1024 * 1024,
   };
 }

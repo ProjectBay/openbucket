@@ -75,6 +75,41 @@ a zero-cost no-op and nothing changes.
   `open-bucket-core.module.ts` pino `redact` pattern; blob reads go through the
   existing safe `BlobStore`/`key-codec` paths (no new traversal surface).
 
+## Spike findings (TASK-2704)
+
+Conclusions adopted by the implementation tasks (the throwaway `__spike__`
+scripts were removed at close; the cases were promoted into the unit specs):
+
+- **Ordering / `seq` mechanism** — a dedicated `seq` column, assigned at enqueue
+  from a process-monotonic generator (`nextReplicationSeq`: `Date.now()*1000`,
+  `+1` on same-ms collision, non-decreasing across restarts), rather than SQLite
+  `rowid`. `seq` only needs a total order consistent with insert order; the
+  `ObjectWriterService` per-`(bucket,key)` mutex already serializes same-key
+  writes, so same-key intents are enqueued (and ordered) in write order.
+  `ReplicationOutboxRepository.dueKeys` orders due keys by `min(seq)` and
+  `pendingForKey` returns a key's chain `seq ASC`.
+- **Coalescing** — act on the LAST intent of a key's chain, mark every earlier
+  one `done`. This converges the remote to the local current visible state for
+  every chain (`PUT,PUT` → one PUT; `PUT,DELETE` → one DELETE; `DELETE,PUT` →
+  one PUT; `PUT,DELETE,PUT` → one PUT). Matches EPIC-10's one-way
+  local→remote, current-visible-state scope — per-version history is NOT
+  replicated in v1 (a versioned delete-marker replicates as a remote DELETE).
+- **Large objects** — the object size is always known (from the object row), so
+  a plain `PutObjectCommand` with `ContentLength` is used below the threshold and
+  `@aws-sdk/lib-storage` `Upload` (streaming multipart) above it. Threshold:
+  `largeObjectThresholdBytes = 64 MiB` (`OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES`).
+- **Crash-resume / idempotency** — no persisted `inflight` state is needed
+  (single process + the scheduler's no-pileup guard). A crash mid-send leaves the
+  intent `pending`; the first tick after boot re-sends it. PUT is idempotent by
+  key, DELETE is idempotent (a remote 404 is success), so a re-send is safe.
+- **Retry realism** — full-jitter exponential backoff `min(1s * 2^(n-1), 5min)
+  * rand(0.5..1.5)`; dead-letter to `status='failed'` after
+  `maxAttempts = 12` (`OB_REPLICATION_MAX_ATTEMPTS`). The SDK's own retry is
+  disabled (`maxAttempts: 1`) so the worker owns the single retry budget.
+- **Security** — an `http://` endpoint logs a boot-time warning (replicated
+  bytes are object plaintext); `OB_REPLICATION_SECRET_ACCESS_KEY` /
+  `secretAccessKey` / `authorization` are in the pino redact paths.
+
 ## References
 
 - `libs/nestjs/src/lib/storage/object-writer.service.ts` — `ObjectWriterService.put` / `putComposed` (the metadata-commit transaction)

@@ -83,6 +83,36 @@ export const validateWebhookUrl = (url: string): string | null => {
   return null;
 };
 
+/**
+ * S3 bucket-name syntax (mirrors `BackupService.BUCKET_RE`): 3–63 chars, starts
+ * and ends alphanumeric, lowercase letters/digits/dot/hyphen between. Used to
+ * fail a malformed remote replication bucket at boot rather than at first drain.
+ */
+export const S3_BUCKET_RE = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+
+/**
+ * Validate a replication target endpoint URL. Operator-supplied config (not
+ * request input), so this is not an SSRF sink — we only fail fast on a
+ * malformed URL. Returns `{ error }` for an unparseable URL, or `{ insecure }`
+ * true when the scheme is plaintext `http:` (the caller logs a boot-time warn —
+ * replicated bytes are object PLAINTEXT, so an http endpoint leaks contents; not
+ * hard-failed because MinIO on a trusted LAN is a legitimate dev case).
+ */
+export const validateReplicationEndpoint = (
+  endpoint: string,
+): { error?: string; insecure?: boolean } => {
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    return { error: 'OB_REPLICATION_ENDPOINT must be a valid URL' };
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return { error: 'OB_REPLICATION_ENDPOINT must be an http(s) URL' };
+  }
+  return { insecure: parsed.protocol === 'http:' };
+};
+
 export const EnvSchema = z
   .object({
     // --- runtime ---
@@ -201,10 +231,69 @@ export const EnvSchema = z
       .string()
       .default('object.created,object.deleted,multipart.completed'),
 
+    // --- async replication to external S3 target (STORY-0900) ---
+    // Off by default: absence ⇒ disabled, so pure local deployments pay nothing.
+    // When ENABLED=true the endpoint/bucket/creds are required together (a
+    // partial config must refuse to boot) — enforced by the superRefine below.
+    OB_REPLICATION_ENABLED: envBoolean(false),
+    // S3-compatible endpoint (R2/B2/MinIO). Omit for real AWS S3 (the SDK derives
+    // it from the region). http:// is accepted (warned at boot) for LAN dev.
+    OB_REPLICATION_ENDPOINT: z.string().optional(),
+    OB_REPLICATION_REGION: z.string().default('us-east-1'),
+    OB_REPLICATION_BUCKET: z.string().optional(),
+    OB_REPLICATION_ACCESS_KEY_ID: z.string().optional(),
+    OB_REPLICATION_SECRET_ACCESS_KEY: z.string().optional(),
+    // path-style addressing — true for MinIO / other S3-compat; false for AWS.
+    OB_REPLICATION_FORCE_PATH_STYLE: envBoolean(true),
+    // Dead-letter cap: after this many failed attempts an intent → `failed`.
+    OB_REPLICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(50).default(12),
+    // Drain tick interval (ms). Floor 1000 so the drain can't hot-loop.
+    OB_REPLICATION_DRAIN_INTERVAL_MS: z.coerce.number().int().min(1_000).max(300_000).default(5_000),
+    // Distinct keys drained per tick — bounds per-tick work (CWE-770).
+    OB_REPLICATION_BATCH_KEYS: z.coerce.number().int().min(1).max(1_000).default(50),
+    // Objects larger than this stream via lib-storage multipart. Default 64 MiB.
+    OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(64 * 1024 * 1024),
+
     // --- shutdown ---
     SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
   })
   .superRefine((env, ctx) => {
+    // Cross-field: when replication is enabled, the endpoint (optional for real
+    // AWS but validated when present), bucket, and both credentials are required
+    // together — a partial config must refuse to boot (mirrors the webhook /
+    // admin-block footgun guards, fail-closed).
+    if (env.OB_REPLICATION_ENABLED) {
+      const requireField = (key: keyof typeof env, label: string) => {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key as string],
+            message: `${label} is required when OB_REPLICATION_ENABLED=true`,
+          });
+        }
+      };
+      requireField('OB_REPLICATION_BUCKET', 'OB_REPLICATION_BUCKET');
+      requireField('OB_REPLICATION_ACCESS_KEY_ID', 'OB_REPLICATION_ACCESS_KEY_ID');
+      requireField('OB_REPLICATION_SECRET_ACCESS_KEY', 'OB_REPLICATION_SECRET_ACCESS_KEY');
+      if (env.OB_REPLICATION_BUCKET && !S3_BUCKET_RE.test(env.OB_REPLICATION_BUCKET)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['OB_REPLICATION_BUCKET'],
+          message: 'OB_REPLICATION_BUCKET must be a valid S3 bucket name (3-63 chars)',
+        });
+      }
+      if (env.OB_REPLICATION_ENDPOINT) {
+        const { error } = validateReplicationEndpoint(env.OB_REPLICATION_ENDPOINT);
+        if (error) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['OB_REPLICATION_ENDPOINT'], message: error });
+        }
+      }
+    }
+
     // Cross-field: when a webhook URL is configured, require a strong secret
     // (fail-closed — never sign with a weak/empty key, CWE-521) and enforce the
     // https/loopback rule on the URL.

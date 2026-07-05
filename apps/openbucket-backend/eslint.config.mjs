@@ -24,6 +24,8 @@ export default [
           // moves them to the lib's package.json + verifies the bundle scan
           // re-adds them to the generated prod package.json.)
           ignoredDependencies: [
+            '@aws-sdk/client-s3',
+            '@aws-sdk/lib-storage',
             '@mikro-orm/libsql',
             '@mikro-orm/migrations',
             '@mikro-orm/nestjs',

@@ -62,4 +62,17 @@ export class AppConfigService {
       .map((s) => s.trim())
       .filter(Boolean);
   }
+
+  // --- async replication to external S3 target (STORY-0900) ---
+  get replicationEnabled(): boolean { return this.raw.get('OB_REPLICATION_ENABLED', { infer: true }); }
+  get replicationEndpoint(): string | undefined { return this.raw.get('OB_REPLICATION_ENDPOINT', { infer: true }); }
+  get replicationRegion(): string { return this.raw.get('OB_REPLICATION_REGION', { infer: true }); }
+  get replicationBucket(): string | undefined { return this.raw.get('OB_REPLICATION_BUCKET', { infer: true }); }
+  get replicationAccessKeyId(): string | undefined { return this.raw.get('OB_REPLICATION_ACCESS_KEY_ID', { infer: true }); }
+  get replicationSecretAccessKey(): string | undefined { return this.raw.get('OB_REPLICATION_SECRET_ACCESS_KEY', { infer: true }); }
+  get replicationForcePathStyle(): boolean { return this.raw.get('OB_REPLICATION_FORCE_PATH_STYLE', { infer: true }); }
+  get replicationMaxAttempts(): number { return this.raw.get('OB_REPLICATION_MAX_ATTEMPTS', { infer: true }); }
+  get replicationDrainIntervalMs(): number { return this.raw.get('OB_REPLICATION_DRAIN_INTERVAL_MS', { infer: true }); }
+  get replicationBatchKeys(): number { return this.raw.get('OB_REPLICATION_BATCH_KEYS', { infer: true }); }
+  get replicationLargeObjectThresholdBytes(): number { return this.raw.get('OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES', { infer: true }); }
 }
