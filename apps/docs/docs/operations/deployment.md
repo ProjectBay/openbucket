@@ -54,7 +54,7 @@ OpenBucket now listens on **`http://localhost:9000`**:
 - **Admin API** — `http://localhost:9000/api/admin`
 - **Health / readiness** — `/api/admin/health`, `/api/admin/ready`
 
-:::note Where the image comes from
+:::note[Where the image comes from]
 The standalone server image is published to **`ghcr.io/<owner>/openbucket`** on
 every `v*` release tag, with `:latest`, `:{major}.{minor}`, and exact `:{version}`
 tags (plus `linux/amd64` and `linux/arm64`). Pin an exact version in production;
@@ -90,7 +90,7 @@ The full, commented list lives in `.env.example` at the repo root (webhooks,
 replication, tiering, backups, metrics, analytics, and the DoS-guard limits). See
 the [configuration reference](../reference/nestjs-module.md) for every key.
 
-:::warning Weak secrets fail the boot, on purpose
+:::warning[Weak secrets fail the boot, on purpose]
 A short, all-same-character, or known-placeholder value for `JWT_SECRET` /
 `ROOT_SECRET_ACCESS_KEY` is rejected at startup (not a warning — a hard refusal).
 Generate real random values.
@@ -142,7 +142,7 @@ server {
 Set `OPENBUCKET_ENDPOINT=storage.example.com` so the store reports a DNS-safe
 public hostname for endpoint discovery.
 
-:::info Embedding under a path prefix
+:::info[Embedding under a path prefix]
 When you embed `@openbucket/nestjs` instead of running the container, everything
 mounts under `mountPath` (default `/storage`) — the S3 endpoint is
 `http(s)://<host>/storage`, the admin API is `<mountPath>/api/admin`, and the

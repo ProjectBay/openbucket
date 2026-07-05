@@ -24,7 +24,7 @@ It comes in two shapes from one codebase:
   (S3 + admin API + admin console) **inside your own NestJS app**.
   → [**Embed it in NestJS**](./getting-started/quickstart-embed.md)
 
-:::tip New here? Store your first file in 5 minutes.
+:::tip[New here? Store your first file in 5 minutes.]
 The [**first upload**](./getting-started/first-upload.md) tutorial takes you from
 zero to "an uploaded file with a shareable URL" — the thing most apps actually need.
 :::
@@ -61,13 +61,13 @@ The pitch is simple: **it's the file backend for your app.** Because it can run
 | Learn how it works | [Concepts](./concepts/architecture.md) & the [whitepaper](./whitepaper/00-front-matter.md) |
 | Run it in production | [Operations](./operations/deployment.md) — deploy, monitor, upgrade |
 
-:::note Status
+:::note[Status]
 OpenBucket is **pre-1.0** and under active development. The S3 surface and admin
 console are feature-complete and tested; APIs may still change before 1.0. The
 library publishes to the npm **`next`** dist-tag — `npm install @openbucket/nestjs@next`.
 :::
 
-:::info Trademark
+:::info[Trademark]
 OpenBucket is an independent project and is not affiliated with or endorsed by
 Amazon Web Services. "Amazon S3" and "AWS" are trademarks of Amazon.com, Inc.
 "S3-compatible" describes wire-protocol compatibility only.

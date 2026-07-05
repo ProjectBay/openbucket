@@ -64,7 +64,7 @@ object key, or client IP):
 | `openbucket_integrity_last_run_timestamp` | gauge | — |
 | `openbucket_process_*` / `openbucket_nodejs_*` | default | — |
 
-:::note What updates when
+:::note[What updates when]
 HTTP counters and the latency histogram are recorded live by the request
 interceptor. The per-bucket gauges are refreshed on the **usage-rollup** tick
 (`USAGE_ROLLUP_INTERVAL_MS`, default 15 min) from an in-memory aggregate — so a

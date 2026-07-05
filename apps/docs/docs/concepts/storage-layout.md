@@ -36,7 +36,7 @@ DATA_DIR/
 └── backups/                 scheduled .zip snapshots (default location)
 ```
 
-:::tip Back up the whole directory
+:::tip[Back up the whole directory]
 `DATA_DIR` is the entire state of the instance — metadata **and** bytes. A
 filesystem-level snapshot of it (with the process stopped, or via the built-in
 backup) is a complete point-in-time copy. Don't try to back up `blobs/` without
@@ -84,7 +84,7 @@ The encoding round-trips: `decodeKey` reverses it. Decoding is only used for
 diagnostics and the orphan-blob recovery scan — the hot path always reads the raw
 key from SQLite.
 
-:::note Why not just base64 the key?
+:::note[Why not just base64 the key?]
 The path-mirroring encoding keeps the on-disk tree **human-legible** and preserves
 the folder structure, so an operator browsing `blobs/` sees something close to the
 logical layout — while still being safe against traversal, hidden files, and
@@ -115,7 +115,7 @@ When `OPENBUCKET_SSE_KEY` is unset, OpenBucket generates a random 32-byte SSE-S3
 key on first boot and persists it to `<DATA_DIR>/sse.key` (mode `0600`). Each
 encrypted object stores its own random IV in metadata; the key is instance-wide.
 
-:::warning `sse.key` is break-glass material
+:::warning[`sse.key` is break-glass material]
 Losing this file makes every SSE-encrypted object permanently unreadable. Back it
 up with your other secrets — and prefer delivering it via `OPENBUCKET_SSE_KEY`
 from a secrets manager over relying on the generated file. See the

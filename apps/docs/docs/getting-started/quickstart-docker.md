@@ -25,7 +25,7 @@ docker compose up --build
 
 When the logs settle, OpenBucket is listening on **http://localhost:9000**. Open the admin console at **http://localhost:9000/admin** and sign in with `admin` and the password you just hashed.
 
-:::tip What each command did
+:::tip[What each command did]
 `hash-password.mjs` prints an argon2id hash to stdout — the app stores only the hash, never your plaintext password. `docker compose up` builds the image from the repo `Dockerfile` and mounts a named volume (`openbucket-data`) at `/data`, so your buckets and objects survive a restart.
 :::
 
@@ -66,7 +66,7 @@ Everything is **path-style** and served from the one port:
 | Admin JSON API | `http://localhost:9000/api/admin` |
 | Health / readiness | `http://localhost:9000/api/admin/health`, `/api/admin/ready` |
 
-:::note Path-style only
+:::note[Path-style only]
 OpenBucket addresses buckets as `http://localhost:9000/my-bucket/key` — never `http://my-bucket.localhost:9000`. Virtual-host-style addressing is not supported, so always set path-style / `forcePathStyle: true` in your client.
 :::
 
@@ -110,7 +110,7 @@ await s3.send(
 
 Streaming PUT/GET, multipart uploads, presigned URLs, and range reads all behave exactly as they do against AWS S3.
 
-:::warning Keep your secrets out of version control
+:::warning[Keep your secrets out of version control]
 `.env` holds real credentials — it should already be gitignored. Never commit it, and prefer a secrets manager over inline env vars for production.
 :::
 

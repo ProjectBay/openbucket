@@ -25,7 +25,7 @@ ROOT_SECRET_ACCESS_KEY=$(openssl rand -base64 48)
 Everything else has a sensible default. The full, commented template lives in
 [`.env.example`](https://github.com/ProjectBay/openbucket/blob/main/.env.example).
 
-:::tip Generate strong secrets
+:::tip[Generate strong secrets]
 `JWT_SECRET`, `ROOT_SECRET_ACCESS_KEY`, `KEY_ENCRYPTION_SECRET`, `WEBHOOK_SECRET`,
 and a `token`-mode `METRICS_TOKEN` are all validated as **strong secrets**: at
 least 32 characters, at least 8 distinct characters, not a single repeated
@@ -304,14 +304,14 @@ Omit to disable. Exactly one of `cron` / `intervalMinutes` must be set.
 | `metrics.token` | — | Strong bearer token — required when `mode: 'token'`. |
 | `tracing.enabled` | `false` | OpenTelemetry span wrapping. No-op unless `@opentelemetry/api` + an SDK are present. |
 
-:::info Static options in `forRootAsync`
+:::info[Static options in `forRootAsync`]
 `mountPath`, `serveUi`, and `admin` (the on/off switch) are **static** — passed
 alongside `useFactory` because routing is wired at module-config time. The admin
 *secrets* still come from the async factory. See the
 [NestJS module reference](./nestjs-module.md#async-configuration).
 :::
 
-:::warning Refuse-to-boot validation
+:::warning[Refuse-to-boot validation]
 Both entry points validate security-critical formats before serving a single
 request: a non-argon2id `passwordHash`, a too-short `jwtSecret`, a weak
 `rootCredentials.secretAccessKey`, a `token`-mode metrics endpoint behind a weak

@@ -19,7 +19,7 @@ Embedded:    http://<host><mountPath>/admin     (e.g. /storage/admin)
 
 Sign in at `/login` with your admin username and password (`ADMIN_USERNAME` defaults to `admin`). Everything past login is behind an auth guard; the only routes outside the app shell are `/login` and `/force-rotate` (shown when a password rotation is required). All feature screens are lazy-loaded, so the first paint is fast.
 
-:::note The console needs the admin surface
+:::note[The console needs the admin surface]
 The SPA is wired only when you configure the `admin` block (with `serveUi: true`) — a headless, S3-only store has no console. See [the module reference](../reference/nestjs-module.md).
 :::
 
@@ -88,7 +88,7 @@ Surfaces the background integrity scrubber: scanned / ok / corrupt / repaired st
 
 A durable, queryable record of **every state-changing admin action**, newest first, keyset-paged with bounded retention.
 
-:::tip Read-only admins see everything
+:::tip[Read-only admins see everything]
 A read-only admin can open every one of these tabs and read the data; the server default-denies any change by HTTP method, read fresh from the DB on each request, so a demotion takes effect immediately.
 :::
 

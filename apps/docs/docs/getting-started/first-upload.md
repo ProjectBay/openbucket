@@ -45,7 +45,7 @@ export class FilesController {
 
 That's the whole upload path. Post a `multipart/form-data` request with a `file` part and the bytes land in the `uploads` bucket, content-sniffed and size-checked.
 
-:::tip Why `contentType` is trustworthy
+:::tip[Why `contentType` is trustworthy]
 The engine sniffs the type from the body's magic bytes and the **sniffed type wins** over whatever the client declared — so a "PNG" that's really HTML is caught and rejected, not stored. `file.contentType` is the resolved, verified type.
 :::
 
@@ -100,7 +100,7 @@ export class UploadsBootstrap implements OnApplicationBootstrap {
 }
 ```
 
-:::note Why the exception filter matters
+:::note[Why the exception filter matters]
 `UploadValidationExceptionFilter` is scoped to `UploadValidationError`, so it turns a too-large / disallowed-type / active-content upload into a clean `400` — but it deliberately does **not** swallow an S3 error like `NoSuchBucketError`. If you skip the bootstrap above, an upload to a missing bucket surfaces as a real error, not a silent `400`.
 :::
 
@@ -175,7 +175,7 @@ export class FilesController {
 
 The built-in `keyStrategy` values are `'uuid'`, `'uuid-flat'`, `'sha256'` (content-addressed), and `'original'` (sanitized filename). You can also pass a `(ctx) => string` function — its result is always run through the anti-traversal `assertSafeKey` gate.
 
-:::info `putObject` is the raw primitive
+:::info[`putObject` is the raw primitive]
 Want no sniffing or validation and to pick the key entirely yourself? `this.ob.putObject(bucket, key, body, { contentType })` writes a `Buffer`, string, or `Readable` directly. `uploadFrom` is sugar on top of it.
 :::
 
@@ -190,7 +190,7 @@ return files.map((f) => this.toDto(f)); // each gets a fresh 1-hour URL
 
 `presignGetUrl` is pure crypto over your root credentials — no DB or filesystem access. `expiresIn` is in seconds and caps at 7 days. `baseUrl` is your public origin (scheme + host); OpenBucket appends the `mountPath` and object path for you.
 
-:::warning Store the key, not the URL
+:::warning[Store the key, not the URL]
 Presigned URLs expire, so persisting one as a column means dead links later. The robust default is **store `{ bucket, key }`, presign on read**. If you truly want a URL column, either re-mint it periodically with a longer `expiresIn`, or — for a bucket you deliberately make public with an anonymous-GET policy — store the stable path-style URL `` `${PUBLIC_ORIGIN}${mountPath}/${bucket}/${key}` ``.
 :::
 

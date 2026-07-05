@@ -48,7 +48,7 @@ The guard:
   form (`STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER`) is rejected with a clear
   `InvalidArgument`.
 
-:::note Path-style only
+:::note[Path-style only]
 OpenBucket addresses buckets **path-style** (`host/bucket/key`), never
 virtual-host style. Configure your SDK with `forcePathStyle: true` and a region
 that matches `OPENBUCKET_REGION` (default `us-east-1`).
@@ -98,7 +98,7 @@ conditions — `Bool aws:SecureTransport` and `IpAddress`/`NotIpAddress aws:Sour
 — and **fails closed**: an unknown condition operator satisfies a `Deny` but never
 grants an `Allow`.
 
-:::tip Inspect before you ship
+:::tip[Inspect before you ship]
 Before handing a scoped key to a tenant, call `getKeyEffectivePermissions(id)` for
 an allow/deny matrix, or `simulateKeyAction(id, { action, resource })` for a single
 decision — both run through the **same** evaluator the live request path uses, so
@@ -157,7 +157,7 @@ The 32-byte key-encryption key (KEK) that wraps sub-key secrets is **HKDF-SHA256
 derived** from `KEY_ENCRYPTION_SECRET` when set, otherwise from
 `ROOT_SECRET_ACCESS_KEY`.
 
-:::warning Set `KEY_ENCRYPTION_SECRET` up front
+:::warning[Set `KEY_ENCRYPTION_SECRET` up front]
 If you rotate `ROOT_SECRET_ACCESS_KEY` **without** having set a dedicated
 `KEY_ENCRYPTION_SECRET`, the KEK changes and every existing sub-key secret becomes
 undecryptable — those keys must be re-minted. Set a strong `KEY_ENCRYPTION_SECRET`

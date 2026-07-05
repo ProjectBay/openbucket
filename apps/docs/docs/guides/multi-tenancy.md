@@ -102,7 +102,7 @@ The semantics are AWS-aligned: a matching `Deny` always wins, else a matching
 `Allow` grants, else the default fallback applies. An operation the guard can't
 map to an `s3:*` action **fails closed** for a scoped key.
 
-:::info Root stays unrestricted
+:::info[Root stays unrestricted]
 Root credentials are never scope-checked. Their request path is byte-identical to
 a store with no scoping at all — a scoped key is a strictly narrower grant layered
 on top.
@@ -185,13 +185,13 @@ actions a read-only admin can still perform: changing their own password
 (`settings/change-password`) and logging out (`auth/logout`). Managing admin
 users is itself full-admin-only.
 
-:::warning The scope is fixed at mint time
+:::warning[The scope is fixed at mint time]
 A key's scope is compiled and stored when you create the key; there's no
 "edit scope" endpoint. To change a tenant's reach, mint a new scoped key and
 revoke the old one. `PATCH` only toggles `disabled` / `label`.
 :::
 
-:::note One bucket, or one prefix
+:::note[One bucket, or one prefix]
 A prefix scope pins a key to a single bucket (and optional key prefix). To give a
 tenant several buckets, mint several keys, or author an inline `"kind": "policy"`
 scope whose statements list each bucket's ARN.

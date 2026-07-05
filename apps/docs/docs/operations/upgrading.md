@@ -40,7 +40,7 @@ Two independently-versioned artifacts ship from the one codebase:
 - **The embeddable library** — `@openbucket/nestjs` on npm, currently on
   pre-release versions.
 
-:::tip Pin exact versions in production
+:::tip[Pin exact versions in production]
 Deploy a pinned tag (`ghcr.io/<owner>/openbucket:0.1.0` or an exact npm version),
 not `:latest`/`next`. Pinning makes an upgrade a deliberate, reviewable change and
 keeps two environments reproducibly identical.
@@ -59,7 +59,7 @@ to snapshot before upgrading: **rolling back means restoring the pre-upgrade
 snapshot**, not reversing a migration. Applied migrations are logged
 (`Applied N migration(s) on init`).
 
-:::warning Don't downgrade the image against an upgraded database
+:::warning[Don't downgrade the image against an upgraded database]
 Once a newer version has migrated `openbucket.db` forward, an **older** image may
 not understand the new schema. If you need to go back, restore the snapshot you
 took before the upgrade rather than pointing an old binary at a new database.

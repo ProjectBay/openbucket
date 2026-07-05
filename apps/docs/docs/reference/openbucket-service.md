@@ -97,7 +97,7 @@ Key options on `UploadOptions`: `key` (explicit, wins over `keyStrategy`),
 `keyStrategy` (default `'uuid'`), `validate`, `contentType`, `filename`, `image`,
 and `presign` (a `PresignOptions` object, or `false` to skip URL minting).
 
-:::warning Active content is rejected by default
+:::warning[Active content is rejected by default]
 `uploadFrom` rejects HTML/XHTML/SVG bodies unless you opt in — defense in depth
 for the stored-XSS surface. On a rejected upload it throws `UploadValidationError`
 (map its `statusHint` of `400` to a `BadRequestException`).
@@ -138,7 +138,7 @@ const { url, fields } = this.ob.createPresignedPost('avatars', {
 `maxObjectSizeMb` cap when you omit one, so a minted token can never authorise an
 object larger than the server allows.
 
-:::note `baseUrl` is required unless `endpoint` is set
+:::note[`baseUrl` is required unless `endpoint` is set]
 Presign throws if neither a `baseUrl` nor the `endpoint` option resolves an
 origin. Pass `baseUrl: 'https://files.example.com'` (scheme + host only).
 :::

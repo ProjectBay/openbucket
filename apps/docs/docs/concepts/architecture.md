@@ -47,7 +47,7 @@ So the container and the embedded module run **exactly the same code** — the o
 difference is who owns the Node process and where config comes from (environment
 variables for standalone, `OpenBucketModule.forRoot({ … })` in code for embedded).
 
-:::info No horizontal scale-out (yet)
+:::info[No horizontal scale-out (yet)]
 OpenBucket is a **single-node** store: SQLite plus a local blob tree assume one
 writer. You scale it **up** (bigger disk, more CPU) and make it **durable**
 (backups, async replication to an S3 target), not **out** across nodes. See

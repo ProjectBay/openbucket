@@ -25,7 +25,7 @@ const { contents, commonPrefixes } = await ob.listObjects('my-bucket', {
 });
 ```
 
-:::note Keys are stable identity
+:::note[Keys are stable identity]
 An object is identified by `{ bucket, key }`. That pair is what you persist in your own database — never a presigned URL, which expires. Mint a fresh URL from the key whenever you need one (see [Your first upload](./first-upload.md)).
 :::
 
@@ -47,7 +47,7 @@ Pick standalone for a drop-in S3 service; pick embedded when you want an object 
 
 Because everything sits under `mountPath`, OpenBucket's greedy S3 routes (`:bucket/:key`) never shadow a host app's own routes, and its exception filter only renders errors for requests under the prefix.
 
-:::warning Path-style addressing only
+:::warning[Path-style addressing only]
 OpenBucket addresses buckets as `<endpoint>/<bucket>/<key>`, never `<bucket>.<host>`. Virtual-host-style addressing is not supported, so always configure your client for path-style (`forcePathStyle: true` in the AWS SDK).
 :::
 
@@ -78,7 +78,7 @@ These sign in to the **admin console and JSON API** — a different credential e
 - The first-run bootstrap admin (`ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH`) is a full admin. Manage additional admins from the console or `POST /api/admin/users`.
 - Enforcement is server-side and default-deny by HTTP method, read fresh from the DB on every request, so a demotion takes effect immediately.
 
-:::info Two roles, same word, different worlds
+:::info[Two roles, same word, different worlds]
 A minted **S3 access key** carries `role: 'scoped'` or `role: 'root'` — that labels a *data-plane* key's reach. An **admin user** carries `role: 'admin'` or `role: 'readonly'` — that governs the *admin console*. They are orthogonal: an S3 key can't sign into the console, and an admin login can't sign an S3 request.
 :::
 

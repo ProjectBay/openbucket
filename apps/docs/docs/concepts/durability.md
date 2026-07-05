@@ -26,7 +26,7 @@ A crash at any point leaves either the **old** object or the **new** one — nev
 torn half-written blob. The same tmp→fsync→rename shape backs multipart parts,
 multipart compose, backups, and rehydrated (tiered) reads.
 
-:::warning Keep `tmp/` and `blobs/` on one filesystem
+:::warning[Keep `tmp/` and `blobs/` on one filesystem]
 `rename(2)` is atomic **only within a single filesystem**. If `DATA_DIR/tmp` and
 `DATA_DIR/blobs` land on different mounts, Node returns `EXDEV` and OpenBucket
 falls back to a (non-atomic) copy + unlink, logging a loud warning. Mount all of
@@ -104,7 +104,7 @@ OB_REPLICATION_SECRET_ACCESS_KEY=…
 # Omit OB_REPLICATION_ENDPOINT for real AWS S3; set it for R2/B2/MinIO.
 ```
 
-:::note Plaintext over the wire
+:::note[Plaintext over the wire]
 The worker sends object **plaintext** (SSE is decrypted before sending), so an
 `http://` endpoint leaks object contents and warns at boot. Prefer `https://`
 unless the target is MinIO on a trusted LAN. Credentials are never logged.
@@ -145,7 +145,7 @@ sidecar recording size, object count, and SHA-256. **Union retention** means
 keep-last-N is a hard floor and max-age can never delete a fresh snapshot. A
 pre-flight free-space guard skips a cycle rather than fill the disk.
 
-:::warning Snapshots contain plaintext object bytes
+:::warning[Snapshots contain plaintext object bytes]
 A backup archive holds **decrypted** object bytes (same posture as replication),
 so snapshot files are `0o600` under a `0o700` directory. Treat the backup volume
 with the same trust boundary as `DATA_DIR`.
