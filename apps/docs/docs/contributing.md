@@ -119,6 +119,6 @@ For **security vulnerabilities, do not open a public issue** — follow
 
 ## Project layout
 
-See [Architecture](./architecture.md#repository-layout) for the repository layout,
+See [Architecture](./concepts/architecture.md) for the repository layout,
 and the [Whitepaper](./whitepaper/01-backend-architecture.md) for the design in
 depth.

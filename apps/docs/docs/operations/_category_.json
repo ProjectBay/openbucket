@@ -1,0 +1,1 @@
+{ "label": "Operations", "position": 6, "collapsible": true, "collapsed": true, "link": { "type": "generated-index", "slug": "/operations", "title": "Operations", "description": "Deploy, monitor, back up, and upgrade OpenBucket in production." } }

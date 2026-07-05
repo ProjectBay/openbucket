@@ -1,0 +1,1 @@
+{ "label": "Getting Started", "position": 2, "collapsible": true, "collapsed": false, "link": { "type": "generated-index", "slug": "/getting-started", "title": "Getting Started", "description": "Run OpenBucket in minutes — standalone with Docker, or embedded in your NestJS app." } }

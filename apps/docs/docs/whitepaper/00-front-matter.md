@@ -1,6 +1,6 @@
 # OpenBucket — Implementation White Paper
 
-> **Status:** implementation plan (v1). This document specifies *how* OpenBucket is built, in enough detail that a senior engineer can implement directly from it. It is the operational sibling of [`ARCHITECTURE.md`](./ARCHITECTURE.md) (the *what*) and supersedes [`BACKEND-DESIGN.md`](./BACKEND-DESIGN.md) (the summary-level *how*) at the level of code.
+> **Status:** implementation plan (v1). This document specifies *how* OpenBucket is built, in enough detail that a senior engineer can implement directly from it. It is the operational sibling of `ARCHITECTURE.md` (the *what*) and supersedes `BACKEND-DESIGN.md` (the summary-level *how*) at the level of code.
 
 ---
 
@@ -12,11 +12,11 @@ This white paper covers the implementation in five sections:
 
 | § | Section | Owner concern |
 |---|---|---|
-| **1** | [Backend Architecture & Bootstrap](#1-backend-architecture--bootstrap) | NestJS topology, the classifier middleware, config, filters, shutdown |
-| **2** | [S3 Wire Protocol & SigV4 Authentication](#2-s3-wire-protocol--sigv4-authentication) | XML serialization, SigV4 reverse-verify, full operation route table, error taxonomy |
-| **3** | [Persistence & Storage Layer](#3-persistence--storage-layer) | MikroORM entities, migrations, path-mirror BlobStore, two-phase commit, crash recovery |
-| **4** | [Streaming I/O, Concurrency & Background Work](#4-streaming-io-concurrency--background-work) | PUT/GET streaming, multipart, range requests, the background tick scheduler |
-| **5** | [Admin API, Frontend, Auth & Delivery](#5-admin-api-frontend-auth-flow--delivery) | Admin endpoints, JWT flow, Angular SPA, OpenAPI client gen, Docker, CI |
+| **1** | [Backend Architecture & Bootstrap](./01-backend-architecture.md) | NestJS topology, the classifier middleware, config, filters, shutdown |
+| **2** | [S3 Wire Protocol & SigV4 Authentication](./02-s3-protocol-and-sigv4.md) | XML serialization, SigV4 reverse-verify, full operation route table, error taxonomy |
+| **3** | [Persistence & Storage Layer](./03-persistence-and-storage.md) | MikroORM entities, migrations, path-mirror BlobStore, two-phase commit, crash recovery |
+| **4** | [Streaming I/O, Concurrency & Background Work](./04-streaming-and-concurrency.md) | PUT/GET streaming, multipart, range requests, the background tick scheduler |
+| **5** | [Admin API, Frontend, Auth & Delivery](./05-admin-frontend-auth-delivery.md) | Admin endpoints, JWT flow, Angular SPA, OpenAPI client gen, Docker, CI |
 
 Each section is implementable from the code it contains. Cross-references between sections appear as `[see §N]`.
 

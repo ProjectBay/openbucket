@@ -1,0 +1,1 @@
+{ "label": "Concepts", "position": 5, "collapsible": true, "collapsed": true, "link": { "type": "generated-index", "slug": "/concepts", "title": "Concepts", "description": "How OpenBucket works under the hood — architecture, the security model, durability, and on-disk storage." } }

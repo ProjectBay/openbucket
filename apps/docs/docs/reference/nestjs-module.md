@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 6
 title: NestJS module reference
 ---
 
@@ -8,7 +8,15 @@ title: NestJS module reference
 The full reference for [`@openbucket/nestjs`](https://www.npmjs.com/package/@openbucket/nestjs) —
 embed an **S3-compatible object store** (wire protocol, admin JSON API, and admin
 console SPA) directly inside your own NestJS application, configured in code. For a
-quick orientation, start with [Embedding in NestJS](./embedding.md).
+quick orientation, start with [Embedding in NestJS](../getting-started/quickstart-embed.md).
+
+:::tip Deep-dive references
+This page covers wiring the module. For the details, see the focused guides:
+[Configuration](./configuration.md) (every option + env var),
+[OpenBucketService API](./openbucket-service.md) (the injectable facade),
+[S3 compatibility](./s3-compatibility.md), the [Admin API](./admin-api.md), and
+the [CLI reference](./cli-reference.md).
+:::
 
 ```ts
 import { Module } from '@nestjs/common';
