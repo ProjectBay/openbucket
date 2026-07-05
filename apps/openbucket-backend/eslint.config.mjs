@@ -41,6 +41,7 @@ export default [
             'fast-xml-parser',
             'image-size',
             'passport-jwt',
+            'prom-client',
             'rxjs',
             'sharp',
             'uuid',

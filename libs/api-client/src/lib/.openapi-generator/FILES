@@ -18,6 +18,8 @@ api/health.service.ts
 api/health.serviceInterface.ts
 api/keys-admin.service.ts
 api/keys-admin.serviceInterface.ts
+api/metrics.service.ts
+api/metrics.serviceInterface.ts
 api/objects-admin.service.ts
 api/objects-admin.serviceInterface.ts
 api/replication-admin.service.ts

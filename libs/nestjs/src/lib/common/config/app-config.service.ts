@@ -84,6 +84,11 @@ export class AppConfigService {
   get replicationBatchKeys(): number { return this.raw.get('OB_REPLICATION_BATCH_KEYS', { infer: true }); }
   get replicationLargeObjectThresholdBytes(): number { return this.raw.get('OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES', { infer: true }); }
 
+  // --- Prometheus /metrics + OpenTelemetry (STORY-1202) ---
+  get metricsMode(): Env['METRICS_MODE'] { return this.raw.get('METRICS_MODE', { infer: true }); }
+  get metricsToken(): string | undefined { return this.raw.get('METRICS_TOKEN', { infer: true }); }
+  get tracingEnabled(): boolean { return this.raw.get('OTEL_TRACING_ENABLED', { infer: true }); }
+
   // --- cold-object tiering (STORY-0901) ---
   get tierEnabled(): boolean { return this.raw.get('OPENBUCKET_TIER_ENABLED', { infer: true }); }
   get tierInlineMaxBytes(): number { return this.raw.get('OPENBUCKET_TIER_INLINE_MAX_BYTES', { infer: true }); }

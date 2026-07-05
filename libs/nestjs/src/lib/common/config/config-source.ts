@@ -100,5 +100,11 @@ export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
     OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS: 30_000,
     OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE: 8,
     OPENBUCKET_TIER_PRESIGN_TTL_SECONDS: 300,
+    // Prometheus /metrics + OpenTelemetry (STORY-1202). Off by default; a library
+    // host opts in via the `metrics` / `tracing` option blocks. `resolveOptions`
+    // already defaulted the mode to 'off'.
+    METRICS_MODE: opts.metrics?.mode ?? 'off',
+    METRICS_TOKEN: opts.metrics?.token,
+    OTEL_TRACING_ENABLED: opts.tracing?.enabled ?? false,
   };
 }

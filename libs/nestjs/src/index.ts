@@ -47,6 +47,15 @@ export { HealthModule } from './lib/admin/health/health.module';
 // Config service consumed by the standalone app's main.ts (phase 0b).
 export { AppConfigService } from './lib/common/config/app-config.service';
 
+// Prometheus metrics (STORY-1202). Exported so a host app can scrape the shared
+// `prom-client` registry directly (e.g. bolt it onto its own `/metrics` route)
+// instead of, or in addition to, the guarded `<mountPath>/metrics` endpoint.
+export {
+  METRICS_REGISTRY,
+  PROM_METRICS,
+  type PromMetrics,
+} from './lib/common/metrics/metrics.registry';
+
 // Object-event notifications (STORY-0801). Host apps register in-process handlers
 // with the decorators and may inject ObjectEventsService directly.
 export {
@@ -65,3 +74,9 @@ export { ObjectEventsService } from './lib/events/object-events.service';
 // standalone app needs it to resolve the named ORM token in main.ts; a host
 // must not register its own MikroORM context with this name.
 export { OPEN_BUCKET_ORM_CONTEXT } from './lib/persistence/orm-context';
+
+// The multer storage engine + `@UploadedToBucket()` decorator + upload-validation
+// filter live behind the `@openbucket/nestjs/multer` SUBPATH export (STORY-1200).
+// They are intentionally NOT re-exported here: importing them drags `multer` (an
+// optional peer) into the `.` entry's type graph, which headless / non-Express
+// hosts must not pay for. Import them from `@openbucket/nestjs/multer` instead.

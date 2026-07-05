@@ -8,10 +8,17 @@
   },
   "main": "./src/index.js",
   "types": "./src/index.d.ts",
+  "bin": {
+    "openbucket": "./src/cli/index.js"
+  },
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
       "default": "./src/index.js"
+    },
+    "./multer": {
+      "types": "./src/lib/adapters/multer/index.d.ts",
+      "default": "./src/lib/adapters/multer/index.js"
     },
     "./package.json": "./package.json"
   },
@@ -24,9 +31,22 @@
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@opentelemetry/api": "^1.9.0",
     "express": "^5.0.0",
+    "multer": "^2.0.0",
     "reflect-metadata": "^0.1.13 || ^0.2.0",
     "rxjs": "^7.8.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/api": {
+      "optional": true
+    },
+    "multer": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/multer": "^2.0.0"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1068.0",
@@ -52,6 +72,7 @@
     "nestjs-pino": "^4.6.1",
     "nestjs-zod": "^5.4.0",
     "passport-jwt": "^4.0.1",
+    "prom-client": "^15.1.3",
     "sharp": "^0.34.0",
     "uuid": "^11.1.1",
     "yauzl": "^3.2.0",

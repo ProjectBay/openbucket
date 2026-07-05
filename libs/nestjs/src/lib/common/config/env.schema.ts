@@ -299,10 +299,36 @@ export const EnvSchema = z
     // TTL for presigned redirect URLs.
     OPENBUCKET_TIER_PRESIGN_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
 
+    // --- Prometheus /metrics scrape endpoint (STORY-1202) ---
+    // Off by default: the endpoint falls through to the S3 route and leaks no
+    // registry body. `public` serves an unauthenticated scrape (trusted network);
+    // `token` requires a bearer token (validated strong + required by the
+    // superRefine below, fail-closed — never expose metrics behind a weak token).
+    METRICS_MODE: z.enum(['off', 'public', 'token']).default('off'),
+    METRICS_TOKEN: z.string().optional(), // validated by superRefine when MODE=token
+
+    // --- OpenTelemetry tracing (STORY-1202) ---
+    // Off by default. When enabled the library wraps request handling in a span,
+    // but only if `@opentelemetry/api` (an OPTIONAL peer) is installed AND an SDK
+    // is registered — otherwise it is a hard no-op (see TracingService).
+    OTEL_TRACING_ENABLED: envBoolean(false),
+
     // --- shutdown ---
     SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
   })
   .superRefine((env, ctx) => {
+    // Cross-field: `token` mode must carry a strong bearer token (fail-closed —
+    // never expose /metrics behind a weak/empty token, CWE-521). Mirrors the
+    // webhook url/secret pairing.
+    if (env.METRICS_MODE === 'token') {
+      const tokenResult = strongSecret('METRICS_TOKEN').safeParse(env.METRICS_TOKEN);
+      if (!tokenResult.success) {
+        for (const issue of tokenResult.error.issues) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['METRICS_TOKEN'], message: issue.message });
+        }
+      }
+    }
+
     // Cross-field: when replication is enabled, the endpoint (optional for real
     // AWS but validated when present), bucket, and both credentials are required
     // together — a partial config must refuse to boot (mirrors the webhook /

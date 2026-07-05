@@ -24,6 +24,7 @@ import { S3Module } from './s3/s3.module';
 import { AdminModule } from './admin/admin.module';
 import { AuditModule } from './admin/audit/audit.module';
 import { HealthModule } from './admin/health/health.module';
+import { MetricsModule } from './common/metrics/metrics.module';
 import { TestModule } from './admin/_test/test.module';
 import { RequestClassifierMiddleware } from './common/middleware/request-classifier.middleware';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
@@ -171,6 +172,13 @@ function buildCoreImports(adminEnabled: boolean): Array<Type | DynamicModule> {
     //    §2.1 "S3 module is mounted last").
     ...(adminEnabled ? [AdminModule] : []),
     HealthModule,
+
+    // Prometheus /metrics scrape (STORY-1202). Imported here — BEFORE S3Module —
+    // so the concrete `<mountPath>/metrics` route is mapped ahead of the greedy
+    // `@Controller(':bucket')` S3 route and can't be swallowed as a bucket named
+    // "metrics". (@Global, so this is a no-op for provider visibility — it's the
+    // route-ordering that matters here.)
+    MetricsModule,
 
     // Test-only routes — gated; never present in production. Read straight
     // from process.env (not ConfigService) since it's a build-time gate.

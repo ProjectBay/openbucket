@@ -61,6 +61,18 @@ export class RequestClassifierMiddleware implements NestMiddleware {
       return next();
     }
 
+    // 2b. Bare /metrics → the Prometheus scrape endpoint (STORY-1202). Without
+    //     this branch it would fall through to path-style S3 below and be tagged
+    //     `s3` with bucket `metrics`, making SigV4Guard reject an unsigned scrape.
+    //     Marking it `admin`-kind makes the SigV4 guard skip it (it only verifies
+    //     `s3`-kind); MetricsAuthGuard does the real authorization. The concrete
+    //     `metrics` route is registered ahead of the greedy `:bucket` route
+    //     (MetricsModule is imported before S3Module).
+    if (lowerPath === '/metrics') {
+      ctx.kind = 'admin';
+      return next();
+    }
+
     // 3. Virtual-host S3.
     if (this.endpointSuffix && host.endsWith(this.endpointSuffix)) {
       const label = host.slice(0, -this.endpointSuffix.length);

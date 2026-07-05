@@ -53,9 +53,11 @@ bounded retention), i18n (en/de), light/dark themes.
 **Developer file pipeline** — on-the-fly **image transformations** on GET
 (`?w=&h=&fit=&format=&q=`, cached derivatives), **object event notifications**
 (in-process `@OnObjectCreated()` events for the embedded case + signed HTTP
-webhooks), **direct browser uploads** (presigned POST), and one-call
+webhooks), **direct browser uploads** (presigned POST), one-call
 `OpenBucketService.uploadFrom()` helpers (content-type sniffing, validation, image
-metadata).
+metadata), and a **drop-in multer storage engine** (`@openbucket/nestjs/multer`) —
+`FileInterceptor` streams straight into the store (no temp file), with an
+`@UploadedToBucket()` decorator and an upload-validation → HTTP 400 filter.
 
 **Durability & replication** — **async one-way replication** to an external
 S3-compatible target (AWS S3 / Cloudflare R2 / Backblaze B2 / MinIO) via a durable
@@ -69,7 +71,14 @@ restore** (per-bucket + whole-instance `.zip` snapshots).
 
 **Operations** — refuse-to-boot env validation, forward-only DB migrations on
 startup, graceful drain on `SIGTERM`, structured (pino) JSON logs, health &
-readiness probes, request IDs.
+readiness probes, request IDs, a **Prometheus `/metrics` endpoint** (HTTP
+request counter + latency histogram, per-bucket storage/object-count gauges, S3
+operation counter, replication-outbox depth — all with bounded label cardinality,
+never a raw URL/key/IP; gated `off`/`public`/`token` with a timing-safe bearer
+check), **optional OpenTelemetry tracing** (a no-op unless you install
+`@opentelemetry/api` + an SDK), and a **dependency-free `openbucket` CLI** (bucket
+& key management, backup/restore, replication status) with secret-safe,
+scriptable output (`--json`, non-echoing password prompt, redacted errors).
 
 **Embeddable** — runs its ORM under an isolated MikroORM context so it won't
 collide with a host app's database, mounts everything under a configurable
@@ -224,6 +233,29 @@ Full method list and admin-API usage: see the
 Take a browser upload, stream it into OpenBucket, and save a row (with a URL) in
 your **own** database:
 
+**One line** — swap `FileInterceptor`'s storage for OpenBucket via the
+`@openbucket/nestjs/multer` subpath: the file streams straight into the store (no
+temp file, no `file.buffer`), and `@UploadedToBucket()` hands you the committed
+`{ bucket, key, url, etag, size, contentType }`:
+
+```ts
+@Post('files')
+@UseFilters(UploadValidationExceptionFilter) // rejected upload → HTTP 400
+@UseInterceptors(
+  OpenBucketFileInterceptor('file', {
+    bucket: 'uploads',
+    key: 'uuid',
+    validate: { maxBytes: 10 * 1024 * 1024, allowedContentTypes: ['image/*'] },
+  }),
+)
+upload(@UploadedToBucket() file: UploadedFileInfo) {
+  return { key: file.key, url: file.url }; // already committed
+}
+```
+
+Prefer the lower-level primitive? `putObject` / `uploadFrom` still let you pick the
+key and persist it by hand:
+
 ```ts
 @Post('files')
 @UseInterceptors(FileInterceptor('file')) // multer field name: "file"
@@ -243,8 +275,8 @@ async upload(@UploadedFile() file: Express.Multer.File) {
 }
 ```
 
-Full walkthrough (bucket bootstrap, serving, and the “store a URL column”
-variants): see the
+Full walkthrough (bucket bootstrap, the one-line multer engine + its DI-friendly
+mixin, serving, and the “store a URL column” variants): see the
 [`@openbucket/nestjs` README](./libs/nestjs/README.md#recipe-accept-file-uploads-and-store-their-urls).
 
 ### Run from source

@@ -154,6 +154,66 @@ row is stored, any secret-looking field (`/secret|password|hash|token|authorizat
 is stripped and the JSON `detail` is dropped if it exceeds ~2 KiB (defense-in-depth;
 the v1 catalogue never carries secrets). Read-only `GET`s are **not** audited.
 
+### Prometheus metrics & OpenTelemetry
+
+A Prometheus scrape endpoint is served at `<mountPath>/metrics` (text exposition
+format `0.0.4`). It is **off by default** — enable it via the `metrics` option:
+
+```ts
+OpenBucketModule.forRoot({
+  // …
+  metrics: {
+    mode: 'token',        // 'off' (default) | 'public' | 'token'
+    token: process.env.METRICS_TOKEN, // required + validated strong when mode: 'token'
+  },
+  tracing: { enabled: false }, // OpenTelemetry (see below)
+});
+```
+
+Standalone / env: `METRICS_MODE=off|public|token`, `METRICS_TOKEN=…`.
+
+- **`off`** — the route is not served (falls through to the S3 route; no registry
+  body is ever leaked).
+- **`public`** — an unauthenticated scrape (the intended default on a trusted
+  network / an internal Prometheus).
+- **`token`** — requires `Authorization: Bearer <token>`; the token is compared in
+  **constant time** (`crypto.timingSafeEqual`) and must be strong (the app
+  **refuses to boot** with a weak/empty token in `token` mode). The token is never
+  logged (redacted with the rest of `authorization`).
+
+The `/metrics` request skips SigV4 verification (the classifier tags it
+`admin`-kind), and its route is mapped **before** the greedy S3 `:bucket` route so
+a bucket literally named `metrics` can't shadow it.
+
+Exported families (all with **bounded** label cardinality — never a raw URL,
+object key, bucket beyond its public name, or client IP; CWE-770):
+
+| Metric | Type | Labels |
+| --- | --- | --- |
+| `openbucket_http_requests_total` | counter | `surface`, `method`, `route_class`, `status_class` |
+| `openbucket_http_request_duration_seconds` | histogram | same as above |
+| `openbucket_s3_operations_total` | counter | `operation` (the finite S3 op names) |
+| `openbucket_storage_bytes` | gauge | `bucket` |
+| `openbucket_object_count` | gauge | `bucket` |
+| `openbucket_replication_outbox_depth` | gauge | `status` (`pending`/`inflight`/`failed`) |
+| `openbucket_process_*` / `openbucket_nodejs_*` | default | — |
+
+HTTP counters/histograms are live immediately (recorded by the single global
+request interceptor). The gauges are refreshed on the **usage-rollup** tick
+(`USAGE_ROLLUP_INTERVAL_MS`, default 15 min) from the same in-memory aggregate the
+analytics rollup already computes — so a scrape never runs a query — and a deleted
+bucket's series is evicted on the next tick. Host apps that want to scrape the
+registry directly can inject `PROM_METRICS` / `METRICS_REGISTRY`.
+
+**Tracing** — `tracing: { enabled: true }` (env `OTEL_TRACING_ENABLED=true`) wraps
+each request in an OpenTelemetry span named by `surface`/`route_class` with only
+bounded attributes (`http.method`, `route_class`, `surface`). The library **never
+hard-depends** on any `@opentelemetry/*` package: it resolves `@opentelemetry/api`
+dynamically and is a genuine **no-op** unless you install `@opentelemetry/api` *and*
+register an SDK (`trace.setGlobalTracerProvider(...)`). If tracing is enabled but the
+api is absent, it logs one boot warning and no-ops (fail-open — tracing is
+non-critical telemetry).
+
 ## Async configuration
 
 For secrets resolved at runtime (e.g. from the host's `ConfigService`). Note
@@ -574,6 +634,102 @@ Notes:
 - Your app’s multipart parsing is independent of OpenBucket — its S3 routes mount
   under `mountPath` and handle their own request bodies.
 
+#### One-line wiring: the multer storage engine
+
+If your app already uses `FileInterceptor`, swap its storage for OpenBucket — the
+file streams **straight into the store** (no temp file, no `file.buffer`, no
+explicit `uploadFrom` call). The engine sniffs + validates + picks a safe key,
+then merges the committed `{ bucket, key, url, etag, size, contentType }` onto the
+file, which `@UploadedToBucket()` hands your handler. These three symbols ship
+behind the dedicated **`@openbucket/nestjs/multer`** subpath export (`multer` is an
+_optional_ peer, already present via `@nestjs/platform-express` — headless hosts
+that never import this subpath never pull it in):
+
+```ts
+import { Controller, Post, UseFilters, UseInterceptors } from '@nestjs/common';
+import {
+  UploadedToBucket,
+  UploadValidationExceptionFilter,
+  type UploadedFileInfo,
+} from '@openbucket/nestjs/multer';
+import { OpenBucketFileInterceptor } from './open-bucket-file.interceptor'; // ← below
+
+@Controller('files')
+@UseFilters(UploadValidationExceptionFilter) // maps a rejected upload → HTTP 400
+export class FilesController {
+  @Post()
+  @UseInterceptors(
+    OpenBucketFileInterceptor('file', {
+      bucket: 'uploads',
+      key: 'uuid', // built-in strategy, OR a (req, file) => string function (always assertSafeKey-guarded)
+      validate: { maxBytes: 10 * 1024 * 1024, allowedContentTypes: ['image/*'] },
+    }),
+  )
+  upload(@UploadedToBucket() file: UploadedFileInfo) {
+    // Already committed to OpenBucket — persist the STABLE key (not the signed url).
+    return { key: file.key, contentType: file.contentType, size: file.size };
+  }
+}
+```
+
+**The `this.ob` caveat.** `openBucketStorage` needs the `OpenBucketService`
+_instance_, but inside a class-property `@UseInterceptors(...)` decorator `this`
+is not available at decoration time. The DI-friendly fix is a tiny `mixin`
+interceptor that receives `ob` from the container and builds the storage engine at
+construction — define it once and reuse it everywhere:
+
+```ts
+// open-bucket-file.interceptor.ts
+import {
+  Injectable,
+  mixin,
+  type NestInterceptor,
+  type Type,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { OpenBucketService } from '@openbucket/nestjs';
+import { openBucketStorage, type OpenBucketStorageOptions } from '@openbucket/nestjs/multer';
+
+/** A `FileInterceptor` whose storage is a DI-resolved OpenBucket engine. */
+export function OpenBucketFileInterceptor(
+  field: string,
+  opts: OpenBucketStorageOptions,
+): Type<NestInterceptor> {
+  @Injectable()
+  class OpenBucketInterceptor implements NestInterceptor {
+    private readonly delegate: NestInterceptor;
+    constructor(ob: OpenBucketService) {
+      const Base = FileInterceptor(field, { storage: openBucketStorage(ob, opts) });
+      this.delegate = new Base();
+    }
+    intercept(...args: Parameters<NestInterceptor['intercept']>) {
+      return this.delegate.intercept(...args);
+    }
+  }
+  return mixin(OpenBucketInterceptor);
+}
+```
+
+Notes:
+
+- **Rejected uploads → 400.** With `@UseFilters(UploadValidationExceptionFilter)`
+  a too-large / disallowed-type / active-content / unsafe-key upload renders a
+  stable `{ statusCode: 400, error: 'Bad Request', code, message }` body instead of
+  an opaque `500`. Register it per-controller (above) or globally
+  (`app.useGlobalFilters(new UploadValidationExceptionFilter())`). It is scoped by
+  `@Catch(UploadValidationError)`, so an S3 error like `NoSuchBucketError` (absent
+  bucket) is **not** swallowed — make sure the bucket exists (step 1 above).
+- **Key safety.** Pass `key` as a built-in strategy name or a `(req, file) => string`
+  function (e.g. `(req) => `tenant/${req.user.id}/${randomUUID()}`); either way the
+  derived key is routed through `assertSafeKey`, so a `../evil` / control-char key
+  is rejected — a raw, unsanitized key string is never used verbatim.
+- **Store the key, presign on read.** The engine attaches a `url`, but the robust
+  default is still to persist the stable `{ bucket, key }` and mint a fresh
+  `presignGetUrl(...)` on read (the `#toDto` pattern above) — no expiry to babysit.
+- For an array of files use `FilesInterceptor` inside the same mixin and read a
+  `UploadedFileInfo[]` via `@UploadedToBucket()`; for a `FileFieldsInterceptor`
+  pass a field name, `@UploadedToBucket('avatar')`.
+
 ## Options
 
 | Option | Required | Default | Notes |
@@ -587,6 +743,8 @@ Notes:
 | `admin` | | — | **Omit to disable the admin surface entirely** (headless S3-only). When present: `{ username, passwordHash (argon2id), jwtSecret, serveUi?, jwtAccessTtl?, jwtRefreshTtl? }` — `username`/`passwordHash`/`jwtSecret` are all required. |
 | `limits` | | | `{ maxObjectSizeMb?, maxMultipartParts?, multipartTtlHours? }`. |
 | `replication` | | — | **Omit to disable.** Async one-way replication to an external S3-compatible target — see [Async replication](#async-replication-to-an-external-s3-target). |
+| `metrics` | | `{ mode: 'off' }` | Prometheus `/metrics` endpoint: `{ mode: 'off'\|'public'\|'token', token? }`. `token` requires a strong `token` (validated at boot). See [Prometheus metrics & OpenTelemetry](#prometheus-metrics--opentelemetry). |
+| `tracing` | | `{ enabled: false }` | OpenTelemetry span-per-request. No-op unless `@opentelemetry/api` + an SDK are installed. |
 
 `forRootAsync` adds two **static** options alongside `useFactory`/`inject`:
 `serveUi?` (default `true`) and `admin?` (default `true` — set `false` for headless).
@@ -764,6 +922,47 @@ Security / durability notes:
 - The **remote key is internal** (key-codec encoded, bucket-scoped) and is never
   exposed on the S3 wire or admin API — the admin object metadata surfaces only
   `location` (`local`/`remote`) + `storageClass`.
+
+## `openbucket` CLI
+
+The package ships an **`openbucket` command-line client** for the admin API (a
+`bin`, so `npx openbucket …` or a global install both work). It is
+**dependency-free** — built entirely on Node built-ins (`fetch`, `parseArgs`,
+`readline`), so it drags nothing extra into your install.
+
+```bash
+export OPENBUCKET_ENDPOINT=https://your-host/storage   # default http://127.0.0.1:3900
+export OPENBUCKET_USERNAME=admin
+export OPENBUCKET_PASSWORD=…            # or omit to be prompted (no echo); never a flag
+
+openbucket buckets ls
+openbucket buckets mb reports --versioning enabled
+openbucket buckets rb reports
+
+openbucket keys list
+openbucket keys create --label ci --scope prefix:reports/2026/   # secret shown ONCE
+openbucket keys revoke <id>
+
+openbucket backup create -o snapshot.zip                  # whole-instance .zip
+openbucket backup create --bucket reports -o reports.zip  # single bucket
+openbucket backup restore -f snapshot.zip --yes           # RESETS the target — gated by --yes
+
+openbucket replication status
+```
+
+**Security posture** (mirrors the server's): the password is read only from
+`$OPENBUCKET_PASSWORD` or an interactive non-echoing prompt — **never** from a
+flag (so it can't land on `argv`/`ps`); the bearer token lives in memory for the
+invocation only; and **every** error path is run through a central redactor that
+strips `Bearer` tokens, JWTs, and `secretAccessKey`/`password` values before
+anything reaches stderr. Data goes to **stdout** (`--json` for a single pipeable
+JSON document, `--quiet` for just the essential datum); human errors go to
+**stderr**.
+
+Set `$OPENBUCKET_TOKEN` to reuse an existing bearer token and skip login (handy in
+CI, where there is no TTY — the CLI then fails fast with an instructive message
+instead of hanging). Exit codes: `0` success, `1` error, `2` usage, `3` auth (401),
+`4` rate-limited (429). `backup restore` is destructive and requires `--yes`.
 
 ## Caveats
 

@@ -119,6 +119,28 @@ export interface OpenBucketModuleOptions {
     /** Objects larger than this stream via multipart. Default 64 MiB. */
     largeObjectThresholdBytes?: number;
   };
+
+  /**
+   * Prometheus scrape endpoint at `<mountPath>/metrics` (STORY-1202). Default
+   * `off` — the endpoint serves nothing (falls through to the S3 route, no
+   * registry body leaked). `public` serves an unauthenticated scrape (a trusted
+   * network); `token` requires `Authorization: Bearer <token>` and the token
+   * must be strong (validated at boot).
+   */
+  metrics?: {
+    mode?: 'off' | 'public' | 'token';
+    /** Bearer token — required (and validated strong) when `mode: 'token'`. */
+    token?: string;
+  };
+
+  /**
+   * OpenTelemetry tracing (STORY-1202). Default disabled. When enabled the
+   * library wraps request handling in a span — but ONLY if the host installs
+   * `@opentelemetry/api` (an optional peer) and registers an SDK; otherwise it
+   * is a hard no-op. The library never hard-depends on any `@opentelemetry/*`
+   * package.
+   */
+  tracing?: { enabled?: boolean };
 }
 
 /** Async variant for DI'd secrets (e.g. from the host's ConfigService). */
@@ -187,6 +209,13 @@ export interface ResolvedOpenBucketOptions {
     batchKeys?: number;
     largeObjectThresholdBytes?: number;
   };
+  metrics: {
+    mode: 'off' | 'public' | 'token';
+    token?: string;
+  };
+  tracing: {
+    enabled: boolean;
+  };
 }
 
 const DEFAULT_MOUNT = '/storage';
@@ -251,6 +280,16 @@ export function resolveOptions(o: OpenBucketModuleOptions): ResolvedOpenBucketOp
           return o.replication;
         })()
       : undefined,
+    // Prometheus /metrics (STORY-1202). Default `off`; the token (when mode is
+    // `token`) is format-validated by `validateSecurityCriticalOptions`.
+    metrics: {
+      mode: o.metrics?.mode ?? 'off',
+      token: o.metrics?.token,
+    },
+    // OpenTelemetry tracing (STORY-1202). Default disabled.
+    tracing: {
+      enabled: o.tracing?.enabled ?? false,
+    },
   };
 }
 
@@ -315,6 +354,24 @@ export function validateSecurityCriticalOptions(o: ResolvedOpenBucketOptions): v
           }),
       })
       .optional(),
+    // Prometheus /metrics (STORY-1202): a `token` mode must carry a strong
+    // bearer token — same fail-closed contract as admin.jwtSecret /
+    // webhooks.secret. A `token` mode with a weak/empty token must fail at boot,
+    // not silently expose metrics.
+    metrics: z
+      .object({
+        mode: z.enum(['off', 'public', 'token']),
+        token: z.string().optional(),
+      })
+      .superRefine((m, ctx) => {
+        if (m.mode !== 'token') return;
+        const result = strongSecret('metrics.token').safeParse(m.token);
+        if (!result.success) {
+          for (const issue of result.error.issues) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['token'], message: issue.message });
+          }
+        }
+      }),
   });
   const result = schema.safeParse(o);
   if (!result.success) {

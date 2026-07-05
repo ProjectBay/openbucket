@@ -7,13 +7,15 @@ import { GlobalExceptionFilter } from './filters/global-exception.filter';
 import { ShutdownTrackerInterceptor } from './interceptors/shutdown-tracker.interceptor';
 import { RequestMetricsInterceptor } from './interceptors/request-metrics.interceptor';
 import { RequestMetricsService } from './metrics/request-metrics.service';
+import { MetricsModule } from './metrics/metrics.module';
+import { TracingModule } from './tracing/tracing.module';
 import { ShutdownState } from './shutdown-state.service';
 import { RequestIdMiddleware } from './middleware/request-id.middleware';
 import { RequestClassifierMiddleware } from './middleware/request-classifier.middleware';
 
 @Global()
 @Module({
-  imports: [AppConfigInternalModule],
+  imports: [AppConfigInternalModule, MetricsModule, TracingModule],
   providers: [
     RequestIdMiddleware,
     RequestClassifierMiddleware,
@@ -37,6 +39,8 @@ import { RequestClassifierMiddleware } from './middleware/request-classifier.mid
   ],
   exports: [
     AppConfigInternalModule,
+    MetricsModule,
+    TracingModule,
     RequestIdMiddleware,
     RequestClassifierMiddleware,
     ShutdownState,
