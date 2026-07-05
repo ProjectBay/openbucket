@@ -114,6 +114,22 @@ export const validateCronExpression = (cron: string): string | null => {
   }
 };
 
+/**
+ * Normalize a route mount prefix: leading slash, no trailing slash; `''` (root)
+ * allowed. Shared by the library (`OpenBucketModule.forRoot({ mountPath })`) and
+ * the standalone `MOUNT_PATH` env var so both accept the same spellings
+ * (`storage`, `/storage`, `/storage/` → `/storage`; `''` / `/` → `''`). Lives
+ * here (config layer) so `env.schema` can reuse it without importing back up into
+ * `open-bucket-options` (which already imports from this module); the public
+ * re-export in `open-bucket-options` preserves the existing import site.
+ */
+export function normalizeMount(p: string): string {
+  let m = p.trim();
+  if (m === '/' || m === '') return '';
+  if (!m.startsWith('/')) m = `/${m}`;
+  return m.replace(/\/+$/, '');
+}
+
 export const validateReplicationEndpoint = (
   endpoint: string,
 ): { error?: string; insecure?: boolean } => {
@@ -135,6 +151,17 @@ export const EnvSchema = z
     NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
     PORT: portNumber.default(9000),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+
+    // --- routing ---
+    // Route prefix the STANDALONE server mounts EVERYTHING under — the S3 wire
+    // protocol (`<MOUNT_PATH>/<bucket>/<key>`), the admin JSON API
+    // (`<MOUNT_PATH>/api/admin/*`), the admin SPA (`<MOUNT_PATH>/admin`), and
+    // health/metrics. Empty (the default) keeps everything at the root, exactly
+    // as before. Set it to run behind a reverse proxy that exposes OpenBucket at a
+    // subpath (e.g. `https://example.com/storage/…`). Normalized to a leading
+    // slash with no trailing slash (`storage`/`/storage/` → `/storage`); mirrors
+    // the embedded module's `OpenBucketModule.forRoot({ mountPath })`.
+    MOUNT_PATH: z.string().default('').transform(normalizeMount),
 
     // --- persistence ---
     DATA_DIR: z

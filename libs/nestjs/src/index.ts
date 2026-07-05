@@ -44,6 +44,15 @@ export { OpenBucketCoreModule } from './lib/open-bucket-core.module';
 export { AdminModule } from './lib/admin/admin.module';
 export { HealthModule } from './lib/admin/health/health.module';
 
+// Standalone `MOUNT_PATH` support: the wrapper root module that mounts the whole
+// tree under a subpath, plus the two pure helpers `main.ts` needs to be
+// mount-aware without duplicating logic — `normalizeMount` (the same
+// normalization the env schema + `forRoot` apply) and `rewriteBaseHref` (the SPA
+// `<base href>` rewrite the embedded SpaController uses).
+export { OpenBucketStandaloneModule } from './lib/open-bucket-standalone.module';
+export { normalizeMount } from './lib/open-bucket-options';
+export { rewriteBaseHref } from './lib/spa/spa-utils';
+
 // Config service consumed by the standalone app's main.ts (phase 0b).
 export { AppConfigService } from './lib/common/config/app-config.service';
 

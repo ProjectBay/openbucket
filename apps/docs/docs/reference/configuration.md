@@ -54,10 +54,21 @@ anything required is missing or malformed. Unknown variables are ignored.
 | --- | --- | --- |
 | `NODE_ENV` | `production` | One of `development` / `test` / `production`. |
 | `PORT` | `9000` | HTTP listen port. |
+| `MOUNT_PATH` | — (root) | Route prefix everything mounts under — S3 (`<MOUNT_PATH>/<bucket>/<key>`), admin API (`<MOUNT_PATH>/api/admin`), admin console (`<MOUNT_PATH>/admin`), health & metrics. Empty = root. Set it to run behind a reverse proxy at a subpath (e.g. `/storage`). Normalized to a leading slash, no trailing slash. |
 | `LOG_LEVEL` | `info` | `trace` / `debug` / `info` / `warn` / `error` / `fatal`. |
 | `ADMIN_USERNAME` | `admin` | Bootstrap admin login. |
 | `JWT_ACCESS_TTL_SECONDS` | `900` | Access-token lifetime (60–3600). |
 | `JWT_REFRESH_TTL_SECONDS` | `604800` | Refresh-token lifetime (3600–2592000, i.e. 1 h–30 d). |
+
+:::tip[Running at a subpath]
+`MOUNT_PATH` moves the **whole** OpenBucket surface under one prefix so it can sit
+behind a reverse proxy at, say, `https://example.com/storage/…` without a
+dedicated subdomain. The admin SPA's `<base href>` is rewritten to match, and
+the admin API stays guarded at `<MOUNT_PATH>/api/admin/*`. Point your S3 client's
+endpoint at `https://example.com/storage` (path-style). It is the standalone twin
+of the embedded module's `OpenBucketModule.forRoot({ mountPath })`. See
+[Deployment → behind a reverse proxy](../operations/deployment.md#running-behind-a-reverse-proxy-at-a-subpath).
+:::
 
 ### S3 protocol
 

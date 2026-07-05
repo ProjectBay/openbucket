@@ -2,12 +2,18 @@ import type { ModuleMetadata, Type } from '@nestjs/common';
 import { z } from 'zod';
 
 import {
+  normalizeMount,
   S3_BUCKET_RE,
   strongSecret,
   validateCronExpression,
   validateReplicationEndpoint,
   validateWebhookUrl,
 } from './common/config/env.schema';
+
+// Re-exported for the existing import sites (open-bucket.module.ts, tests) that
+// pull `normalizeMount` from here. It now lives in `env.schema` so the standalone
+// `MOUNT_PATH` env var can share it without a config → options import cycle.
+export { normalizeMount };
 
 /**
  * Configuration for {@link OpenBucketModule}. Replaces the standalone app's
@@ -451,12 +457,4 @@ export function validateSecurityCriticalOptions(o: ResolvedOpenBucketOptions): v
       .join('\n');
     throw new Error(`OpenBucketModule: invalid configuration (fix before boot):\n${issues}`);
   }
-}
-
-/** Leading slash, no trailing slash; `''` (root) allowed. */
-export function normalizeMount(p: string): string {
-  let m = p.trim();
-  if (m === '/' || m === '') return '';
-  if (!m.startsWith('/')) m = `/${m}`;
-  return m.replace(/\/+$/, '');
 }
