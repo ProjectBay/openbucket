@@ -9,6 +9,24 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.12] — 2026-07-05
+
+Feature release — admin console v2 (EPIC-12).
+
+### Added
+
+- **Object preview** — preview images, PDFs, and text/code directly in the admin
+  console (with a size cap and safe rendering), without a full download.
+- **Cross-bucket object search** — find objects by name / prefix / tag across all
+  buckets, keyset-paginated. Backed by an indexed object-tags table and a search
+  admin endpoint (LIKE-escaped queries).
+- **Usage analytics dashboard** — storage-over-time, per-bucket size breakdown, and
+  request/error rates on the home dashboard, from periodic usage samples + a
+  request-metrics interceptor and rollup.
+- **Audit-log viewer** — a durable, queryable audit store (secret-stripped,
+  retention-bounded) with a filterable console viewer over admin logins and
+  bucket / object / key mutations.
+
 ## [0.1.0-alpha.11] — 2026-07-05
 
 Feature release — multi-tenant access control (EPIC-11).
