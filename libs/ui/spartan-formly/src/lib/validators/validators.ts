@@ -28,9 +28,15 @@ export function emailValidatorExpression(control: AbstractControl): boolean {
 // ============================================================================
 
 /**
- * URL regex pattern
+ * URL regex pattern.
+ *
+ * The path portion is a single `[/\w .-]*` class rather than the nested
+ * `([/\w .-]*)*` it replaces: the inner group could match empty, making the
+ * outer `*` ambiguous and catastrophically backtrack (js/redos). A flat
+ * character class accepts exactly the same strings without the nested
+ * quantifier.
  */
-const URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
+const URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})[/\w .-]*\/?$/;
 
 /**
  * URL validator expression

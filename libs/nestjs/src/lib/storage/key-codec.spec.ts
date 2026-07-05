@@ -77,6 +77,13 @@ describe('encodeKey / decodeKey', () => {
       const segment = 'a'.repeat(255);
       expect(encodeKey(segment)).toBe(segment);
     });
+
+    it('rejects a raw segment of 256 bytes at the pre-loop bound (js/loop-bound-injection)', () => {
+      // 256 unreserved bytes would encode 1:1 to 256 bytes (> 255). The new
+      // pre-loop cap rejects it before the encode loop runs — same accept/reject
+      // outcome as the post-encode check it complements.
+      expect(() => encodeKey('a'.repeat(256))).toThrow(KeyTooLongError);
+    });
   });
 
   describe('roundtrip', () => {

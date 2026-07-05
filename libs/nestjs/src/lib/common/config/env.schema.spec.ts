@@ -2,7 +2,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
 import { AppConfigService } from './app-config.service';
-import { loadEnv } from './env.schema';
+import { loadEnv, normalizeMount } from './env.schema';
 
 /**
  * TEST-0012 — env schema validation + refuse-to-boot semantics.
@@ -486,5 +486,31 @@ describe('loadEnv scheduled backups (STORY-1203)', () => {
       }),
     ).toThrow('Refusing to boot: invalid environment.');
     expect(errSpy.mock.calls[0][0]).toContain('OB_SCHEDULED_BACKUP_CRON is not a valid cron');
+  });
+});
+
+describe('normalizeMount (ReDoS-free trailing-slash trim)', () => {
+  it.each([
+    ['', ''],
+    ['/', ''],
+    ['//', ''],
+    ['storage', '/storage'],
+    ['/storage', '/storage'],
+    ['/storage/', '/storage'],
+    ['storage///', '/storage'],
+    ['  /storage/  ', '/storage'],
+    ['/a/b/c/', '/a/b/c'],
+  ])('normalizeMount(%j) -> %j', (input, expected) => {
+    expect(normalizeMount(input)).toBe(expected);
+  });
+
+  it('is linear on a long trailing-slash run (no polynomial backtracking)', () => {
+    // A pathological input for the old `/\/+$/`: many slashes NOT terminating the
+    // string. Must return promptly and correctly with the linear scan.
+    const evil = '/x' + '/'.repeat(200_000) + 'y';
+    const start = Date.now();
+    // No trailing slash to strip (ends in 'y') → returned unchanged.
+    expect(normalizeMount(evil)).toBe(evil);
+    expect(Date.now() - start).toBeLessThan(1000);
   });
 });

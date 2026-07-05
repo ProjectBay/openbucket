@@ -21,6 +21,12 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least-privilege default for every job (actions/missing-workflow-permissions):
+# read-only. The one job that needs more (build-image → GHCR) widens its own
+# scope with a job-level `permissions:` block that overrides this default.
+permissions:
+  contents: read
+
 env:
   # Node 22 matches the Docker base and satisfies Angular's require(ESM)
   # (22.x >=22.12). The SQLite driver (libsql) ships N-API prebuilds that are
@@ -54,7 +60,7 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
       - name: Derive nx affected base
-        uses: nrwl/nx-set-shas@v5
+        uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5.0.1
 
       - name: Lint
         run: npx nx run-many --target=lint --all --parallel=4
@@ -100,7 +106,7 @@ jobs:
       image-tag: ${{ steps.meta.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - id: meta
         name: Compute image tag
@@ -114,7 +120,7 @@ jobs:
           fi
 
       - name: Build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: Dockerfile
