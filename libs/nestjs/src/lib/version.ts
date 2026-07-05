@@ -8,4 +8,4 @@
  * constant must match. (No build-time JSON import: the standalone app is bundled
  * and can't reliably read package.json at runtime.)
  */
-export const OPENBUCKET_VERSION = '0.1.0-alpha.9';
+export const OPENBUCKET_VERSION = '0.1.0-alpha.10';

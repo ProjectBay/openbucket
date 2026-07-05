@@ -9,6 +9,25 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.10] — 2026-07-05
+
+Feature release — durability & cloud replication (EPIC-10).
+
+### Added
+
+- **Async replication to an external S3-compatible target** (AWS S3 / Cloudflare R2
+  / Backblaze B2 / MinIO). Every committed PUT/DELETE is enqueued in a durable
+  **transactional outbox** and mirrored by a background worker with per-key
+  ordering, last-writer-wins coalescing, exponential-backoff retry, and a
+  dead-letter cap — resuming on boot and surviving remote outages. Configure via
+  `OB_REPLICATION_*` env vars or the `replication` module option.
+- **Cold-object tiering** — objects not accessed within a policy window are
+  offloaded to the replication target to free local disk; a `GET` transparently
+  rehydrates them (read-through). Lifecycle `<Transition>` rules now drive tiering.
+- **Replication status & reconcile** — an admin API + **console page** showing
+  replication lag, last error, and per-bucket status, plus a manual
+  reconcile/backfill job that re-enqueues objects missing on the remote.
+
 ## [0.1.0-alpha.9] — 2026-07-04
 
 Feature release — the developer upload pipeline (EPIC-09).
