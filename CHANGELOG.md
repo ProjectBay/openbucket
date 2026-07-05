@@ -9,6 +9,16 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.13] — 2026-07-05
+
+### Changed
+
+- **Admin console: consolidated the sidebar into Settings tabs.** Access Keys,
+  Admin Users, Backup & Restore, Replication, and Audit Log — plus Appearance —
+  are now tabs inside **Settings** (`/settings?tab=…`) rather than separate sidebar
+  items; the sidebar is now Dashboard · Buckets · Search · Settings. Read-only
+  admins do not see the Admin Users tab.
+
 ## [0.1.0-alpha.12] — 2026-07-05
 
 Feature release — admin console v2 (EPIC-12).
