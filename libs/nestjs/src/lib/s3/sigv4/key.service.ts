@@ -10,6 +10,10 @@ export interface AccessKey {
   accessKeyId: string;
   secretAccessKey: string;
   disabled: boolean;
+  /** True when this is the env root key, not a stored sub-key (EPIC-11). */
+  isRoot: boolean;
+  /** Compiled scope `PolicyDocument` (JSON text) for a scoped sub-key, else null. */
+  scopePolicy: string | null;
 }
 
 export abstract class KeyService {

@@ -23,7 +23,9 @@ const CONFIG = { maxObjectSizeMb: 1 } as AppConfigService;
 
 const keys: KeyService = {
   getSecret: async (id: string): Promise<AccessKey | null> =>
-    id === AKID ? { accessKeyId: AKID, secretAccessKey: SECRET, disabled: false } : null,
+    id === AKID
+      ? { accessKeyId: AKID, secretAccessKey: SECRET, disabled: false, isRoot: true, scopePolicy: null }
+      : null,
 };
 
 const MINT: PresignPostInput = {

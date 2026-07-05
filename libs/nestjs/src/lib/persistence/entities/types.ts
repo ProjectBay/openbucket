@@ -103,3 +103,15 @@ export interface PolicyDocument {
 }
 
 export type TagSet = Record<string, string>;
+
+/**
+ * Admin authorization role (EPIC-11, STORY-1002). `admin` is a full operator
+ * (every state-changing admin action); `readonly` may authenticate and read but
+ * is 403'd by `RolesGuard` on mutating admin routes (bar the self-service
+ * allowlist). Lives here — not in `admin/` — so both the persistence layer and
+ * the admin controllers/DTOs can import it without a layering inversion.
+ */
+export type AdminRole = 'admin' | 'readonly';
+
+/** The admin roles as a tuple, for `z.enum(ADMIN_ROLES)` DTO validation. */
+export const ADMIN_ROLES = ['admin', 'readonly'] as const;

@@ -8,10 +8,12 @@ import { AuthModule } from './auth/auth.module';
 import { BucketsAdminModule } from './buckets/buckets-admin.module';
 import { ObjectsAdminModule } from './objects/objects-admin.module';
 import { KeysAdminModule } from './keys/keys-admin.module';
+import { AdminUsersModule } from './users/admin-users.module';
 import { SettingsAdminModule } from './settings/settings-admin.module';
 import { BackupModule } from './backup/backup.module';
 import { ReplicationAdminModule } from './replication/replication-admin.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { RolesGuard } from './auth/roles.guard';
 import { AuditService } from './audit/audit.service';
 import { AdminBootstrapService } from './bootstrap/admin-bootstrap.service';
 
@@ -28,6 +30,7 @@ export const ADMIN_CONTROLLER_MODULES = [
   BucketsAdminModule,
   ObjectsAdminModule,
   KeysAdminModule,
+  AdminUsersModule,
   SettingsAdminModule,
   BackupModule,
   ReplicationAdminModule,
@@ -68,6 +71,10 @@ export const ADMIN_CONTROLLER_MODULES = [
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // RolesGuard (EPIC-11) runs immediately AFTER JwtAuthGuard so `req.user.role`
+    // is already the fresh DB value; it default-denies mutating admin routes for
+    // read-only principals. Global guards run in registration order.
+    { provide: APP_GUARD, useClass: RolesGuard },
     // Bind ThrottlerGuard app-wide (TASK-2141): covers the S3 controllers, not
     // just admin login. Listed after JwtAuthGuard so both APP_GUARDs run.
     { provide: APP_GUARD, useClass: ThrottlerGuard },

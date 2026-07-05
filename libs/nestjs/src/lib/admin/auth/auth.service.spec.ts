@@ -43,6 +43,7 @@ describe('AuthService (TEST-0401)', () => {
       username: 'admin',
       passwordHash: '$argon2id$stored',
       mustChangePassword: false,
+      role: 'admin',
     });
     verify.mockResolvedValue(true);
     const expiresAt = new Date('2030-01-01T00:00:00Z');
@@ -55,6 +56,7 @@ describe('AuthService (TEST-0401)', () => {
       sub: 'admin',
       username: 'admin',
       mustChangePassword: false,
+      role: 'admin',
     });
     expect(m.refresh.mint).toHaveBeenCalledWith('admin', 'admin');
     expect(tokens).toEqual({
@@ -117,10 +119,12 @@ describe('AuthService (TEST-0401)', () => {
 
     expect(m.refresh.rotate).toHaveBeenCalledWith('old-raw');
     expect(m.refresh.mint).not.toHaveBeenCalled(); // rotation pre-issues the refresh
+    // No persisted row is mocked here → role defaults to least-privilege readonly.
     expect(m.jwt.signAsync).toHaveBeenCalledWith({
       sub: 'admin',
       username: 'admin',
       mustChangePassword: false,
+      role: 'readonly',
     });
     expect(tokens.refreshToken).toBe('rotated-raw');
     expect(tokens.refreshExpiresAt).toBe(expiresAt);

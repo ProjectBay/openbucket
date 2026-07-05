@@ -7,9 +7,11 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { CreateKeyDtoScope } from './create-key-dto-scope';
 
 
 export interface CreateKeyDto { 
     label: string;
+    scope?: CreateKeyDtoScope;
 }
 

@@ -21,3 +21,14 @@ export const mustNotRotateGuard: CanActivateFn = () => {
   const router = inject(Router);
   return auth.mustChangePassword() ? router.createUrlTree(['/force-rotate']) : true;
 };
+
+/**
+ * Restricts a route to full admins (EPIC-11, STORY-1002). A read-only admin who
+ * deep-links to `/users` is redirected home. The server-side RolesGuard is still
+ * authoritative — this is UX + defense in depth.
+ */
+export const fullAdminGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  return auth.isFullAdmin() ? true : router.createUrlTree(['/']);
+};

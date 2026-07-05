@@ -13,7 +13,11 @@ import { Observable }                                        from 'rxjs';
 
 import { CreateKeyDto } from '../model/models';
 import { CreatedKeyDto } from '../model/models';
+import { EffectivePermissionsDto } from '../model/models';
 import { KeySummaryDto } from '../model/models';
+import { RotatedKeyDto } from '../model/models';
+import { SimulateRequestDto } from '../model/models';
+import { SimulateResponseDto } from '../model/models';
 import { UpdateKeyDto } from '../model/models';
 
 
@@ -42,8 +46,37 @@ export interface KeysAdminServiceInterface {
     /**
      * 
      * 
+     * @param id 
+     */
+    getKeyEffectivePermissions(id: string, extraHttpRequestParams?: any): Observable<EffectivePermissionsDto>;
+
+    /**
+     * 
+     * 
      */
     listKeys(extraHttpRequestParams?: any): Observable<Array<KeySummaryDto>>;
+
+    /**
+     * 
+     * 
+     * @param id 
+     */
+    revokeKey(id: string, extraHttpRequestParams?: any): Observable<KeySummaryDto>;
+
+    /**
+     * 
+     * 
+     * @param id 
+     */
+    rotateKey(id: string, extraHttpRequestParams?: any): Observable<RotatedKeyDto>;
+
+    /**
+     * 
+     * 
+     * @param id 
+     * @param simulateRequestDto 
+     */
+    simulateKeyAction(id: string, simulateRequestDto: SimulateRequestDto, extraHttpRequestParams?: any): Observable<SimulateResponseDto>;
 
     /**
      * 

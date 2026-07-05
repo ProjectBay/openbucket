@@ -6,6 +6,8 @@ export interface SidebarItemBase {
   disabled?: boolean;
   /** Exact router-link match (set for index routes like `/` so they don't stay active everywhere). */
   exact?: boolean;
+  /** EPIC-11: only render for full admins (e.g. the /users entry). Read-only admins never see it. */
+  requiresFullAdmin?: boolean;
 }
 
 export interface SidebarBadge {

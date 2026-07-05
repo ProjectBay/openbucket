@@ -1,6 +1,7 @@
 import { Entity, PrimaryKey, Property } from '@mikro-orm/core';
 
 import { AdminUserRepository } from '../repositories/admin-user.repository';
+import type { AdminRole } from './types';
 
 // `repository: () => …` is lazy so the entity ↔ repo circular import resolves;
 // `MikroOrmModule.forFeature` then auto-provides `AdminUserRepository` at the
@@ -25,4 +26,13 @@ export class AdminUser {
 
   @Property({ type: 'datetime' })
   createdAt: Date = new Date();
+
+  /**
+   * Authorization role (EPIC-11, STORY-1002). Defaults to `admin` (a full
+   * operator) so the bootstrap seed and every pre-migration row stay full
+   * admins — a `readonly` default would silently lock out the only operator.
+   * Kept LAST so the column order matches the appended migration column.
+   */
+  @Property({ type: 'string', length: 16, default: 'admin' })
+  role: AdminRole = 'admin';
 }

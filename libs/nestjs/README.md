@@ -216,6 +216,142 @@ versioning / encryption / lifecycle / CORS / policy, browsing audit events), cal
 the JSON admin API under `<mountPath>/api/admin/*` — the generated, typed
 [`@openbucket/api-client`](../api-client) wraps it.
 
+## Scoped access keys (multi-tenant)
+
+The **root** credential (`ROOT_ACCESS_KEY_ID` / `ROOT_SECRET_ACCESS_KEY`) is
+loaded from the environment, never persisted, and is **always unrestricted** — a
+single-root deployment behaves exactly as before. On top of it you can mint
+**scoped sub-keys**: full SigV4-capable access keys whose reach is confined to a
+bucket + key-prefix (or an inline policy). Scoping is **additive and opt-in** —
+omit `scope` and you get an unscoped sub-key.
+
+### The scope model
+
+A scope is compiled once, at mint time, into the same IAM-style `PolicyDocument`
+the bucket-policy evaluator already understands, then enforced on every S3
+request with **implicit deny** (`defaultAllow: false`) *alongside* the bucket
+policy. The effective decision is **bucket-policy AND scope**:
+
+- an action/resource the scope does not `Allow` is denied — even when the bucket
+  has no policy;
+- an explicit bucket-policy `Deny` still overrides (checked first, never masked);
+- a prefix scope grants `s3:ListBucket` only under a `StringLike s3:prefix`
+  condition, so a tenant key cannot enumerate the whole bucket with an unprefixed
+  `ListObjectsV2`;
+- a scoped key calling a service-scope op (`ListBuckets`) is denied unless its
+  scope explicitly allows `s3:ListAllMyBuckets`.
+
+Two authoring forms:
+
+```jsonc
+// Prefix form (typical): read+write under one bucket/prefix.
+{ "kind": "prefix", "bucket": "tenants", "prefix": "tenant-a/",
+  "actions": ["s3:GetObject","s3:PutObject","s3:DeleteObject","s3:ListBucket"] }
+
+// Inline-policy form (advanced): supply the PolicyDocument yourself.
+{ "kind": "policy", "document": { "Version": "2012-10-17", "Statement": [ /* … */ ] } }
+```
+
+`actions` is optional and defaults to the read+write object set above. `prefix`
+is optional (defaults to the whole bucket), capped at 1 KiB, and may not start
+with `/` or contain a `..` segment.
+
+### Minting a scoped key
+
+`POST <mountPath>/api/admin/keys` with a `scope`. The secret is returned **once**:
+
+```ts
+const { data } = await keysApi.createKey({
+  label: 'tenant-a-uploader',
+  scope: { kind: 'prefix', bucket: 'tenants', prefix: 'tenant-a/' },
+});
+// data.accessKeyId / data.secretAccessKey — hand these to the tenant.
+// data.scope === { kind: 'prefix', bucket: 'tenants', prefix: 'tenant-a/' }
+```
+
+A key minted **with** a scope records `role: 'scoped'`; without a scope it records
+`role: 'root'` (unscoped, root-equivalent) exactly as before.
+
+The tenant then uses the pair with any SigV4 client (SDK header-signed **and**
+presigned URLs are both enforced). `GET /api/admin/keys` returns each key's scope
+summary (never the secret). Disabling or deleting a key takes effect immediately —
+the in-memory SigV4 cache is invalidated on revoke.
+
+### Rotating, revoking & inspecting a key
+
+Four more admin routes manage a key's lifecycle and let you audit exactly what it
+can do. Every state change invalidates the in-memory SigV4 cache **synchronously**,
+so it takes effect in-process at once:
+
+```ts
+// Roll the secret — a fresh secret is returned ONCE (id/accessKeyId/scope unchanged).
+// Throttled to 10/min (argon2id hashing is CPU-heavy). Old secret stops verifying now.
+const { data: rolled } = await keysApi.rotateKey(id); // rolled.secretAccessKey
+
+// Revoke — disable the key (reversible; keeps the audit trail). Distinct from
+// deleteKey(), which hard-removes the row.
+await keysApi.revokeKey(id);
+
+// Effective permissions — the compiled scope plus an allow/deny matrix over a
+// fixed action catalogue × the key's scoped resources, evaluated with the SAME
+// evaluator the S3 path uses (so the console and the real request path agree).
+const { data: eff } = await keysApi.getKeyEffectivePermissions(id);
+// eff.scoped, eff.scope (PolicyDocument | null), eff.matrix: { action, resource, decision }[]
+
+// Simulate a single { action, resource } — `action` accepts `GetObject` or
+// `s3:GetObject`. Returns the same allow/deny the guard would.
+const { data: sim } = await keysApi.simulateKeyAction(id, {
+  action: 'GetObject',
+  resource: 'arn:aws:s3:::tenants/tenant-a/report.csv',
+}); // sim.decision === 'allow'
+```
+
+`rotateKey` and `revokeKey` emit the `key.rotated` / `key.revoked` audit events;
+`getKeyEffectivePermissions` and `simulateKeyAction` are read-only and never mutate
+state or surface the secret.
+
+### Reversible secret storage (`KEY_ENCRYPTION_SECRET`)
+
+SigV4 needs the plaintext secret to verify a signature, so a sub-key's secret is
+stored **encrypted at rest** (AES-256-GCM) — never in plaintext — and decrypted on
+the hot path. The 32-byte key-encryption key (KEK) is HKDF-derived from
+`KEY_ENCRYPTION_SECRET` if set, otherwise from `ROOT_SECRET_ACCESS_KEY`.
+
+> **Operational caveat:** if you rotate `ROOT_SECRET_ACCESS_KEY` **without** having
+> set a dedicated `KEY_ENCRYPTION_SECRET`, existing sub-key secrets become
+> undecryptable and must be re-minted. Set `KEY_ENCRYPTION_SECRET` (a strong,
+> 32+ char value) up front to decouple sub-key storage from the root credential.
+
+### Admin roles (multi-admin)
+
+The admin plane supports **multiple admin users**, each carrying a `role`:
+
+- **`admin` (full admin)** — every state-changing admin action.
+- **`readonly`** — can sign in and read (all admin `GET`s succeed) but is `403`'d on
+  any state-changing admin operation.
+
+The first-run bootstrap admin (and every row created before this feature) defaults
+to **full admin**, so single-admin instances are unchanged. Manage admins at
+`/api/admin/users` — `listAdminUsers`, `createAdminUser`, `updateAdminUser` (reassign
+role and/or reset password), `deleteAdminUser` — all **full-admin-only**.
+
+Enforcement is server-authoritative and **default-deny by HTTP method**: a global
+`RolesGuard` `403`s any `POST`/`PUT`/`PATCH`/`DELETE` under `/api/admin/*` for a
+read-only principal, except two self-service routes (`settings/change-password`,
+`auth/logout`) and handlers explicitly marked `@AllowReadOnly()`. The role is read
+**fresh from the DB on every request** (not the JWT claim), so a demotion takes
+effect immediately even while an old token still verifies. `GET /api/admin/auth/me`
+returns the caller's `role` for UI gating.
+
+Two anti-lockout invariants are always enforced: you cannot delete or demote the
+**last full admin** (`409`), and you cannot **delete your own** account (`403`).
+Creating an admin forces a password change on first login; a password reset or a
+delete immediately evicts that user's live sessions.
+
+> **Data-plane vs admin roles.** A minted **S3 access key** records `role: 'scoped'`
+> (created with a scope) or `role: 'root'` (unscoped) — that labels a *data-plane*
+> key's reach and is orthogonal to the *admin* `admin`/`readonly` role above.
+
 ### Recipe: accept file uploads and store their URLs
 
 A very common pattern: your NestJS app takes a browser upload, streams it into

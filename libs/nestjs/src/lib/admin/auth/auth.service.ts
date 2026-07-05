@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 
 import { AdminUserRepository } from '../../persistence/index';
+import type { AdminRole } from '../../persistence/entities/types';
 
 import { RefreshTokenService } from './refresh-token.service';
 
@@ -51,7 +52,7 @@ export class AuthService {
     const ok = await argon2.verify(user.passwordHash, password);
     if (!ok) throw new UnauthorizedException('invalid credentials');
 
-    return this.issueTokens(user.username, user.username, user.mustChangePassword);
+    return this.issueTokens(user.username, user.username, user.mustChangePassword, user.role);
   }
 
   async refresh(rawRefreshToken: string): Promise<IssuedTokens> {
@@ -62,10 +63,14 @@ export class AuthService {
     // DB read too, but keeping the claim truthful avoids handing out a token that
     // advertises a stale `false`.
     const user = await this.users.findByUsername(rotated.username);
+    // Re-derive `role` from the persisted row too (EPIC-11). Default to
+    // `readonly` (least privilege) if the row vanished, matching the fresh-read
+    // guard, so a refresh can never re-mint elevated rights for a deleted admin.
     return this.issueTokens(
       rotated.subjectId,
       rotated.username,
       user?.mustChangePassword ?? false,
+      user?.role ?? 'readonly',
       rotated.token,
       rotated.expiresAt,
     );
@@ -79,6 +84,7 @@ export class AuthService {
     subjectId: string,
     username: string,
     mustChangePassword: boolean,
+    role: AdminRole,
     preIssuedRefreshRaw?: string,
     preIssuedRefreshExpiresAt?: Date,
   ): Promise<IssuedTokens> {
@@ -86,6 +92,7 @@ export class AuthService {
       sub: subjectId,
       username,
       mustChangePassword,
+      role,
     });
 
     if (preIssuedRefreshRaw && preIssuedRefreshExpiresAt) {

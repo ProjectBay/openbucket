@@ -15,6 +15,7 @@ import { ReplicationStatusService } from '../domain/replication/replication-stat
 import { BlobStore } from '../storage/blob-store';
 import { DerivativeCacheService } from '../storage/derivative-cache.service';
 import { KeyService as StorageKeyService } from '../storage/key.service';
+import { SecretCipher } from '../domain/keys/secret-cipher';
 import { ObjectWriterService } from '../storage/object-writer.service';
 import { RecoveryService } from '../storage/recovery.service';
 import { VersionStoreService } from '../storage/version-store.service';
@@ -80,6 +81,8 @@ describe('S3 controller topology (TEST-0100)', () => {
       .useValue({})
       .overrideProvider(StorageKeyService)
       .useValue({ getSecret: async () => null })
+      .overrideProvider(SecretCipher)
+      .useValue({})
       .compile();
 
     // All four controllers resolve from the container.

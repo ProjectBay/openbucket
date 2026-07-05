@@ -59,7 +59,13 @@ import { XmlSerializer } from './xml/xml.serializer';
         async getSecret(accessKeyId: string): Promise<AccessKey | null> {
           const r = await impl.getSecret(accessKeyId);
           return r
-            ? { accessKeyId: r.accessKeyId, secretAccessKey: r.secret, disabled: r.disabled }
+            ? {
+                accessKeyId: r.accessKeyId,
+                secretAccessKey: r.secret,
+                disabled: r.disabled,
+                isRoot: r.isRoot,
+                scopePolicy: r.scopePolicy ?? null,
+              }
             : null;
         },
       }),

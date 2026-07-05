@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { CanActivateFn, Router, UrlTree } from '@angular/router';
 
-import { authGuard, mustNotRotateGuard, unauthGuard } from './auth.guard';
+import { authGuard, fullAdminGuard, mustNotRotateGuard, unauthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 
 /**
@@ -11,11 +11,11 @@ import { AuthService } from './auth.service';
  * build-verified. Covers the true/redirect branch of each guard.
  */
 describe('auth guards (TEST-0420)', () => {
-  let auth: { isAuthenticated: jest.Mock; mustChangePassword: jest.Mock };
+  let auth: { isAuthenticated: jest.Mock; mustChangePassword: jest.Mock; isFullAdmin: jest.Mock };
   let createUrlTree: jest.Mock;
 
   beforeEach(() => {
-    auth = { isAuthenticated: jest.fn(), mustChangePassword: jest.fn() };
+    auth = { isAuthenticated: jest.fn(), mustChangePassword: jest.fn(), isFullAdmin: jest.fn() };
     createUrlTree = jest.fn((cmds: unknown) => ({ __urlTree: cmds }) as unknown as UrlTree);
     TestBed.configureTestingModule({
       providers: [
@@ -53,5 +53,15 @@ describe('auth guards (TEST-0420)', () => {
 
     auth.mustChangePassword.mockReturnValue(false);
     expect(run(mustNotRotateGuard)).toBe(true);
+  });
+
+  // EPIC-11: /users is full-admin only; a read-only admin is redirected home.
+  it('fullAdminGuard: true for a full admin, else redirects to /', () => {
+    auth.isFullAdmin.mockReturnValue(true);
+    expect(run(fullAdminGuard)).toBe(true);
+
+    auth.isFullAdmin.mockReturnValue(false);
+    run(fullAdminGuard);
+    expect(createUrlTree).toHaveBeenCalledWith(['/']);
   });
 });

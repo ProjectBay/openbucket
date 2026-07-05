@@ -12,6 +12,8 @@ interface MeResponse {
   id: string;
   username: string;
   mustChangePassword: boolean;
+  /** Authorization role (EPIC-11). */
+  role?: 'admin' | 'readonly';
 }
 
 /**
@@ -30,6 +32,15 @@ export class AuthService {
   readonly isAuthenticated = computed(() => this.accessToken() !== null);
   readonly mustChangePassword = computed(() => this.me()?.mustChangePassword === true);
   readonly username = computed(() => this.me()?.username ?? null);
+
+  /**
+   * Authorization role (EPIC-11), read from the in-memory /me signal — no new
+   * storage, the token stays in-memory only (§5.12 posture preserved). The
+   * server-side RolesGuard remains authoritative; these drive UX gating only.
+   */
+  readonly role = computed(() => this.me()?.role ?? null);
+  readonly isFullAdmin = computed(() => this.me()?.role === 'admin');
+  readonly isReadOnly = computed(() => this.me()?.role === 'readonly');
 
   getAccessToken(): string | null {
     return this.accessToken();

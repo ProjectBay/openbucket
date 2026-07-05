@@ -3,15 +3,21 @@ import { firstValueFrom } from 'rxjs';
 import {
   CreateKeyDto,
   CreatedKeyDto,
+  EffectivePermissionsDto,
   KeySummaryDto,
   KeysAdminService,
+  RotatedKeyDto,
+  SimulateRequestDto,
+  SimulateResponseDto,
   UpdateKeyDto,
 } from '@openbucket/api-client';
 
 /**
- * Access-keys read/write store (STORY-0611), mirroring BucketsSignalStore over
- * KeysAdminService. The created secret is returned from `create` (shown once);
- * the store keeps only the summary view.
+ * Access-keys read/write store (STORY-0611 / EPIC-11), mirroring
+ * BucketsSignalStore over KeysAdminService. The created/rotated secret is
+ * returned from `create`/`rotate` (shown once); the store keeps only the
+ * summary view. Rotate/revoke keep the SigV4 truth server-side — the store just
+ * reflects state.
  */
 @Injectable({ providedIn: 'root' })
 export class KeysSignalStore {
@@ -51,6 +57,7 @@ export class KeysSignalStore {
         createdAt: created.createdAt,
         lastUsedAt: null,
         disabled: false,
+        scope: created.scope,
       },
     ]);
     return created;
@@ -64,5 +71,30 @@ export class KeysSignalStore {
   async remove(id: string): Promise<void> {
     await firstValueFrom(this.api.deleteKey(id));
     this._items.update((arr) => arr.filter((k) => k.id !== id));
+  }
+
+  /**
+   * Rotate a key's secret (EPIC-11): returns the one-time secret payload for the
+   * secret-once dialog. The summary (id/accessKeyId/scope) is unchanged, so the
+   * list row needs no update.
+   */
+  async rotate(id: string): Promise<RotatedKeyDto> {
+    return firstValueFrom(this.api.rotateKey(id));
+  }
+
+  /** Revoke (disable) a key — reflect `disabled: true` in the list row. */
+  async revoke(id: string): Promise<void> {
+    const revoked = await firstValueFrom(this.api.revokeKey(id));
+    if (revoked) this._items.update((arr) => arr.map((k) => (k.id === id ? revoked : k)));
+  }
+
+  /** Read-only effective-permissions matrix for a key (EPIC-11). */
+  async effectivePermissions(id: string): Promise<EffectivePermissionsDto> {
+    return firstValueFrom(this.api.getKeyEffectivePermissions(id));
+  }
+
+  /** Simulate a single action/resource decision for a key (EPIC-11). */
+  async simulate(id: string, req: SimulateRequestDto): Promise<SimulateResponseDto> {
+    return firstValueFrom(this.api.simulateKeyAction(id, req));
   }
 }

@@ -1,3 +1,6 @@
+export * from './admin-users.service';
+import { AdminUsersService } from './admin-users.service';
+export * from './admin-users.serviceInterface';
 export * from './auth.service';
 import { AuthService } from './auth.service';
 export * from './auth.serviceInterface';
@@ -19,4 +22,4 @@ export * from './replication-admin.serviceInterface';
 export * from './settings-admin.service';
 import { SettingsAdminService } from './settings-admin.service';
 export * from './settings-admin.serviceInterface';
-export const APIS = [AuthService, BucketsAdminService, HealthService, KeysAdminService, ObjectsAdminService, ReplicationAdminService, SettingsAdminService];
+export const APIS = [AdminUsersService, AuthService, BucketsAdminService, HealthService, KeysAdminService, ObjectsAdminService, ReplicationAdminService, SettingsAdminService];

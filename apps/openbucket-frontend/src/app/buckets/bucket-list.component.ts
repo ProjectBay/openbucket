@@ -23,6 +23,7 @@ import { ListStateComponent } from '../shared/ui/list-state.component';
 import { SortHeaderComponent, type SortDir } from '../shared/ui/sort-header.component';
 import { notify } from '../shared/ui/notify';
 import { PageHeaderService } from '../layout/shell/services';
+import { AuthService } from '../auth/auth.service';
 import { BucketsSignalStore } from './buckets.signal-store';
 import { BucketCreateDialogComponent } from './bucket-create-dialog.component';
 
@@ -165,18 +166,21 @@ type BucketSortKey = 'name' | 'objects' | 'size' | 'created';
                     hlmTd
                     class="text-right"
                   >
-                    <button
-                      hlmBtn
-                      variant="ghost"
-                      size="icon-sm"
-                      [attr.aria-label]="'Delete ' + b.name"
-                      (click)="onDelete(b.name)"
-                    >
-                      <ng-icon
-                        name="lucideTrash2"
-                        class="text-base"
-                      />
-                    </button>
+                    <!-- EPIC-11: hidden for read-only admins (server RolesGuard 403s regardless). -->
+                    @if (!auth.isReadOnly()) {
+                      <button
+                        hlmBtn
+                        variant="ghost"
+                        size="icon-sm"
+                        [attr.aria-label]="'Delete ' + b.name"
+                        (click)="onDelete(b.name)"
+                      >
+                        <ng-icon
+                          name="lucideTrash2"
+                          class="text-base"
+                        />
+                      </button>
+                    }
                   </td>
                 </tr>
               }
@@ -199,6 +203,7 @@ type BucketSortKey = 'name' | 'objects' | 'size' | 'created';
 export class BucketListComponent implements OnInit, OnDestroy {
   protected readonly store = inject(BucketsSignalStore);
   private readonly pageHeader = inject(PageHeaderService);
+  protected readonly auth = inject(AuthService);
 
   protected readonly createDialog = viewChild.required(BucketCreateDialogComponent);
   protected readonly confirmDialog = viewChild.required(ConfirmDialogComponent);
@@ -236,7 +241,10 @@ export class BucketListComponent implements OnInit, OnDestroy {
 
   constructor() {
     this.pageHeader.setPageHeader('buckets.title');
-    this.pageHeader.setActionButton('buckets.create', () => this.createDialog().open());
+    // EPIC-11: no create action for read-only admins (UX; server is authoritative).
+    if (!this.auth.isReadOnly()) {
+      this.pageHeader.setActionButton('buckets.create', () => this.createDialog().open());
+    }
   }
 
   ngOnInit(): void {

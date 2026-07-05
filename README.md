@@ -39,9 +39,9 @@ policies, and S3-style XML error responses.
 
 **Admin** — a JSON admin API (`/api/admin/*`) secured with argon2id passwords +
 rotating JWTs, plus an **Angular admin console**: bucket & object browser,
-upload/download, presigned share links, access-key management, per-bucket
-versioning / encryption / object-lock / lifecycle / CORS / policy editors,
-i18n (en/de), light/dark themes.
+upload/download, presigned share links, access-key management, **multi-admin users
+with full-admin / read-only roles**, per-bucket versioning / encryption /
+object-lock / lifecycle / CORS / policy editors, i18n (en/de), light/dark themes.
 
 **Developer file pipeline** — on-the-fly **image transformations** on GET
 (`?w=&h=&fit=&format=&q=`, cached derivatives), **object event notifications**
@@ -264,6 +264,33 @@ commented list. The essentials:
 | `ADMIN_USERNAME`         |          | `admin`      | Admin login.                                                 |
 | `OPENBUCKET_REGION`      |          | `us-east-1`  | Region reported to clients.                                  |
 | `OPENBUCKET_SSE_KEY`     |          | generated    | base64 of 32 bytes; auto-generated to `<DATA_DIR>/sse.key`.  |
+| `KEY_ENCRYPTION_SECRET`  |          | root secret  | ≥ 32 chars; KEK for scoped sub-key secrets at rest. Falls back to `ROOT_SECRET_ACCESS_KEY` when unset (see caveat below). |
+
+### Scoped access keys (multi-tenant)
+
+The root credential is always unrestricted. Mint **scoped sub-keys** —
+SigV4-capable keys confined to a bucket/prefix — via
+`POST /api/admin/keys` with a `scope`. Scoping is enforced through the same
+policy evaluator as bucket policies, with implicit-deny, so a tenant key can't
+read outside its prefix, list the whole bucket, or enumerate all buckets. Keys can
+be **rotated** (roll the secret, shown once), **revoked** (reversible disable), and
+inspected via an **effective-permissions** allow/deny matrix and single-action
+**simulate** — all in the admin console and API. See the
+[library README](./libs/nestjs/README.md#scoped-access-keys-multi-tenant) for the
+scope model, minting recipe, key lifecycle, and the `KEY_ENCRYPTION_SECRET`
+rotation caveat.
+
+### Multi-admin users & roles
+
+Beyond the single bootstrap admin, you can manage **multiple admin users** from the
+console (**Admin Users**) or the `/api/admin/users` API. Each admin is either a
+**full admin** (every action) or **read-only** (can sign in and view everything, but
+is `403`'d on any change). Enforcement is server-side and default-deny by HTTP
+method, read fresh from the DB on every request, so a demotion takes effect at once.
+You can't delete or demote the **last full admin**, and you can't delete your **own**
+account. Existing single-admin instances are unaffected — the bootstrap admin is a
+full admin. See the
+[library README](./libs/nestjs/README.md#admin-roles-multi-admin) for details.
 
 ### Async replication
 

@@ -15,8 +15,10 @@ import {
 } from '../persistence/index';
 
 import { KeyService, redact } from './key.service';
+import { SecretCipher } from '../domain/keys/secret-cipher';
 import { Migration20260520000001_initial } from '../migrations/Migration20260520000001_initial';
 import { Migration20260609000001_access_key_admin_fields } from '../migrations/Migration20260609000001_access_key_admin_fields';
+import { Migration20260704000001_access_key_scope } from '../migrations/Migration20260704000001_access_key_scope';
 
 const ENTITIES = [
   Bucket,
@@ -61,6 +63,10 @@ describe('KeyService (TEST-0212)', () => {
             name: 'Migration20260609000001_access_key_admin_fields',
             class: Migration20260609000001_access_key_admin_fields,
           },
+          {
+            name: 'Migration20260704000001_access_key_scope',
+            class: Migration20260704000001_access_key_scope,
+          },
         ],
       },
     });
@@ -71,8 +77,10 @@ describe('KeyService (TEST-0212)', () => {
     await orm?.close(true);
   });
 
+  const cipherFor = (env: Record<string, string>) => new SecretCipher(mkConfig(env));
+
   const make = (env: Record<string, string>) => {
-    const svc = new KeyService(orm.em as EntityManager, mkConfig(env));
+    const svc = new KeyService(orm.em as EntityManager, mkConfig(env), cipherFor(env));
     svc.onModuleInit();
     return svc;
   };
@@ -84,6 +92,7 @@ describe('KeyService (TEST-0212)', () => {
       secret: 'secretvalue',
       disabled: false,
       isRoot: true,
+      scopePolicy: null,
     });
   });
 
@@ -92,20 +101,64 @@ describe('KeyService (TEST-0212)', () => {
     expect(await svc.getSecret('unknown-id-' + Math.random())).toBeNull();
   });
 
-  it('case 3: sub-key in DB returns null with a sub-key-support warning (redacted id)', async () => {
-    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
-    const svc = make({ ROOT_ACCESS_KEY_ID: 'AKIA3', ROOT_SECRET_ACCESS_KEY: 's3' });
+  it('case 3: sub-key in DB decrypts its secret and surfaces scope + isRoot:false', async () => {
+    const env = { ROOT_ACCESS_KEY_ID: 'AKIA3', ROOT_SECRET_ACCESS_KEY: 's3-root-secret' };
+    const svc = make(env);
+    const scope = '{"Version":"2012-10-17","Statement":[]}';
 
     const em = orm.em.fork();
-    em.create(AccessKey, { id: 'subkey-id-1', accessKeyId: 'subkeyabcdef', secretHash: 'argon2id$hash' });
+    em.create(AccessKey, {
+      id: 'subkey-id-1',
+      accessKeyId: 'subkeyabcdef',
+      secretHash: 'argon2id$hash',
+      secretEncrypted: cipherFor(env).encrypt('subkeyplaintext'),
+      scopePolicy: scope,
+    });
     await em.flush();
 
-    expect(await svc.getSecret('subkeyabcdef')).toBeNull();
-    const allWarnArgs = warnSpy.mock.calls.flat().join(' ');
-    expect(allWarnArgs).toMatch(/sub-key support not enabled in v1/);
-    expect(allWarnArgs).toMatch(/subk…ef/); // redacted form
-    expect(allWarnArgs).not.toContain('subkeyabcdef'); // never the full id
+    expect(await svc.getSecret('subkeyabcdef')).toEqual({
+      accessKeyId: 'subkeyabcdef',
+      secret: 'subkeyplaintext',
+      disabled: false,
+      isRoot: false,
+      scopePolicy: scope,
+    });
+  });
 
+  it('case 3b: a disabled sub-key returns null (negative-cached)', async () => {
+    const env = { ROOT_ACCESS_KEY_ID: 'AKIA3B', ROOT_SECRET_ACCESS_KEY: 's3b-root-secret' };
+    const svc = make(env);
+
+    const em = orm.em.fork();
+    em.create(AccessKey, {
+      id: 'subkey-id-3b',
+      accessKeyId: 'subkeydisabled',
+      secretHash: 'argon2id$hash',
+      secretEncrypted: cipherFor(env).encrypt('nope'),
+      disabled: true,
+    });
+    await em.flush();
+
+    expect(await svc.getSecret('subkeydisabled')).toBeNull();
+    // Cached negatively — a second call must not re-hit the DB.
+    const findSpy = jest.spyOn(orm.em, 'findOne');
+    expect(await svc.getSecret('subkeydisabled')).toBeNull();
+    expect(findSpy).not.toHaveBeenCalled();
+    findSpy.mockRestore();
+  });
+
+  it('case 3c: a row with no encrypted secret fails closed (null + redacted warn)', async () => {
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const svc = make({ ROOT_ACCESS_KEY_ID: 'AKIA3C', ROOT_SECRET_ACCESS_KEY: 's3c-root-secret' });
+
+    const em = orm.em.fork();
+    em.create(AccessKey, { id: 'subkey-id-3c', accessKeyId: 'legacynoenc1', secretHash: 'argon2id$hash' });
+    await em.flush();
+
+    expect(await svc.getSecret('legacynoenc1')).toBeNull();
+    const allWarnArgs = warnSpy.mock.calls.flat().join(' ');
+    expect(allWarnArgs).toMatch(/lega…c1/); // redacted form
+    expect(allWarnArgs).not.toContain('legacynoenc1'); // never the full id
     warnSpy.mockRestore();
   });
 
@@ -144,7 +197,7 @@ describe('KeyService (TEST-0212)', () => {
 
   it('case 7: reloadRootFromEnv swaps the root id/secret', async () => {
     const env = { ROOT_ACCESS_KEY_ID: 'AKIAOLD', ROOT_SECRET_ACCESS_KEY: 'old' };
-    const svc = new KeyService(orm.em as EntityManager, mkConfig(env));
+    const svc = new KeyService(orm.em as EntityManager, mkConfig(env), cipherFor(env));
     svc.onModuleInit();
     expect((await svc.getSecret('AKIAOLD'))?.secret).toBe('old');
 

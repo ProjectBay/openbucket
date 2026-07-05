@@ -1,4 +1,4 @@
-import { createSidebarConfig, SidebarConfig } from '../types';
+import { createSidebarConfig, SidebarConfig, SidebarItem } from '../types';
 
 export const sidebarConfig: SidebarConfig = {
   groups: [
@@ -24,6 +24,15 @@ export const sidebarConfig: SidebarConfig = {
           title: 'sidebar.storage.keys',
           icon: 'lucideKey',
           url: '/keys',
+        }),
+        createSidebarConfig.item({
+          id: 'users',
+          title: 'sidebar.admin.users',
+          icon: 'lucideUsers',
+          url: '/users',
+          // EPIC-11: full-admin only. Hidden from read-only admins (fullAdminGuard
+          // also redirects a deep-link); the server RolesGuard is authoritative.
+          requiresFullAdmin: true,
         }),
         createSidebarConfig.item({
           id: 'settings',
@@ -52,3 +61,25 @@ export const sidebarConfig: SidebarConfig = {
 export const secondaryNavConfig: SidebarConfig = {
   groups: [],
 };
+
+/** True if a sidebar item is visible to a principal with the given role (EPIC-11). */
+function itemVisible(item: SidebarItem, isFullAdmin: boolean): boolean {
+  return !('requiresFullAdmin' in item && item.requiresFullAdmin) || isFullAdmin;
+}
+
+/**
+ * Project a sidebar config for a principal's role (EPIC-11): drops
+ * full-admin-only entries (e.g. `/users`) for read-only admins. Pure — used by
+ * the shell sidebars via a computed over `AuthService.isFullAdmin()`.
+ */
+export function sidebarConfigForRole(
+  config: SidebarConfig,
+  isFullAdmin: boolean,
+): SidebarConfig {
+  return {
+    groups: config.groups.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => itemVisible(item, isFullAdmin)),
+    })),
+  };
+}

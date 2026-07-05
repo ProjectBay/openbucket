@@ -8,6 +8,7 @@ import { ObjectWriterService } from './object-writer.service';
 import { RecoveryService } from './recovery.service';
 import { SseKeyService } from './sse-key.service';
 import { VersionStoreService } from './version-store.service';
+import { SecretCipher } from '../domain/keys/secret-cipher';
 
 /**
  * Filesystem storage layer. BlobStore (§3.6, STORY-0208), two-phase
@@ -16,7 +17,7 @@ import { VersionStoreService } from './version-store.service';
  * and VersionStoreService (§3.11, STORY-0213).
  */
 @Module({
-  providers: [BlobStore, DerivativeCacheService, FreeSpaceService, ObjectWriterService, RecoveryService, KeyService, SseKeyService, VersionStoreService],
-  exports: [BlobStore, DerivativeCacheService, FreeSpaceService, ObjectWriterService, RecoveryService, KeyService, SseKeyService, VersionStoreService],
+  providers: [BlobStore, DerivativeCacheService, FreeSpaceService, ObjectWriterService, RecoveryService, KeyService, SseKeyService, VersionStoreService, SecretCipher],
+  exports: [BlobStore, DerivativeCacheService, FreeSpaceService, ObjectWriterService, RecoveryService, KeyService, SseKeyService, VersionStoreService, SecretCipher],
 })
 export class StorageModule {}

@@ -13,5 +13,12 @@ export interface MeResponseDto {
     id: string;
     username: string;
     mustChangePassword: boolean;
+    role: MeResponseDtoRoleEnum;
 }
+export enum MeResponseDtoRoleEnum {
+    Admin = 'admin',
+    Readonly = 'readonly'
+};
+
+
 

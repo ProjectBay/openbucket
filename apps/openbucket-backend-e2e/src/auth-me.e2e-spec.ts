@@ -99,6 +99,7 @@ describe('Me endpoint (e2e, TEST-0407)', () => {
       id: 'admin',
       username: 'admin',
       mustChangePassword: false,
+      role: 'admin', // EPIC-11: /me now echoes the admin role (full-admin default)
     });
   });
 

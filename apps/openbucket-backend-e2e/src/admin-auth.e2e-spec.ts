@@ -118,6 +118,6 @@ describe('admin auth (e2e, TASK-1551 / TEST-0503)', () => {
 
     const me = await http('GET', '/api/admin/auth/me', { headers: { authorization: `Bearer ${bearer}` } });
     expect(me.status).toBe(200);
-    expect(JSON.parse(me.body)).toEqual({ id: 'admin', username: 'admin', mustChangePassword: false });
+    expect(JSON.parse(me.body)).toEqual({ id: 'admin', username: 'admin', mustChangePassword: false, role: 'admin' });
   });
 });
