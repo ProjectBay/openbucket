@@ -12,7 +12,6 @@ import { HlmButton } from '@openbucket/spartan-ui/button';
 import { BucketsAdminService } from '@openbucket/api-client';
 import { notify } from '../shared/ui/notify';
 import { ConfirmDialogComponent } from '../shared/ui/confirm-dialog.component';
-import { PageHeaderService } from '../layout/shell/services';
 
 /**
  * Admin Backup & Restore. Two scopes:
@@ -29,8 +28,6 @@ import { PageHeaderService } from '../layout/shell/services';
   providers: [provideIcons({ lucideDownload, lucideUpload, lucideDatabase, lucideServer })],
   template: `
     <div class="space-y-6 p-6">
-      <!-- Title + subtitle render through the unified page header (PageHeaderService). -->
-
       <!-- Per-bucket -->
       <section hlmCard>
         <div hlmCardHeader>
@@ -110,7 +107,6 @@ import { PageHeaderService } from '../layout/shell/services';
 export class BackupRestoreComponent {
   private readonly http = inject(HttpClient);
   private readonly bucketsApi = inject(BucketsAdminService);
-  private readonly pageHeader = inject(PageHeaderService);
   private readonly confirmDialog = viewChild.required(ConfirmDialogComponent);
 
   readonly buckets = signal<string[]>([]);
@@ -122,7 +118,6 @@ export class BackupRestoreComponent {
   readonly confirmPhrase = signal<string | null>(null);
 
   constructor() {
-    this.pageHeader.setPageHeader('backupRestore.title', 'backupRestore.subtitle');
     void this.loadBuckets();
   }
 

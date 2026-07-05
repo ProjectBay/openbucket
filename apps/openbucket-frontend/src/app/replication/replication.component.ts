@@ -19,7 +19,6 @@ import { HlmBadge } from '@openbucket/spartan-ui/badge';
 import { StatCardComponent } from '../shared/ui/stat-card.component';
 import { ListStateComponent } from '../shared/ui/list-state.component';
 import { ConfirmDialogComponent } from '../shared/ui/confirm-dialog.component';
-import { PageHeaderService } from '../layout/shell/services';
 import { ReplicationSignalStore } from './replication.signal-store';
 
 /**
@@ -177,7 +176,6 @@ import { ReplicationSignalStore } from './replication.signal-store';
 })
 export class ReplicationComponent implements OnInit, OnDestroy {
   protected readonly store = inject(ReplicationSignalStore);
-  private readonly pageHeader = inject(PageHeaderService);
   private readonly confirmDialog = viewChild.required(ConfirmDialogComponent);
 
   protected readonly confirmTitle = signal('');
@@ -185,10 +183,6 @@ export class ReplicationComponent implements OnInit, OnDestroy {
 
   /** Human-readable instance-wide replication lag for the stat card. */
   protected readonly lagLabel = computed(() => this.formatLag(this.store.status()?.oldestPendingAgeMs ?? null));
-
-  constructor() {
-    this.pageHeader.setPageHeader('replication.title', 'replication.subtitle');
-  }
 
   ngOnInit(): void {
     void this.store.refresh();

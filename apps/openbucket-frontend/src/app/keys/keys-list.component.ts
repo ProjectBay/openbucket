@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  OnDestroy,
   OnInit,
   computed,
   inject,
@@ -30,7 +29,6 @@ import { ConfirmDialogComponent } from '../shared/ui/confirm-dialog.component';
 import { ListStateComponent } from '../shared/ui/list-state.component';
 import { SortHeaderComponent, type SortDir } from '../shared/ui/sort-header.component';
 import { notify } from '../shared/ui/notify';
-import { PageHeaderService } from '../layout/shell/services';
 import { AuthService } from '../auth/auth.service';
 import { KeysSignalStore } from './keys.signal-store';
 import { KeyCreateDialogComponent } from './key-create-dialog.component';
@@ -85,6 +83,17 @@ interface ConfirmConfig {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="p-6">
+      <!-- EPIC-11: no create action for read-only admins (UX; server is authoritative). -->
+      @if (!auth.isReadOnly()) {
+        <div class="mb-4 flex justify-end">
+          <button
+            hlmBtn
+            (click)="createDialog().open()"
+          >
+            {{ 'keys.create' | translate }}
+          </button>
+        </div>
+      }
       <ob-list-state
         [loading]="store.loading()"
         [error]="store.error()"
@@ -268,9 +277,8 @@ interface ConfirmConfig {
     />
   `,
 })
-export class KeysListComponent implements OnInit, OnDestroy {
+export class KeysListComponent implements OnInit {
   protected readonly store = inject(KeysSignalStore);
-  private readonly pageHeader = inject(PageHeaderService);
   protected readonly auth = inject(AuthService);
   private readonly i18n = inject(TranslateService);
 
@@ -305,20 +313,8 @@ export class KeysListComponent implements OnInit, OnDestroy {
     });
   });
 
-  constructor() {
-    this.pageHeader.setPageHeader('keys.title', 'keys.subtitle');
-    // EPIC-11: no create action for read-only admins (UX; server is authoritative).
-    if (!this.auth.isReadOnly()) {
-      this.pageHeader.setActionButton('keys.create', () => this.createDialog().open());
-    }
-  }
-
   ngOnInit(): void {
     void this.store.refresh();
-  }
-
-  ngOnDestroy(): void {
-    this.pageHeader.hideActionButton();
   }
 
   protected toggleSort(key: KeySortKey): void {
