@@ -743,6 +743,7 @@ Notes:
 | `admin` | | — | **Omit to disable the admin surface entirely** (headless S3-only). When present: `{ username, passwordHash (argon2id), jwtSecret, serveUi?, jwtAccessTtl?, jwtRefreshTtl? }` — `username`/`passwordHash`/`jwtSecret` are all required. |
 | `limits` | | | `{ maxObjectSizeMb?, maxMultipartParts?, multipartTtlHours? }`. |
 | `replication` | | — | **Omit to disable.** Async one-way replication to an external S3-compatible target — see [Async replication](#async-replication-to-an-external-s3-target). |
+| `backups` | | — | **Omit to disable.** Scheduled `.zip` snapshots + retention — see [Scheduled backups](#scheduled-backups--retention). `{ scope?, cron?, intervalMinutes?, dir?, keepLast?, maxAgeDays?, checkIntervalMs?, pushToReplication? }`; exactly one of `cron`/`intervalMinutes` (validated at boot). |
 | `metrics` | | `{ mode: 'off' }` | Prometheus `/metrics` endpoint: `{ mode: 'off'\|'public'\|'token', token? }`. `token` requires a strong `token` (validated at boot). See [Prometheus metrics & OpenTelemetry](#prometheus-metrics--opentelemetry). |
 | `tracing` | | `{ enabled: false }` | OpenTelemetry span-per-request. No-op unless `@opentelemetry/api` + an SDK are installed. |
 
@@ -859,6 +860,68 @@ The admin console surfaces this at **/replication**: health stat cards (pending,
 lag, failed), a per-bucket table, and a confirm-guarded "Reconcile" action that
 starts a job and polls it to completion.
 
+## Scheduled backups & retention
+
+Beyond the on-demand backup/restore endpoints, OpenBucket can write **`.zip`
+snapshots on a schedule** and prune them by a retention policy. A snapshot is the
+exact same archive as the admin download (identical `manifest.json` v1 + per-object
+data entries), written through the shared read path — so a scheduled snapshot and a
+manual download are byte-for-byte the same format.
+
+```ts
+OpenBucketModule.forRoot({
+  dataDir: '/data',
+  rootCredentials: { /* … */ },
+  backups: {
+    scope: 'instance',        // or 'buckets' — one snapshot per bucket
+    intervalMinutes: 1440,    // OR cron: '0 3 * * *' (exactly one; validated at boot)
+    dir: '/data/backups',     // default <dataDir>/backups
+    keepLast: 7,              // retention floor: keep the newest N
+    maxAgeDays: 30,           // union: also keep anything younger than this
+    pushToReplication: false, // also push each .zip to the replication target
+  },
+});
+```
+
+Behaviour and guarantees:
+
+- **Runs on the background tick.** A `checkIntervalMs` wake tick (default 60s) asks
+  "is a snapshot due?" from the cron/interval schedule plus a filesystem-persisted
+  last-run marker (`<dir>/state.json`) — no DB table or migration, so the feature
+  stays embeddable. A schedule change takes effect immediately (`nextRunAt` is
+  computed on read, never stored).
+- **Atomic + durable.** Each snapshot streams into `<final>.part`, is `fsync`'d,
+  then `rename`'d to the final `.zip` — a crash leaves only a `.part` (swept the
+  next cycle), never a torn `.zip` seen as a good backup. A `<name>.json` sidecar
+  records `{ createdAt, scope, bucket?, bytes, objectCount, sha256 }`.
+- **Union retention.** `retain = (rank < keepLast) OR (ageDays < maxAgeDays)` — so
+  keep-last-N is a hard floor (an old-but-within-N snapshot is kept) and max-age can
+  never delete a fresh snapshot. For `scope: 'buckets'` retention is per bucket.
+- **Bounded / fail-safe.** A pre-flight free-space guard skips a cycle (never fills
+  the disk); `scope: 'buckets'` isolates per-bucket failures; an optional push to
+  the replication target (`_ob_backups/<scope>/…`, multipart above the threshold) is
+  **non-fatal** — the local snapshot is the system of record.
+
+**Security:** snapshots contain **decrypted plaintext object bytes** (same posture
+as the download / replication), so files are `0o600` under a `0o700` dir and the
+backup volume inherits the data volume's trust boundary. `dir` is boot config only
+— never derived from request input.
+
+Two JWT-guarded admin routes (mounted under `/api/admin/backup/schedule`, in the
+OpenAPI doc so the generated client has a typed `BackupScheduleService`):
+
+| Route | operationId | Purpose |
+| --- | --- | --- |
+| `GET /api/admin/backup/schedule` | `getBackupSchedule` | **Redacted** status: `enabled`, `scope`, `schedule`, `lastRunAt`/`nextRunAt`, `lastStatus`/`lastError`, counts, retention numbers, `snapshotCount`. Carries no `dir`, credentials, or object keys. |
+| `POST /api/admin/backup/schedule/run-now` | `runBackupNow` | Trigger a snapshot now (`202`). Shares the in-flight lock with the scheduled tick: a concurrent call **joins** and returns `{ started: false }` rather than launching a second cycle (the DoS guard). |
+
+The admin console's **Settings → Backup & Restore** tab shows last-run / next-run
++ a snapshot count and a **Run now** button.
+
+Standalone (env) equivalents: `OB_SCHEDULED_BACKUP_ENABLED`, `_SCOPE`,
+`_INTERVAL_MINUTES` / `_CRON`, `_DIR`, `_KEEP_LAST`, `_MAX_AGE_DAYS`,
+`_CHECK_INTERVAL_MS`, `_PUSH_TO_REPLICATION` — see `.env.example`.
+
 ## Cold-object tiering (read-through)
 
 OpenBucket can **offload cold objects** to the same external S3-compatible target
@@ -922,6 +985,55 @@ Security / durability notes:
 - The **remote key is internal** (key-codec encoded, bucket-scoped) and is never
   exposed on the S3 wire or admin API — the admin object metadata surfaces only
   `location` (`local`/`remote`) + `storageClass`.
+
+## Integrity scrubbing (bit-rot detection & repair)
+
+Beyond the F1 **read-time** integrity gate (every full GET re-hashes the blob and
+`500`s rather than serve corrupted bytes), a **background scrubber** proactively
+walks current/local objects, re-computes each blob's whole-object plaintext
+SHA-256 through the *same* shared `IntegrityVerifier` as the read gate, and records
+a per-object verdict (`unchecked` → `ok`/`corrupt`) on the object row. When a blob
+is `corrupt` **and** a replication target is configured, it fetches the good remote
+copy (async replication stores it plaintext under the raw key), stages it through
+the two-phase blob writer, re-verifies the on-disk bytes against the stored
+`contentSha256`, and atomically swaps it in — flipping the row back to `ok`. A
+remote copy that *also* fails the digest is rolled back (via `backupCurrentBlob`),
+never overwriting the local blob.
+
+It is **default-off** and strictly rate-limited so it never starves request
+traffic: each tick is bounded by a hard per-tick object cap **and** a per-tick byte
+budget, persists a resume cursor between ticks, and yields to the event loop
+between batches (the same throttling shape as the tiering/reconcile runners).
+Tiered objects (`location !== 'local'`) and pre-F1 rows without a stored
+`contentSha256` are skipped, never marked corrupt.
+
+Standalone deployments configure it via `OB_INTEGRITY_SCRUB_*` environment
+variables (defaults shown):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OB_INTEGRITY_SCRUB_ENABLED` | `false` | Master switch. A fresh install performs zero extra disk reads / DB writes. |
+| `OB_INTEGRITY_SCRUB_INTERVAL_MS` | `60000` | Tick interval (floor 1s). |
+| `OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK` | `1000` | Hard per-tick object cap — bounds detection work regardless of blob sizes. |
+| `OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK` | `1073741824` (1 GiB) | Per-tick byte budget: the tick stops once this many bytes have been hashed. |
+
+The admin API exposes a read model + a manual trigger under `/api/admin/integrity`
+(JWT-guarded, in the OpenAPI doc so the generated client has a typed
+`IntegrityAdminService`):
+
+| Method & path | operationId | Purpose |
+| --- | --- | --- |
+| `GET /api/admin/integrity/status` | `getIntegrityStatus` | Summary: `enabled`, lifetime `scanned`/`repaired`, live `ok`/`corrupt`/`unchecked` counts, `lastRunAt`, and the resume `cursor`. Always `200`, even when disabled/unconfigured. |
+| `GET /api/admin/integrity/corrupt` | `listCorruptObjects` | Paged corrupt-object list (`limit` capped at 200). Each row is `{ bucket, key, checkedAt, detail }` — counts + identities only, never a target endpoint/credential. |
+| `POST /api/admin/integrity/scrub` | `startIntegrityScrub` | Kick a one-shot pass on the next tick (does **not** bypass the byte/object budget). Audited (`integrity.scrub.started`); `202`. |
+
+The admin console surfaces this at **/settings?tab=integrity**: scanned/ok/corrupt/
+repaired stat cards, a corrupt-object table, a clean panel when there is no
+corruption, and a "Scrub now" button — plus a small red corrupt-count badge in the
+sidebar (hidden at zero). If the Prometheus `/metrics` endpoint is enabled it also
+exposes `openbucket_integrity_objects{status="ok|corrupt|unchecked"}` and
+`openbucket_integrity_last_run_timestamp` (counts + a timestamp only — never an
+object key or a secret).
 
 ## `openbucket` CLI
 

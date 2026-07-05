@@ -12,10 +12,14 @@ api/audit-admin.service.ts
 api/audit-admin.serviceInterface.ts
 api/auth.service.ts
 api/auth.serviceInterface.ts
+api/backup-schedule.service.ts
+api/backup-schedule.serviceInterface.ts
 api/buckets-admin.service.ts
 api/buckets-admin.serviceInterface.ts
 api/health.service.ts
 api/health.serviceInterface.ts
+api/integrity-admin.service.ts
+api/integrity-admin.serviceInterface.ts
 api/keys-admin.service.ts
 api/keys-admin.serviceInterface.ts
 api/metrics.service.ts
@@ -45,6 +49,8 @@ model/bulk-delete-dto.ts
 model/bulk-delete-error-item.ts
 model/bulk-delete-response-dto.ts
 model/change-password-dto.ts
+model/corrupt-list-dto.ts
+model/corrupt-object-dto.ts
 model/cors-config-dto.ts
 model/cors-rule-dto.ts
 model/create-admin-user-dto.ts
@@ -64,6 +70,7 @@ model/effective-permissions-dto-matrix-inner.ts
 model/effective-permissions-dto-scope.ts
 model/effective-permissions-dto.ts
 model/encryption-config-dto.ts
+model/integrity-status-dto.ts
 model/key-summary-dto-scope.ts
 model/key-summary-dto.ts
 model/legal-hold-dto.ts
@@ -95,6 +102,9 @@ model/request-point-dto.ts
 model/request-series-dto.ts
 model/retention-dto.ts
 model/rotated-key-dto.ts
+model/run-now-result-dto.ts
+model/schedule-spec-dto.ts
+model/schedule-status-dto.ts
 model/simulate-request-dto.ts
 model/simulate-response-dto.ts
 model/storage-point-dto.ts

@@ -64,3 +64,27 @@ export function sidebarConfigForRole(
     })),
   };
 }
+
+/**
+ * The console indicator (STORY-1204): stamp a small red (destructive) badge with
+ * the corrupt-object count onto the `settings` item — where the Integrity tab
+ * lives. Pure and hidden at zero (no badge when `corruptCount <= 0`), so the
+ * indicator only appears when there is corruption to surface. Used by the shell
+ * sidebars via a computed over `IntegritySignalStore.corrupt()`.
+ */
+export function sidebarConfigWithIntegrityBadge(
+  config: SidebarConfig,
+  corruptCount: number,
+): SidebarConfig {
+  if (corruptCount <= 0) return config;
+  return {
+    groups: config.groups.map((group) => ({
+      ...group,
+      items: group.items.map((item) =>
+        item.type === 'item' && item.id === 'settings'
+          ? { ...item, badge: { content: corruptCount, variant: 'destructive' as const } }
+          : item,
+      ),
+    })),
+  };
+}

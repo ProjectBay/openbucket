@@ -12,6 +12,7 @@ import { MultipartService } from '../domain/multipart/multipart.service';
 import { ObjectService } from '../domain/objects/object.service';
 import { ReconcileService } from '../domain/replication/reconcile.service';
 import { ReplicationStatusService } from '../domain/replication/replication-status.service';
+import { IntegrityStatusService } from '../domain/integrity/integrity-status.service';
 import { BlobStore } from '../storage/blob-store';
 import { DerivativeCacheService } from '../storage/derivative-cache.service';
 import { KeyService as StorageKeyService } from '../storage/key.service';
@@ -19,6 +20,7 @@ import { SecretCipher } from '../domain/keys/secret-cipher';
 import { ObjectWriterService } from '../storage/object-writer.service';
 import { RecoveryService } from '../storage/recovery.service';
 import { VersionStoreService } from '../storage/version-store.service';
+import { IntegrityRepairService } from '../storage/integrity-repair.service';
 import { ObjectController } from './controllers/object.controller';
 import { NotImplementedError } from './errors/s3-error';
 import {
@@ -69,6 +71,8 @@ describe('S3 controller topology (TEST-0100)', () => {
       .useValue({})
       .overrideProvider(ReplicationStatusService)
       .useValue({})
+      .overrideProvider(IntegrityStatusService)
+      .useValue({})
       .overrideProvider(BlobStore)
       .useValue({})
       .overrideProvider(ObjectWriterService)
@@ -76,6 +80,8 @@ describe('S3 controller topology (TEST-0100)', () => {
       .overrideProvider(RecoveryService)
       .useValue({})
       .overrideProvider(VersionStoreService)
+      .useValue({})
+      .overrideProvider(IntegrityRepairService)
       .useValue({})
       .overrideProvider(DerivativeCacheService)
       .useValue({})

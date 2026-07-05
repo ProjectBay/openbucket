@@ -38,6 +38,7 @@ export default [
             '@nestjs/throttler',
             'argon2',
             'busboy',
+            'cron-parser',
             'fast-xml-parser',
             'image-size',
             'passport-jwt',

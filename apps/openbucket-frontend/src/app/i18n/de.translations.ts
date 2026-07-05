@@ -90,6 +90,37 @@ export default {
       emptyHint: 'Keine ausstehende oder fehlgeschlagene Replikation für einen Bucket.',
     },
   },
+  integrity: {
+    title: 'Integrität',
+    subtitle:
+      'Hintergrund-Erkennung von Bit-Fäule: Blobs gegen ihre gespeicherte Prüfsumme neu hashen und eine beschädigte Kopie vom Replikationsziel reparieren.',
+    stats: {
+      scanned: 'Geprüft',
+      ok: 'OK',
+      corrupt: 'Beschädigt',
+      repaired: 'Repariert',
+    },
+    scrub: {
+      title: 'Prüfung',
+      description:
+        'Aktuelle lokale Objekte gegen ihre gespeicherte SHA-256 neu verifizieren. Gedrosselt, damit der Anfrageverkehr nie ausgehungert wird.',
+      now: 'Jetzt prüfen',
+      disabledHint: 'Die geplante Prüfung ist deaktiviert; dies führt einen einzelnen manuellen Durchlauf aus.',
+    },
+    clean: {
+      title: 'Keine Beschädigung erkannt',
+      description: 'Jedes geprüfte Objekt stimmt mit seiner gespeicherten Prüfsumme überein.',
+    },
+    corrupt: {
+      title: 'Beschädigte Objekte',
+      bucket: 'Bucket',
+      key: 'Schlüssel',
+      checkedAt: 'Erkannt',
+      detail: 'Detail',
+      empty: 'Keine beschädigten Objekte',
+      emptyHint: 'Der Scrubber hat kein Objekt als beschädigt markiert.',
+    },
+  },
   backupRestore: {
     title: 'Sicherung & Wiederherstellung',
     subtitle:
@@ -112,6 +143,32 @@ export default {
     resetWarning:
       'Beim Wiederherstellen wird der aktuelle Inhalt des Ziels GELÖSCHT und durch die Sicherung ersetzt. Dies kann nicht rückgängig gemacht werden.',
     confirmLabel: 'Wiederherstellen',
+    schedule: {
+      title: 'Geplante Sicherungen',
+      description: 'Automatische Snapshots nach Zeitplan, mit Aufbewahrung.',
+      enabled: 'Aktiviert',
+      disabled: 'Deaktiviert',
+      scope: 'Umfang',
+      scopeInstance: 'Gesamte Instanz',
+      scopeBuckets: 'Pro Bucket',
+      scheduleLabel: 'Zeitplan',
+      every: 'Alle {{minutes}} Min.',
+      lastRun: 'Letzter Lauf',
+      nextRun: 'Nächster Lauf',
+      never: 'Nie',
+      snapshots: 'Aufbewahrte Snapshots',
+      retention: 'Aufbewahrung',
+      retentionValue: 'behalte {{keepLast}}, max. {{maxAgeDays}} T',
+      runNow: 'Jetzt ausführen',
+      running: 'Läuft…',
+      statusOk: 'OK',
+      statusError: 'Fehler',
+      statusSkipped: 'Übersprungen',
+      runStarted: 'Sicherung gestartet',
+      runJoined: 'Eine Sicherung läuft bereits',
+      runFailed: 'Sicherung konnte nicht gestartet werden',
+      offHint: 'Geplante Sicherungen sind deaktiviert. Setze OB_SCHEDULED_BACKUP_*, um sie zu aktivieren.',
+    },
   },
   breadcrumb: {
     objects: 'Objekte',

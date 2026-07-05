@@ -11,6 +11,7 @@ import {
 import { OPEN_BUCKET_ORM_CONTEXT } from '../../persistence/orm-context';
 import { BucketService } from '../../domain/buckets/bucket.service';
 import { ReplicationStatusService } from '../../domain/replication/replication-status.service';
+import { IntegrityStatusService } from '../../domain/integrity/integrity-status.service';
 import {
   REPLICATION_CONFIG,
   type ReplicationConfig,
@@ -59,6 +60,7 @@ export class UsageRollupRunner implements ScheduledTask {
     @Inject(PROM_METRICS) private readonly prom: PromMetrics,
     private readonly replicationStatus: ReplicationStatusService,
     @Inject(REPLICATION_CONFIG) private readonly replicationConfig: ReplicationConfig,
+    private readonly integrityStatus: IntegrityStatusService,
   ) {}
 
   async run(): Promise<void> {
@@ -119,6 +121,11 @@ export class UsageRollupRunner implements ScheduledTask {
     // empty — set all three to 0 and skip the query entirely.
     await this.refreshReplicationDepth();
 
+    // Integrity gauges (STORY-1204): live per-status object counts + the last
+    // scrub run timestamp, sourced from the SAME read model the admin status
+    // endpoint uses. Counts only — never an object key or a credential.
+    await this.refreshIntegrity();
+
     this.log.debug(
       `usage-rollup: sampled ${allBuckets.length} bucket(s) + ${SURFACES.length} surface(s) @ ${sampledAt.toISOString()}`,
     );
@@ -142,5 +149,21 @@ export class UsageRollupRunner implements ScheduledTask {
     gauge.set({ status: 'pending' }, status.pendingCount);
     gauge.set({ status: 'inflight' }, status.inflightCount);
     gauge.set({ status: 'failed' }, status.failedCount);
+  }
+
+  /**
+   * Set `openbucket_integrity_objects{status}` (ok/corrupt/unchecked) and
+   * `openbucket_integrity_last_run_timestamp` from the integrity read model. Only
+   * counts + a timestamp are exposed — never an object key or a target credential
+   * (EPIC-08: /metrics must not leak secrets).
+   */
+  private async refreshIntegrity(): Promise<void> {
+    const status = await this.integrityStatus.getStatus();
+    this.prom.integrityObjects.set({ status: 'ok' }, status.ok);
+    this.prom.integrityObjects.set({ status: 'corrupt' }, status.corrupt);
+    this.prom.integrityObjects.set({ status: 'unchecked' }, status.unchecked);
+    this.prom.integrityLastRunTimestamp.set(
+      status.lastRunAt ? Math.floor(Date.parse(status.lastRunAt) / 1000) : 0,
+    );
   }
 }

@@ -89,6 +89,37 @@ export default {
       emptyHint: 'No pending or failed replication for any bucket.',
     },
   },
+  integrity: {
+    title: 'Integrity',
+    subtitle:
+      'Background bit-rot detection: re-hash blobs against their stored checksum and repair a corrupt copy from the replication target.',
+    stats: {
+      scanned: 'Scanned',
+      ok: 'OK',
+      corrupt: 'Corrupt',
+      repaired: 'Repaired',
+    },
+    scrub: {
+      title: 'Scrub',
+      description:
+        'Re-verify current, local objects against their stored SHA-256. Throttled so it never starves request traffic.',
+      now: 'Scrub now',
+      disabledHint: 'Scheduled scrubbing is disabled; this runs a single manual pass.',
+    },
+    clean: {
+      title: 'No corruption detected',
+      description: 'Every scanned object matches its stored checksum.',
+    },
+    corrupt: {
+      title: 'Corrupt objects',
+      bucket: 'Bucket',
+      key: 'Key',
+      checkedAt: 'Detected',
+      detail: 'Detail',
+      empty: 'No corrupt objects',
+      emptyHint: 'The scrubber has not flagged any object as corrupt.',
+    },
+  },
   backupRestore: {
     title: 'Backup & Restore',
     subtitle:
@@ -110,6 +141,32 @@ export default {
     resetWarning:
       'Restoring ERASES the current contents of the target and replaces them with the backup. This cannot be undone.',
     confirmLabel: 'Restore',
+    schedule: {
+      title: 'Scheduled backups',
+      description: 'Automatic snapshots written on a schedule, with retention.',
+      enabled: 'Enabled',
+      disabled: 'Disabled',
+      scope: 'Scope',
+      scopeInstance: 'Whole instance',
+      scopeBuckets: 'Per bucket',
+      scheduleLabel: 'Schedule',
+      every: 'Every {{minutes}} min',
+      lastRun: 'Last run',
+      nextRun: 'Next run',
+      never: 'Never',
+      snapshots: 'Snapshots kept',
+      retention: 'Retention',
+      retentionValue: 'keep {{keepLast}}, max {{maxAgeDays}}d',
+      runNow: 'Run now',
+      running: 'Running…',
+      statusOk: 'OK',
+      statusError: 'Error',
+      statusSkipped: 'Skipped',
+      runStarted: 'Backup started',
+      runJoined: 'A backup is already running',
+      runFailed: 'Could not start backup',
+      offHint: 'Scheduled backups are disabled. Set OB_SCHEDULED_BACKUP_* to enable.',
+    },
   },
   breadcrumb: {
     objects: 'Objects',

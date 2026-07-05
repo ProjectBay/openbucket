@@ -13,6 +13,7 @@ import { Bucket } from './bucket.entity';
 import { ObjectTag } from './object-tag.entity';
 import { ObjectRepository } from '../repositories/object.repository';
 import {
+  IntegrityStatus,
   ObjectEncryptionState,
   ObjectLocation,
   ObjectLockObjectState,
@@ -25,6 +26,9 @@ import {
 @Unique({ name: 'uq_objects_bucket_key', properties: ['bucket', 'key'] })
 @Index({ name: 'ix_objects_bucket_key', properties: ['bucket', 'key'] })
 @Index({ name: 'ix_objects_bucket_softdeleted', properties: ['bucket', 'softDeleted'] })
+// Integrity scrubber (STORY-1204): the admin corrupt-list is an index scan and
+// the scrubber can prefer least-recently-checked rows without a full-table sort.
+@Index({ name: 'ix_objects_integrity', properties: ['integrityStatus', 'integrityCheckedAt'] })
 export class ObjectEntity {
   // Surrogate PK so the FK target is stable across renames. Composite
   // (bucket, key) is enforced by the unique constraint above.
@@ -93,6 +97,19 @@ export class ObjectEntity {
   @Index({ name: 'ix_objects_lastaccessed' })
   @Property({ type: 'datetime', nullable: true })
   lastAccessedAt?: Date;
+
+  // -------- read-time / background integrity scrubbing (STORY-1204) ---------
+  // Nullable/defaulted so every pre-existing row is valid and simply `unchecked`
+  // until the scrub reaches it (mirrors how `contentSha256` was added nullable).
+  @Property({ type: 'string', default: IntegrityStatus.Unchecked })
+  integrityStatus: IntegrityStatus = IntegrityStatus.Unchecked;
+
+  @Property({ type: 'datetime', nullable: true })
+  integrityCheckedAt?: Date;
+
+  /** Bounded, redacted diagnostic on corruption/repair (≤255). Never a credential. */
+  @Property({ type: 'string', length: 255, nullable: true })
+  integrityDetail?: string;
 
   @Property({ type: 'boolean', default: false })
   softDeleted = false;

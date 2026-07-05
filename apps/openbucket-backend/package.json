@@ -33,6 +33,7 @@
     "@openbucket/nestjs": "0.1.0-alpha.13",
     "argon2": "^0.41.1",
     "busboy": "^1.6.0",
+    "cron-parser": "^5.6.1",
     "express": "5.2.1",
     "fast-xml-parser": "^5.9.3",
     "helmet": "^8.2.0",

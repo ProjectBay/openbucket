@@ -100,6 +100,18 @@ describe('UsageRollupRunner (TEST-1102 / TEST-1202)', () => {
         return { pendingCount: 3, inflightCount: 2, failedCount: 1 };
       },
     } as unknown as ReplicationStatusService;
+    const integrityStatus = {
+      getStatus: async () => ({
+        enabled: false,
+        scanned: 0,
+        ok: 0,
+        corrupt: 0,
+        unchecked: 0,
+        repaired: 0,
+        lastRunAt: null,
+        cursor: null,
+      }),
+    } as unknown as import('../../domain/integrity/integrity-status.service').IntegrityStatusService;
 
     runner = new UsageRollupRunner(
       orm.em as EntityManager,
@@ -111,6 +123,7 @@ describe('UsageRollupRunner (TEST-1102 / TEST-1202)', () => {
       prom,
       replicationStatus,
       replicationConfig,
+      integrityStatus,
     );
   }, 60_000);
 

@@ -44,6 +44,10 @@ export interface PromMetrics {
   readonly objectCount: Gauge<'bucket'>;
   /** Replication outbox depth by status (pending/inflight/failed). */
   readonly replicationOutboxDepth: Gauge<'status'>;
+  /** Live object count by integrity status (ok/corrupt/unchecked) — STORY-1204. */
+  readonly integrityObjects: Gauge<'status'>;
+  /** Unix seconds of the last integrity scrub tick that did work (0 if never). */
+  readonly integrityLastRunTimestamp: Gauge<string>;
 }
 
 /**
@@ -117,6 +121,19 @@ export function buildPromMetrics(): PromMetrics {
     registers: [registry],
   });
 
+  const integrityObjects = new Gauge({
+    name: 'openbucket_integrity_objects',
+    help: 'Live object count by integrity status (ok, corrupt, unchecked).',
+    labelNames: ['status'] as const,
+    registers: [registry],
+  });
+
+  const integrityLastRunTimestamp = new Gauge({
+    name: 'openbucket_integrity_last_run_timestamp',
+    help: 'Unix seconds of the last integrity scrub tick that did work (0 if never).',
+    registers: [registry],
+  });
+
   return {
     registry,
     httpRequestsTotal,
@@ -125,5 +142,7 @@ export function buildPromMetrics(): PromMetrics {
     storageBytes,
     objectCount,
     replicationOutboxDepth,
+    integrityObjects,
+    integrityLastRunTimestamp,
   };
 }

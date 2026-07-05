@@ -422,3 +422,69 @@ describe('AppConfigService', () => {
     await moduleRef.close();
   });
 });
+
+describe('loadEnv scheduled backups (STORY-1203)', () => {
+  let errSpy: jest.SpyInstance;
+  beforeEach(() => {
+    errSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+  afterEach(() => errSpy.mockRestore());
+
+  it('defaults: disabled with the documented retention defaults', () => {
+    const env = loadEnv({ ...baseEnv });
+    expect(env.OB_SCHEDULED_BACKUP_ENABLED).toBe(false);
+    expect(env.OB_SCHEDULED_BACKUP_SCOPE).toBe('instance');
+    expect(env.OB_SCHEDULED_BACKUP_KEEP_LAST).toBe(7);
+    expect(env.OB_SCHEDULED_BACKUP_MAX_AGE_DAYS).toBe(30);
+    expect(env.OB_SCHEDULED_BACKUP_CHECK_INTERVAL_MS).toBe(60_000);
+    expect(env.OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION).toBe(false);
+  });
+
+  it('enabled with an interval parses', () => {
+    const env = loadEnv({
+      ...baseEnv,
+      OB_SCHEDULED_BACKUP_ENABLED: 'true',
+      OB_SCHEDULED_BACKUP_INTERVAL_MINUTES: '60',
+    });
+    expect(env.OB_SCHEDULED_BACKUP_ENABLED).toBe(true);
+    expect(env.OB_SCHEDULED_BACKUP_INTERVAL_MINUTES).toBe(60);
+  });
+
+  it('enabled with a valid cron parses', () => {
+    const env = loadEnv({
+      ...baseEnv,
+      OB_SCHEDULED_BACKUP_ENABLED: 'true',
+      OB_SCHEDULED_BACKUP_CRON: '0 3 * * *',
+    });
+    expect(env.OB_SCHEDULED_BACKUP_CRON).toBe('0 3 * * *');
+  });
+
+  it('enabled with NEITHER interval nor cron refuses to boot', () => {
+    expect(() => loadEnv({ ...baseEnv, OB_SCHEDULED_BACKUP_ENABLED: 'true' })).toThrow(
+      'Refusing to boot: invalid environment.',
+    );
+    expect(errSpy.mock.calls[0][0]).toContain('exactly one of OB_SCHEDULED_BACKUP_INTERVAL_MINUTES');
+  });
+
+  it('enabled with BOTH interval and cron refuses to boot', () => {
+    expect(() =>
+      loadEnv({
+        ...baseEnv,
+        OB_SCHEDULED_BACKUP_ENABLED: 'true',
+        OB_SCHEDULED_BACKUP_INTERVAL_MINUTES: '60',
+        OB_SCHEDULED_BACKUP_CRON: '0 3 * * *',
+      }),
+    ).toThrow('Refusing to boot: invalid environment.');
+  });
+
+  it('a malformed cron refuses to boot', () => {
+    expect(() =>
+      loadEnv({
+        ...baseEnv,
+        OB_SCHEDULED_BACKUP_ENABLED: 'true',
+        OB_SCHEDULED_BACKUP_CRON: 'not a cron',
+      }),
+    ).toThrow('Refusing to boot: invalid environment.');
+    expect(errSpy.mock.calls[0][0]).toContain('OB_SCHEDULED_BACKUP_CRON is not a valid cron');
+  });
+});

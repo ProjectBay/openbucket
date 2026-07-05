@@ -93,6 +93,20 @@ export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
     OB_REPLICATION_BATCH_KEYS: opts.replication?.batchKeys ?? 50,
     OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES:
       opts.replication?.largeObjectThresholdBytes ?? 64 * 1024 * 1024,
+    // Scheduled backups (STORY-1203). Off unless the host passes a `backups`
+    // block; `enabled` is derived from its presence (the library caller never
+    // sets it explicitly). Numeric defaults mirror the env schema; the default
+    // `dir` (`<dataDir>/backups`) is applied at resolve time in
+    // `resolveScheduledBackupConfig`, so an unset `dir` maps to `undefined` here.
+    OB_SCHEDULED_BACKUP_ENABLED: !!opts.backups,
+    OB_SCHEDULED_BACKUP_SCOPE: opts.backups?.scope ?? 'instance',
+    OB_SCHEDULED_BACKUP_INTERVAL_MINUTES: opts.backups?.intervalMinutes,
+    OB_SCHEDULED_BACKUP_CRON: opts.backups?.cron,
+    OB_SCHEDULED_BACKUP_DIR: opts.backups?.dir,
+    OB_SCHEDULED_BACKUP_KEEP_LAST: opts.backups?.keepLast ?? 7,
+    OB_SCHEDULED_BACKUP_MAX_AGE_DAYS: opts.backups?.maxAgeDays ?? 30,
+    OB_SCHEDULED_BACKUP_CHECK_INTERVAL_MS: opts.backups?.checkIntervalMs ?? 60_000,
+    OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION: opts.backups?.pushToReplication ?? false,
     // Cold-object tiering (STORY-0901). Off by default; a library host enables it
     // via the env-driven standalone path. Defaults mirror the env schema.
     OPENBUCKET_TIER_ENABLED: false,
@@ -100,6 +114,12 @@ export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
     OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS: 30_000,
     OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE: 8,
     OPENBUCKET_TIER_PRESIGN_TTL_SECONDS: 300,
+    // Background integrity scrubbing (STORY-1204). Off by default; a library host
+    // enables it via the env-driven standalone path. Defaults mirror the env schema.
+    OB_INTEGRITY_SCRUB_ENABLED: false,
+    OB_INTEGRITY_SCRUB_INTERVAL_MS: 60_000,
+    OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK: 1_000,
+    OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK: 1_073_741_824,
     // Prometheus /metrics + OpenTelemetry (STORY-1202). Off by default; a library
     // host opts in via the `metrics` / `tracing` option blocks. `resolveOptions`
     // already defaulted the mode to 'off'.

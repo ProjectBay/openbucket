@@ -123,4 +123,32 @@ describe('validateSecurityCriticalOptions', () => {
       validate({ ...validBase, webhooks: { url: 'https://hooks.example.com/ob', secret: 'short' } }),
     ).toThrow(/webhooks\.secret/);
   });
+
+  // Scheduled backups (STORY-1203) — same fail-fast cron/interval guarantee the
+  // standalone env schema gives.
+  it('accepts a backups block with an interval', () => {
+    expect(() => validate({ ...validBase, backups: { intervalMinutes: 60 } })).not.toThrow();
+  });
+
+  it('accepts a backups block with a valid cron', () => {
+    expect(() => validate({ ...validBase, backups: { cron: '0 3 * * *' } })).not.toThrow();
+  });
+
+  it('rejects a backups block with NEITHER cron nor interval', () => {
+    expect(() => validate({ ...validBase, backups: { keepLast: 5 } })).toThrow(
+      /exactly one of `backups.cron` or `backups.intervalMinutes`/,
+    );
+  });
+
+  it('rejects a backups block with BOTH cron and interval', () => {
+    expect(() =>
+      validate({ ...validBase, backups: { cron: '0 3 * * *', intervalMinutes: 60 } }),
+    ).toThrow(/exactly one of/);
+  });
+
+  it('rejects a backups block with a malformed cron', () => {
+    expect(() => validate({ ...validBase, backups: { cron: 'not a cron' } })).toThrow(
+      /not a valid cron/,
+    );
+  });
 });

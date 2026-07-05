@@ -5,6 +5,7 @@ import { Bucket } from '../entities/bucket.entity';
 import { ObjectEntity } from '../entities/object.entity';
 import { ObjectTag } from '../entities/object-tag.entity';
 import { ObjectVersion } from '../entities/object-version.entity';
+import { IntegrityStatus, ObjectLocation } from '../entities/types';
 import { escapeLikePattern, ObjectRepository } from './object.repository';
 
 const repoOf = (orm: MikroORM): ObjectRepository =>
@@ -138,5 +139,118 @@ describe('ObjectRepository.searchAcrossBuckets (TEST-1101)', () => {
       })
     ).rows;
     expect(rows.map((r) => `${r.bucket.name}/${r.key}`).sort()).toEqual(['tag1/prod', 'tag2/prod']);
+  });
+});
+
+/**
+ * TEST-1204 — the integrity scrubber's paged scan + the admin corrupt-list query
+ * (STORY-1204), against a real :memory: SQLite built from entity metadata.
+ */
+describe('ObjectRepository integrity queries (TEST-1204)', () => {
+  let orm: MikroORM;
+
+  beforeAll(async () => {
+    orm = await MikroORM.init({
+      dbName: ':memory:',
+      entities: [Bucket, ObjectEntity, ObjectTag, ObjectVersion],
+      metadataProvider: ReflectMetadataProvider,
+      metadataCache: { enabled: false },
+      allowGlobalContext: true,
+      forceUtcTimezone: true,
+      pool: {
+        afterCreate: (conn: any, done: (err?: Error) => void) => {
+          conn.pragma('foreign_keys = ON');
+          done();
+        },
+      },
+    });
+    await orm.schema.createSchema();
+  }, 60_000);
+
+  afterAll(async () => {
+    await orm?.close(true);
+  });
+
+  interface SeedRow {
+    key: string;
+    sha?: string | null;
+    softDeleted?: boolean;
+    location?: ObjectLocation;
+    status?: IntegrityStatus;
+    checkedAt?: Date;
+  }
+
+  const seed = async (bucket: string, rows: SeedRow[]): Promise<void> => {
+    const em = orm.em.fork();
+    const b = em.create(Bucket, { name: bucket });
+    for (const r of rows) {
+      em.create(ObjectEntity, {
+        id: `${bucket}/${r.key}`,
+        bucket: b,
+        key: r.key,
+        etag: 'e',
+        contentSha256: r.sha === undefined ? 'a'.repeat(64) : r.sha ?? undefined,
+        softDeleted: r.softDeleted ?? false,
+        location: r.location ?? ObjectLocation.Local,
+        integrityStatus: r.status ?? IntegrityStatus.Unchecked,
+        integrityCheckedAt: r.checkedAt,
+      });
+    }
+    await em.flush();
+  };
+
+  it('case 1: scanForScrub returns only local, live, sha-bearing rows in (bucket,key) order', async () => {
+    await seed('scrub', [
+      { key: 'a' },
+      { key: 'b', softDeleted: true }, // excluded — soft-deleted
+      { key: 'c', location: ObjectLocation.Remote }, // excluded — tiered
+      { key: 'd', sha: null }, // excluded — no stored digest
+      { key: 'e' },
+    ]);
+    const rows = await repoOf(orm).scanForScrub({ limit: 100 });
+    expect(rows.map((r) => r.key)).toEqual(['a', 'e']);
+    // bucket is populated so the runner can read o.bucket.name.
+    expect(rows[0].bucket.name).toBe('scrub');
+  });
+
+  it('case 2: scanForScrub honours the (bucket,key) cursor and limit', async () => {
+    await seed('page', [{ key: 'k1' }, { key: 'k2' }, { key: 'k3' }]);
+    const repo = repoOf(orm);
+    const p1 = await repo.scanForScrub({ limit: 2, afterBucket: 'page', afterKey: '' });
+    // First two keys of the 'page' bucket (other buckets from case 1 sort before 'page' vs 'scrub';
+    // constrain via the cursor to this bucket window).
+    const p1Keys = p1.filter((r) => r.bucket.name === 'page').map((r) => r.key);
+    expect(p1Keys.length).toBeGreaterThan(0);
+
+    const last = p1[p1.length - 1];
+    const p2 = await repo.scanForScrub({
+      limit: 100,
+      afterBucket: last.bucket.name,
+      afterKey: last.key,
+    });
+    // Every returned row is strictly after the cursor in (bucket,key) order.
+    for (const r of p2) {
+      const after = r.bucket.name > last.bucket.name || (r.bucket.name === last.bucket.name && r.key > last.key);
+      expect(after).toBe(true);
+    }
+  });
+
+  it('case 3: listCorrupt returns only corrupt rows, newest-checked first, with a total', async () => {
+    await seed('corrupt', [
+      { key: 'ok1', status: IntegrityStatus.Ok },
+      { key: 'bad1', status: IntegrityStatus.Corrupt, checkedAt: new Date('2026-01-01T00:00:00Z') },
+      { key: 'bad2', status: IntegrityStatus.Corrupt, checkedAt: new Date('2026-02-01T00:00:00Z') },
+      { key: 'unchecked1' },
+    ]);
+    const { rows, total } = await repoOf(orm).listCorrupt({ limit: 50, offset: 0 });
+    expect(total).toBe(2);
+    expect(rows.map((r) => r.key)).toEqual(['bad2', 'bad1']); // newest checkedAt first
+  });
+
+  it('case 4: listCorrupt is offset/limit paged', async () => {
+    const { rows, total } = await repoOf(orm).listCorrupt({ limit: 1, offset: 1 });
+    expect(total).toBe(2);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].key).toBe('bad1');
   });
 });

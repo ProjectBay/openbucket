@@ -16,6 +16,7 @@ export * from './entities/tiering-state.entity';
 export * from './entities/event-delivery.entity';
 export * from './entities/replication-outbox.entity';
 export * from './entities/reconcile-job.entity';
+export * from './entities/scrub-state.entity';
 export * from './entities/usage-sample.entity';
 export * from './entities/request-metric-sample.entity';
 export * from './entities/audit-log.entity';

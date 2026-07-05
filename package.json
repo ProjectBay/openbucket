@@ -57,6 +57,7 @@
     "argon2": "^0.41.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "cron-parser": "^5.6.1",
     "date-fns": "^4.1.0",
     "embla-carousel-angular": "^16.0.0",
     "fast-xml-parser": "^5.9.3",

@@ -137,7 +137,13 @@ import { SidebarConfig } from '../types';
                   <span>{{ item.title | translate }}</span>
                 </a>
                 @if (item.badge) {
-                  <div hlmSidebarMenuBadge>{{ item.badge.content | translate }}</div>
+                  <div
+                    hlmSidebarMenuBadge
+                    [class.bg-destructive]="item.badge.variant === 'destructive'"
+                    [class.text-white]="item.badge.variant === 'destructive'"
+                  >
+                    {{ item.badge.content | translate }}
+                  </div>
                 }
                 @if (item.action) {
                   <ng-container

@@ -26,6 +26,14 @@ import type {
  */
 const TIER_PREFIX = '_ob_tiered/';
 
+/**
+ * Reserved key prefix under which scheduled-backup snapshots are pushed
+ * (STORY-1203). Filtered out of `listRemoteObjects` alongside {@link TIER_PREFIX}
+ * so a reconcile scan (STORY-0902) never treats a pushed backup `.zip` as a stray
+ * remote raw-key object to be deleted.
+ */
+const BACKUP_PREFIX = '_ob_backups/';
+
 export interface ReplicationPutInput {
   key: string;
   body: Readable;
@@ -148,7 +156,9 @@ export class ReplicationTargetService implements RemoteObjectStore {
     const objects: RemoteObjectRef[] = [];
     for (const c of out.Contents ?? []) {
       const key = c.Key;
-      if (!key || key.startsWith(TIER_PREFIX)) continue;
+      // Skip reserved prefixes: tiered blobs and pushed backup snapshots must
+      // never masquerade as replicated raw-key objects during a reconcile.
+      if (!key || key.startsWith(TIER_PREFIX) || key.startsWith(BACKUP_PREFIX)) continue;
       objects.push({
         key,
         size: c.Size,
@@ -157,6 +167,27 @@ export class ReplicationTargetService implements RemoteObjectStore {
       });
     }
     return { objects, isTruncated: out.IsTruncated ?? false };
+  }
+
+  /**
+   * Read a RAW-key replicated object from the target (STORY-1204 integrity
+   * repair). Async replication (STORY-0900) writes objects under their raw key on
+   * the target (distinct from the tiering `TIER_PREFIX` path), and decrypts SSE
+   * before upload — so the remote copy is PLAINTEXT and its digest lines up
+   * directly with the stored `contentSha256`. Throws (NoSuchKey) when the key was
+   * never replicated / since deleted; the endpoint/credentials stay encapsulated.
+   */
+  async getReplicated(key: string, opts?: { signal?: AbortSignal }): Promise<RemoteGetResult> {
+    const client = this.requireClient();
+    const out = await client.send(
+      new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
+      { abortSignal: opts?.signal },
+    );
+    return {
+      stream: out.Body as Readable,
+      contentLength: out.ContentLength,
+      contentType: out.ContentType,
+    };
   }
 
   /** Delete an object from the target. Idempotent — S3 DeleteObject returns 204

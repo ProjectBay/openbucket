@@ -8,8 +8,10 @@ import {
   sidebarConfig,
   secondaryNavConfig,
   sidebarConfigForRole,
+  sidebarConfigWithIntegrityBadge,
 } from '../../../sidebar/data/sidebar.data';
 import { AuthService } from '../../../../auth/auth.service';
+import { IntegritySignalStore } from '../../../../integrity/integrity.signal-store';
 
 @Component({
   selector: 'ob-compact-sidebar',
@@ -67,10 +69,19 @@ import { AuthService } from '../../../../auth/auth.service';
 })
 export class CompactSidebar {
   private readonly auth = inject(AuthService);
+  private readonly integrity = inject(IntegritySignalStore);
   // Role-filtered (EPIC-11): the full-admin-only /users entry is hidden from
   // read-only admins.
   protected readonly mainConfig = computed(() =>
-    sidebarConfigForRole(sidebarConfig, this.auth.isFullAdmin()),
+    sidebarConfigWithIntegrityBadge(
+      sidebarConfigForRole(sidebarConfig, this.auth.isFullAdmin()),
+      this.integrity.corrupt(),
+    ),
   );
+
+  constructor() {
+    // Load the corrupt count once so the console indicator badge reflects it.
+    void this.integrity.refresh();
+  }
   protected readonly secondaryConfig = secondaryNavConfig;
 }

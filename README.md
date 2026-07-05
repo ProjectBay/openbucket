@@ -67,13 +67,24 @@ cap; the drain worker resumes on boot and survives remote outages. **Cold-object
 tiering** offloads rarely-accessed objects to that same remote (via lifecycle
 `<Transition>` rules) and **rehydrates them transparently on read** (single-flight,
 integrity-verified, with a presigned redirect for large objects). Plus **backup &
-restore** (per-bucket + whole-instance `.zip` snapshots).
+restore** (per-bucket + whole-instance `.zip` snapshots) — on demand or on a
+**schedule** (cron/interval) with **union retention** (keep-last-N or max-age),
+atomic writes, a free-space guard, and an optional push of each snapshot to the
+replication target. A throttled **background integrity scrubber** re-hashes local
+blobs against their stored SHA-256 to detect bit-rot, records a per-object verdict,
+and — when a replication target is configured — **repairs a corrupt blob from the
+good remote copy** (staged through the two-phase writer, digest-verified before the
+swap); it is default-off and strictly rate-limited (per-tick object + byte budgets)
+so it never starves request traffic. The admin console's **Integrity** page (and the
+`/api/admin/integrity` API) surfaces the scan summary, a corrupt-object list, and a
+manual "scrub now" trigger, with a corrupt-count badge in the sidebar.
 
 **Operations** — refuse-to-boot env validation, forward-only DB migrations on
 startup, graceful drain on `SIGTERM`, structured (pino) JSON logs, health &
 readiness probes, request IDs, a **Prometheus `/metrics` endpoint** (HTTP
 request counter + latency histogram, per-bucket storage/object-count gauges, S3
-operation counter, replication-outbox depth — all with bounded label cardinality,
+operation counter, replication-outbox depth, integrity object counts by status +
+last-scrub timestamp — all with bounded label cardinality,
 never a raw URL/key/IP; gated `off`/`public`/`token` with a timing-safe bearer
 check), **optional OpenTelemetry tracing** (a no-op unless you install
 `@opentelemetry/api` + an SDK), and a **dependency-free `openbucket` CLI** (bucket

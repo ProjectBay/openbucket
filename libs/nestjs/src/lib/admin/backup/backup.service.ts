@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createWriteStream, promises as fs } from 'node:fs';
 import { join, posix } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { Readable } from 'node:stream';
+import { Readable, type Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { once } from 'node:events';
 import type { Response } from 'express';
@@ -89,19 +89,59 @@ export class BackupService {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    const archive = archiver('zip', { zlib: { level: 1 } });
-    let failed = false;
-    archive.on('error', (err) => {
-      failed = true;
+    // Retain the archiver handle so a client disconnect can abort it mid-stream
+    // (stops reading blobs). The single archive-creation site lives in
+    // `writeSnapshot`; the wrapper only owns the HTTP concerns (headers, abort).
+    let archive: archiver.Archiver | undefined;
+    res.on('close', () => {
+      if (!res.writableFinished) archive?.abort();
+    });
+
+    try {
+      await this.writeSnapshot(res, kind, bucketNames, (a) => {
+        archive = a;
+      });
+    } catch (err) {
+      // On the download path a failed archive must tear down the response (the
+      // file path instead rejects so the runner unlinks its partial `.part`).
       this.log.error(`backup archive error: ${(err as Error).message}`);
       if (!res.headersSent) res.status(500);
-      res.destroy(err as Error);
+      if (!res.destroyed) res.destroy(err as Error);
+    }
+  }
+
+  /**
+   * Build the backup `.zip` (identical `BackupManifest` v1 + per-object data
+   * entries) into any `Writable` sink — the streamed HTTP response OR a file on
+   * disk (the scheduled runner). This is the single seam both callers share.
+   *
+   * Streams each object via {@link ObjectService.openObjectStream} with the same
+   * one-fd-at-a-time backpressure (`await once(archive, 'entry')`), appends
+   * `manifest.json`, and finalizes. Returns the snapshot's size (`bytes`, from
+   * `archive.pointer()` after finalize — no re-`stat`) and `objectCount` (from
+   * `manifest.objects.length`). An archiver error rejects the returned promise so
+   * a file-sink caller can mark the run failed and remove the partial `.part`.
+   *
+   * `onArchive` hands the caller the `archiver` handle (e.g. to `abort()` on a
+   * client disconnect) while keeping one archive-creation site here.
+   */
+  async writeSnapshot(
+    sink: Writable,
+    kind: 'bucket' | 'instance',
+    bucketNames: string[],
+    onArchive?: (archive: archiver.Archiver) => void,
+  ): Promise<{ bytes: number; objectCount: number }> {
+    const archive = archiver('zip', { zlib: { level: 1 } });
+    onArchive?.(archive);
+
+    // Capture the first archiver error and rethrow it after the current await
+    // unwinds, so a failure rejects the returned promise (file path) instead of
+    // silently truncating the archive.
+    let failed: Error | undefined;
+    archive.on('error', (err) => {
+      failed = err as Error;
     });
-    // If the client disconnects, abort the archive so we stop reading blobs.
-    res.on('close', () => {
-      if (!res.writableFinished) archive.abort();
-    });
-    archive.pipe(res);
+    archive.pipe(sink);
 
     const manifest: BackupManifest = {
       version: 1,
@@ -113,7 +153,7 @@ export class BackupService {
 
     for (const name of bucketNames) {
       const b = await this.bucketRepo.getByName(name);
-      if (!b) continue;
+      if (!b) continue; // bucket deleted mid-scan — tolerate
       manifest.buckets.push({
         name: b.name,
         versioning: b.versioning === VersioningState.Enabled ? 'enabled' : 'disabled',
@@ -123,7 +163,7 @@ export class BackupService {
 
       let marker: string | undefined;
       do {
-        if (failed) return;
+        if (failed) throw failed;
         const { rows, truncated } = await this.objectRepo.listByPrefix(name, '', marker, PAGE);
         for (const obj of rows) {
           if (obj.softDeleted) continue;
@@ -147,9 +187,14 @@ export class BackupService {
       } while (marker);
     }
 
-    if (failed) return;
+    if (failed) throw failed;
     archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
     await archive.finalize();
+    if (failed) throw failed;
+
+    // `archive.pointer()` is the total bytes written to the sink after finalize —
+    // the snapshot size without re-stat'ing the file.
+    return { bytes: archive.pointer(), objectCount: manifest.objects.length };
   }
 
   // ===== RESTORE (upload a .zip → reset target to it) ===================
