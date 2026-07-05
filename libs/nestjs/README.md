@@ -56,6 +56,104 @@ A **partial** `admin` block is rejected at startup (it would otherwise sign JWTs
 with an empty secret): `username`, `passwordHash`, and `jwtSecret` are all required
 when `admin` is present. Omit the whole block to go headless.
 
+### Object preview
+
+The object browser previews an object inline (a per-row **Preview** action and the
+detail sheet) for **images**, **PDF**, **text/code**, and **video/audio**. Bytes are
+read only through the guarded admin content route
+(`GET <mountPath>/api/admin/buckets/:name/objects/<key>?content`) — the same
+authenticated path as download — so preview adds no new API surface. The safeguards:
+
+- **Active-content neutralization** — every read applies
+  `Content-Security-Policy: default-src 'none'; sandbox` + `X-Content-Type-Options: nosniff`,
+  and `text/html` / `application/xhtml+xml` / `image/svg+xml` are forced to
+  `attachment; application/octet-stream`, so uploaded markup/SVG can never script the
+  admin origin (it falls through to a download-only fallback card instead of rendering).
+- **PDF `<iframe sandbox>`** with no tokens (blocks scripts/forms/popups/same-origin) as
+  defense in depth over the server CSP.
+- **Per-kind size caps** — the client refuses to fetch over-cap images/PDF/video/audio;
+  text is fetched with a bounded `Range: bytes=0-262143` (256 KiB) request so a
+  multi-gigabyte log never streams into the browser, with a truncation banner and a
+  binary-content sniff that declines to dump control characters.
+- **No shared caching** — `?content` responses carry `Cache-Control: private, no-store`
+  so previewed bytes never land in a shared/browser cache (multi-operator installs).
+
+### Cross-bucket object search
+
+The console's **Search** page (and `GET <mountPath>/api/admin/objects/search`) finds
+objects across **every** bucket — or one named bucket — in two modes:
+
+- **`prefix`** (default) — an indexed byte-wise range scan on the key
+  (`ix_objects_bucket_key`), matching S3's `StartAfter` semantics; cheap even on
+  huge buckets.
+- **`contains`** — a substring match via a parameterised `LIKE … ESCAPE`. The term
+  is bound (never interpolated) and run through a wildcard-escaping helper, so `%`,
+  `_`, and `\` in user input match **literally** (CWE-150). It requires `q` of length
+  ≥ 2 as a DoS guard against a full-table `%%` scan.
+
+An optional **tag filter** (`tagKey` + `tagValue`, supplied together) narrows results
+to objects carrying that exact tag. Tags are indexed in a denormalised `object_tags`
+table (`ix_object_tags_kv`) kept in sync on the tagging write path and backfilled for
+pre-existing objects by a background tick — so tag search is an index-backed exact
+match, not a JSON scan. The unindexed `objects.tagging` JSON column stays the source
+of truth; `object_tags` is a rebuildable index.
+
+Pagination is **keyset** over `(bucket, key)` (an opaque `nextCursor`, never `OFFSET`),
+so page N is as cheap as page 1 — no deep-pagination DoS. The endpoint inherits the
+global `JwtAuthGuard` (401 without a bearer token) and the `default` throttle bucket
+(100/min/IP → 429); each call emits an `object.searched` audit event recording the
+search **shape** (`mode`, whether a tag filter was used, result count) — never the raw
+query term, to avoid logging sensitive key fragments.
+
+### Usage analytics
+
+The console's **Dashboard** renders storage-over-time, a per-bucket size breakdown,
+and request/error mini-charts, backed by three read-only endpoints under
+`<mountPath>/api/admin/analytics` (JWT-guarded; in the OpenAPI doc so the generated
+client has a typed `AnalyticsService`):
+
+| Endpoint | operationId | What it returns |
+| --- | --- | --- |
+| `GET /api/admin/analytics/storage?range=&bucket=` | `getStorageAnalytics` | Storage-over-time points (`sizeBytes`, `objectCount`). Instance-wide, or one bucket via **exact** match (never `LIKE`). |
+| `GET /api/admin/analytics/buckets` | `getBucketBreakdown` | Per-bucket size + `sharePct` of the **latest** sample, limited to still-existing buckets. |
+| `GET /api/admin/analytics/requests?range=` | `getRequestAnalytics` | Request/error counts per window, pivoted across the `admin` and `s3` surfaces. |
+
+`range` is an **allow-list enum** (`1h`/`24h`/`7d`/`30d`/`90d`) — there is no
+free-form window, so no unbounded scan. Every series is **server-side downsampled**
+to ≤ 500 points so a 90-day range never streams thousands of rows to the browser.
+
+The data comes from a background **usage-rollup** tick (`USAGE_ROLLUP_INTERVAL_MS`,
+default 15 min): it snapshots per-bucket storage in one grouped aggregate, drains an
+in-memory per-surface request/error counter (counts only — never URLs, keys, or
+signatures), writes both to `usage_samples` / `request_metric_samples` with a shared
+timestamp, and prunes rows older than `USAGE_RETENTION_DAYS` (default 90) to bound
+table growth. A bucket delete does **not** erase its historical samples, so the
+storage line never retroactively drops; the breakdown filters to existing buckets at
+read time.
+
+### Audit log
+
+Every state-changing admin action (`AuditService.emit`) is both logged as a Pino
+record (`audit: true`) **and** persisted to an `audit_logs` table, so the console's
+**Audit log** page (`<mountPath>/audit`) can browse history the log stream can't. Two
+read-only, JWT-guarded endpoints back it (typed `AuditAdminService` in the generated
+client):
+
+| Endpoint | operationId | What it returns |
+| --- | --- | --- |
+| `GET /api/admin/audit?event=&subject=&bucket=&from=&to=&cursor=&limit=` | `listAuditEvents` | A newest-first page `{ items, nextCursor }`. Filters match **exact**, indexed columns (never `LIKE`); `limit ≤ 200` with opaque **keyset** paging bounds every response. |
+| `GET /api/admin/audit/catalog` | `getAuditCatalog` | The static v1 event-name list for the filter dropdown (no `distinct` scan). |
+
+Writes never block the request handler: `emit` pushes onto a bounded in-memory ring
+buffer, and a background **audit-flush** tick (`AUDIT_FLUSH_MS`, default 2 s)
+batch-inserts drained rows inside a per-tick `RequestContext`, then prunes rows older
+than `AUDIT_RETENTION_DAYS` (default 90) once per day. The buffer is capped at
+`AUDIT_BUFFER_MAX` (default 10 000) — past that the **oldest** row is dropped and the
+flusher warns, so a burst or a stalled flusher can never exhaust the heap. Before a
+row is stored, any secret-looking field (`/secret|password|hash|token|authorization|cookie/i`)
+is stripped and the JSON `detail` is dropped if it exceeds ~2 KiB (defense-in-depth;
+the v1 catalogue never carries secrets). Read-only `GET`s are **not** audited.
+
 ## Async configuration
 
 For secrets resolved at runtime (e.g. from the host's `ConfigService`). Note

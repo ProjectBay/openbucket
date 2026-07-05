@@ -20,6 +20,12 @@ export const sidebarConfig: SidebarConfig = {
           url: '/buckets',
         }),
         createSidebarConfig.item({
+          id: 'search',
+          title: 'sidebar.storage.search',
+          icon: 'lucideSearch',
+          url: '/search',
+        }),
+        createSidebarConfig.item({
           id: 'keys',
           title: 'sidebar.storage.keys',
           icon: 'lucideKey',
@@ -51,6 +57,12 @@ export const sidebarConfig: SidebarConfig = {
           title: 'sidebar.admin.replication',
           icon: 'lucideRefreshCw',
           url: '/replication',
+        }),
+        createSidebarConfig.item({
+          id: 'audit',
+          title: 'sidebar.admin.audit',
+          icon: 'lucideScrollText',
+          url: '/audit',
         }),
       ],
     }),

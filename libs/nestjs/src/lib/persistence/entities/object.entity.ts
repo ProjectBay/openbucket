@@ -1,6 +1,16 @@
-import { Entity, Index, ManyToOne, PrimaryKey, Property, Unique } from '@mikro-orm/core';
+import {
+  Collection,
+  Entity,
+  Index,
+  ManyToOne,
+  OneToMany,
+  PrimaryKey,
+  Property,
+  Unique,
+} from '@mikro-orm/core';
 
 import { Bucket } from './bucket.entity';
+import { ObjectTag } from './object-tag.entity';
 import { ObjectRepository } from '../repositories/object.repository';
 import {
   ObjectEncryptionState,
@@ -92,4 +102,13 @@ export class ObjectEntity {
 
   @Property({ type: 'datetime', onUpdate: () => new Date() })
   modifiedAt: Date = new Date();
+
+  /**
+   * Derived tag-index rows (STORY-1101, TASK-3312). Inverse side of
+   * {@link ObjectTag.object}; joined by cross-bucket search when a `tagKey`/
+   * `tagValue` filter is present. The `objects.tagging` JSON column above remains
+   * the source of truth — this collection is a rebuildable index.
+   */
+  @OneToMany(() => ObjectTag, (t) => t.object)
+  tags = new Collection<ObjectTag>(this);
 }

@@ -39,9 +39,16 @@ policies, and S3-style XML error responses.
 
 **Admin** — a JSON admin API (`/api/admin/*`) secured with argon2id passwords +
 rotating JWTs, plus an **Angular admin console**: bucket & object browser,
-upload/download, presigned share links, access-key management, **multi-admin users
-with full-admin / read-only roles**, per-bucket versioning / encryption /
-object-lock / lifecycle / CORS / policy editors, i18n (en/de), light/dark themes.
+**cross-bucket object search** (key prefix / substring / tag, keyset-paginated),
+upload/download, **inline object preview** (image / PDF / text-code / video / audio,
+sandboxed with CSP + per-kind size caps), presigned share links, access-key
+management, **multi-admin users with full-admin / read-only roles**, per-bucket
+versioning / encryption /
+object-lock / lifecycle / CORS / policy editors, a **usage-analytics dashboard**
+(storage-over-time, per-bucket size breakdown, request/error charts, live request
+rate — from a background rollup with bounded retention), a **persisted audit log**
+(every state-changing admin action is queryable in the console, keyset-paged, with
+bounded retention), i18n (en/de), light/dark themes.
 
 **Developer file pipeline** — on-the-fly **image transformations** on GET
 (`?w=&h=&fit=&format=&q=`, cached derivatives), **object event notifications**

@@ -1,5 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
+import { v7 as uuidv7 } from 'uuid';
 import { raw, type EntityManager } from '@mikro-orm/core';
 import type { Request, Response } from 'express';
 import type { IncomingHttpHeaders } from 'node:http';
@@ -11,7 +12,9 @@ import {
   ObjectLocation,
   ObjectLockMode,
   ObjectRepository,
+  ObjectTag,
   StorageClass,
+  type ObjectSearchCriteria,
 } from '../../persistence/index';
 import { TieringService } from '../tiering/tiering.service';
 
@@ -135,6 +138,35 @@ export interface AdminObjectMeta {
   location: string;
 }
 
+/** Cross-bucket search input (§STORY-1101, TASK-3311); cursor is opaque base64url. */
+export interface ObjectSearchInput {
+  q: string;
+  mode: 'prefix' | 'contains';
+  bucket?: string;
+  tagKey?: string;
+  tagValue?: string;
+  cursor?: string;
+  limit: number;
+}
+
+/** A single cross-bucket search hit (clean, serializable shapes). */
+export interface ObjectSearchHit {
+  bucket: string;
+  key: string;
+  size: number;
+  etag: string;
+  lastModified: Date;
+  storageClass: string;
+  contentType?: string;
+}
+
+/** One page of cross-bucket search results + opaque keyset cursor. */
+export interface ObjectSearchResult {
+  results: ObjectSearchHit[];
+  isTruncated: boolean;
+  nextCursor?: string;
+}
+
 /**
  * Split a flat key list into Contents + CommonPrefixes under S3 delimiter
  * semantics: a key whose remainder after `prefix` contains `delimiter` rolls up
@@ -244,6 +276,43 @@ export class ObjectService {
       commonPrefixes,
       nextMarker,
       isTruncated: truncated,
+    };
+  }
+
+  /**
+   * Cross-bucket object search (§STORY-1101, TASK-3311). Adapts
+   * {@link ObjectRepository.searchAcrossBuckets} into clean serializable hits +
+   * an opaque keyset cursor. Returns RAW keys — the console encodes-once when
+   * building browser/download links (mirrors the `decodeOnce`/`rawTail` contract
+   * in the admin controller). A malformed cursor is treated as "no cursor"
+   * (restart from the top) rather than a 500 — it only positions the keyset and
+   * is never trusted for authz.
+   */
+  async search(input: ObjectSearchInput): Promise<ObjectSearchResult> {
+    const criteria: ObjectSearchCriteria = {
+      term: input.q,
+      mode: input.mode,
+      bucket: input.bucket,
+      tagKey: input.tagKey,
+      tagValue: input.tagValue,
+      cursor: decodeSearchCursor(input.cursor),
+      limit: input.limit,
+    };
+    const page = await this.objects.searchAcrossBuckets(criteria);
+    const results: ObjectSearchHit[] = page.rows.map((o) => ({
+      bucket: o.bucket.name,
+      key: o.key,
+      size: Number(o.size),
+      etag: o.etag,
+      lastModified: o.modifiedAt,
+      storageClass: o.storageClass,
+      contentType: o.contentType,
+    }));
+    const last = page.truncated ? page.rows[page.rows.length - 1] : undefined;
+    return {
+      results,
+      isTruncated: page.truncated,
+      nextCursor: last ? encodeSearchCursor(last.bucket.name, last.key) : undefined,
     };
   }
 
@@ -975,7 +1044,9 @@ export class ObjectService {
   async putTagging(req: Request, bucket: string, key: string): Promise<undefined> {
     const obj = await this.objects.findCurrentVersion(bucket, key);
     if (!obj) throw new NoSuchKeyError(key);
-    obj.tagging = parseTagSet((req as unknown as { xmlBody?: unknown }).xmlBody);
+    const tags = parseTagSet((req as unknown as { xmlBody?: unknown }).xmlBody);
+    obj.tagging = tags;
+    await this.syncTagIndex(obj, tags ?? {});
     await this.objects.getEntityManager().persistAndFlush(obj);
     return undefined;
   }
@@ -995,6 +1066,7 @@ export class ObjectService {
     const obj = await this.objects.findCurrentVersion(bucket, key);
     if (!obj) throw new NoSuchKeyError(key);
     obj.tagging = undefined;
+    await this.syncTagIndex(obj, {});
     await this.objects.getEntityManager().persistAndFlush(obj);
     res.status(204);
     return undefined;
@@ -1011,20 +1083,37 @@ export class ObjectService {
     return obj.tagging ?? {};
   }
 
-  /** Replace the current-version tag set. */
+  /** Replace the current-version tag set (and its derived `object_tags` rows). */
   async setTaggingMap(bucket: string, key: string, tags: Record<string, string>): Promise<void> {
     const obj = await this.objects.findCurrentVersion(bucket, key);
     if (!obj) throw new NoSuchKeyError(key);
     obj.tagging = tags;
+    await this.syncTagIndex(obj, tags);
     await this.objects.getEntityManager().persistAndFlush(obj);
   }
 
-  /** Clear the current-version tag set. */
+  /** Clear the current-version tag set (and its derived `object_tags` rows). */
   async clearTaggingMap(bucket: string, key: string): Promise<void> {
     const obj = await this.objects.findCurrentVersion(bucket, key);
     if (!obj) throw new NoSuchKeyError(key);
     obj.tagging = undefined;
+    await this.syncTagIndex(obj, {});
     await this.objects.getEntityManager().persistAndFlush(obj);
+  }
+
+  /**
+   * Rebuild the derived `object_tags` index rows for one object to match `tags`
+   * (STORY-1101, TASK-3312). Replace semantics: delete the object's existing rows
+   * then stage one insert per entry in the caller's unit of work. The
+   * `objects.tagging` JSON column stays the source of truth, so a re-run (or the
+   * backfill tick) is always safe. Callers flush afterwards (with the object).
+   */
+  private async syncTagIndex(obj: ObjectEntity, tags: Record<string, string>): Promise<void> {
+    const em = this.objects.getEntityManager();
+    await em.nativeDelete(ObjectTag, { object: obj.id });
+    for (const [tagKey, tagValue] of Object.entries(tags)) {
+      em.create(ObjectTag, { id: uuidv7(), object: obj, bucket: obj.bucket, tagKey, tagValue });
+    }
   }
 
   /** Object versions + delete markers as JSON (admin adapter for ListVersions). */
@@ -1223,6 +1312,40 @@ function parseCopySource(header: string): { srcBucket: string; srcKey: string } 
   const slash = s.indexOf('/');
   if (slash === -1) return { srcBucket: s, srcKey: '' };
   return { srcBucket: s.slice(0, slash), srcKey: s.slice(slash + 1) };
+}
+
+/**
+ * Encode a cross-bucket search keyset cursor (§STORY-1101). Opaque,
+ * tamper-tolerant, NOT sensitive — `base64url(JSON.stringify({ b, k }))` of the
+ * last row's bucket + key. It only positions the keyset; it is never trusted for
+ * authz (there is none beyond the admin JWT).
+ */
+export function encodeSearchCursor(bucket: string, key: string): string {
+  return Buffer.from(JSON.stringify({ b: bucket, k: key }), 'utf8').toString('base64url');
+}
+
+/**
+ * Decode a search cursor back to `{ bucket, key }`. A malformed/absent cursor is
+ * treated as "no cursor" (start from the top) rather than a 500 — the client
+ * never round-trips anything but our own base64url, and even a tampered value
+ * only shifts the keyset window, never bypasses authz.
+ */
+export function decodeSearchCursor(
+  cursor: string | undefined,
+): { bucket: string; key: string } | undefined {
+  if (!cursor) return undefined;
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {
+      b?: unknown;
+      k?: unknown;
+    };
+    if (typeof parsed.b === 'string' && typeof parsed.k === 'string') {
+      return { bucket: parsed.b, key: parsed.k };
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Collect `x-amz-meta-*` request headers into the object's user metadata. */

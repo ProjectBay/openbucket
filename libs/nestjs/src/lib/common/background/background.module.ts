@@ -9,9 +9,12 @@ import { LifecycleSweepRunner } from './lifecycle-sweep.runner';
 import { MultipartCleanupRunner } from './multipart-cleanup.runner';
 import { ReconcileRunner } from './reconcile.runner';
 import { ReplicationWorkerRunner } from './replication.runner';
+import { TagIndexBackfillRunner } from './tag-index-backfill.runner';
 import { TieringSweepRunner } from './tiering-sweep.runner';
 import { TrashPurgeRunner } from './trash-purge.runner';
+import { UsageRollupRunner } from './usage-rollup.runner';
 import { WebhookDeliveryRunner } from '../../events/webhook-delivery.runner';
+import { AuditFlushRunner } from '../../admin/audit/audit-flush.runner';
 
 /**
  * Hosts the in-process tick scheduler (§4.9). Recurring runners implement
@@ -37,6 +40,8 @@ import { WebhookDeliveryRunner } from '../../events/webhook-delivery.runner';
     ReplicationWorkerRunner,
     ReconcileRunner,
     TieringSweepRunner,
+    TagIndexBackfillRunner,
+    UsageRollupRunner,
     {
       provide: SCHEDULED_TASKS,
       useFactory: (...tasks: ScheduledTask[]) => tasks,
@@ -49,6 +54,11 @@ import { WebhookDeliveryRunner } from '../../events/webhook-delivery.runner';
         ReplicationWorkerRunner,
         ReconcileRunner,
         TieringSweepRunner,
+        TagIndexBackfillRunner,
+        UsageRollupRunner,
+        // Provided + exported by the @Global AuditModule (STORY-1103); collected
+        // here since BackgroundModule owns the app-wide SCHEDULED_TASKS list.
+        AuditFlushRunner,
       ],
     },
   ],

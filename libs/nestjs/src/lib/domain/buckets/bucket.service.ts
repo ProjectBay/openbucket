@@ -771,6 +771,15 @@ export class BucketService {
     await this.buckets.getEntityManager().persistAndFlush(row);
   }
 
+  /**
+   * All bucket rows (name + metadata), with NO per-bucket stats query — the
+   * cheap listing used by the usage-rollup runner (STORY-1102) to seed a `0/0`
+   * sample for buckets with no live objects.
+   */
+  async list(): Promise<Bucket[]> {
+    return this.buckets.listAll();
+  }
+
   /** List all buckets with their aggregate object stats. */
   async listWithStats(): Promise<BucketWithStats[]> {
     const rows = await this.buckets.listAll();

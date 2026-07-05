@@ -303,9 +303,17 @@ export class ObjectsAdminController {
       if ('download' in req.query) {
         const filename = key.split('/').pop() || 'download';
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+      } else {
+        // Inline preview (`?content`): never let previewed object bytes land in a
+        // shared/browser cache — matters for multi-operator installs. The
+        // `?download` attachment path is left untouched.
+        res.setHeader('Cache-Control', 'private, no-store');
       }
       // Reuse the S3 streamer: sets Content-Type, supports Range, releases the fd
-      // on client disconnect. It writes `res` directly (library mode here).
+      // on client disconnect. It writes `res` directly (library mode here). It also
+      // applies `applySafeObjectResponseHeaders` (CSP `default-src 'none'; sandbox`,
+      // nosniff, and HTML/SVG forced to attachment/octet-stream) — the preview
+      // frontend relies on that neutralization.
       await this.objects.getObject(req, res, bucket, key);
       return;
     }

@@ -1,4 +1,47 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+
+import { AuditSink } from './audit-sink';
+
+/**
+ * The canonical v1 audit-event catalogue — the single source of truth for the
+ * event names callers may `emit` and the filter dropdown the viewer exposes
+ * (STORY-1103). Kept next to the JSDoc table below; `AuditQueryService.catalog`
+ * returns it so the SPA needs no `distinct` table scan.
+ */
+export const AUDIT_EVENT_CATALOG = [
+  'admin.login',
+  'admin.login.failed',
+  'admin.logout',
+  'admin.password.changed',
+  'bucket.created',
+  'bucket.deleted',
+  'bucket.versioning.changed',
+  'bucket.tagging.changed',
+  'bucket.encryption.changed',
+  'bucket.lifecycle.changed',
+  'bucket.cors.changed',
+  'bucket.objectlock.changed',
+  'bucket.policy.changed',
+  'object.deleted',
+  'object.tagging.changed',
+  'object.retention.changed',
+  'object.legalhold.changed',
+  'object.presigned',
+  'object.searched',
+  'key.created',
+  'key.disabled',
+  'key.updated',
+  'key.rotated',
+  'key.revoked',
+  'key.deleted',
+  'settings.changed',
+  'admin.user.created',
+  'admin.user.role.changed',
+  'admin.user.password.reset',
+  'admin.user.deleted',
+  'replication.reconcile.started',
+  'replication.reconcile.completed',
+] as const;
 
 /**
  * A structured admin audit event (§5.9). `event` and `subject` are always
@@ -41,6 +84,7 @@ export interface AuditEvent {
  * | `object.retention.changed`  | object retention set      | `subject`, `bucket`, `key`      |
  * | `object.legalhold.changed`  | object legal hold set     | `subject`, `bucket`, `key`      |
  * | `object.presigned`          | presigned URL minted      | `subject`, `bucket`, `key`, `expiresIn` |
+ * | `object.searched`           | cross-bucket search run   | `subject`, `mode`, `hasTag`, `count` (never the raw `q`) |
  * | `key.created`               | access key minted         | `subject`, `keyId`              |
  * | `key.disabled`              | access key disabled       | `subject`, `keyId`              |
  * | `key.updated`               | access key edited         | `subject`, `keyId`              |
@@ -62,9 +106,18 @@ export interface AuditEvent {
 export class AuditService {
   private readonly logger = new Logger('admin.audit');
 
+  /**
+   * The durable sink is `@Optional`: spec-export and unit tests construct
+   * `AuditService` without the `@Global` AuditModule, and the Pino line must
+   * still fire in that case (operator tooling must not regress).
+   */
+  constructor(@Optional() private readonly sink?: AuditSink) {}
+
   emit(event: AuditEvent): void {
     // nestjs-pino flattens the object argument into the JSON record, so each
     // field on `event` becomes a top-level key alongside `audit: true`.
     this.logger.log({ ...event, audit: true });
+    // Dual-write to the buffered durable store (drained by AuditFlushRunner).
+    this.sink?.record(event);
   }
 }

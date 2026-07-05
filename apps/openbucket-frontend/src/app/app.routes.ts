@@ -66,6 +66,12 @@ export const appRoutes: Routes = [
         ],
       },
       {
+        path: 'search',
+        data: { breadcrumb: 'search.title' },
+        loadComponent: () =>
+          import('./objects/object-search.component').then((m) => m.ObjectSearchComponent),
+      },
+      {
         path: 'keys',
         loadComponent: () => import('./keys/keys-list.component').then((m) => m.KeysListComponent),
       },
@@ -94,6 +100,12 @@ export const appRoutes: Routes = [
         data: { breadcrumb: 'sidebar.admin.replication' },
         loadComponent: () =>
           import('./replication/replication.component').then((m) => m.ReplicationComponent),
+      },
+      {
+        path: 'audit',
+        data: { breadcrumb: 'sidebar.admin.audit' },
+        loadComponent: () =>
+          import('./audit/audit-log.component').then((m) => m.AuditLogComponent),
       },
       {
         path: 'about',

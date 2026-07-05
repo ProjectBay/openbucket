@@ -19,9 +19,13 @@ import { Migration20260711000001_object_tiering } from './migrations/Migration20
 import { Migration20260712000001_reconcile_job } from './migrations/Migration20260712000001_reconcile_job';
 import { Migration20260704000001_access_key_scope } from './migrations/Migration20260704000001_access_key_scope';
 import { Migration20260704000001_admin_user_roles } from './migrations/Migration20260704000001_admin_user_roles';
+import { Migration20260704000001_object_tags_index } from './migrations/Migration20260704000001_object_tags_index';
+import { Migration20260705000001_usage_samples } from './migrations/Migration20260705000001_usage_samples';
+import { Migration20260704000001_audit_logs } from './migrations/Migration20260704000001_audit_logs';
 import {
   Bucket,
   ObjectEntity,
+  ObjectTag,
   ObjectVersion,
   MultipartUpload,
   MultipartPart,
@@ -33,18 +37,23 @@ import {
   EventDeliveryEntity,
   ReplicationOutbox,
   ReconcileJob,
+  UsageSample,
+  RequestMetricSample,
+  AuditLog,
   BucketRepository,
   ObjectRepository,
   AdminUserRepository,
   RefreshTokenRepository,
   EventDeliveryRepository,
   ReplicationOutboxRepository,
+  AuditLogRepository,
 } from './persistence/index';
 import { OPEN_BUCKET_ORM_CONTEXT } from './persistence/orm-context';
 
 const ENTITIES = [
   Bucket,
   ObjectEntity,
+  ObjectTag,
   ObjectVersion,
   MultipartUpload,
   MultipartPart,
@@ -56,6 +65,9 @@ const ENTITIES = [
   EventDeliveryEntity,
   ReplicationOutbox,
   ReconcileJob,
+  UsageSample,
+  RequestMetricSample,
+  AuditLog,
 ];
 
 /**
@@ -161,6 +173,18 @@ const ENTITIES = [
               name: 'Migration20260704000001_admin_user_roles',
               class: Migration20260704000001_admin_user_roles,
             },
+            {
+              name: 'Migration20260704000001_object_tags_index',
+              class: Migration20260704000001_object_tags_index,
+            },
+            {
+              name: 'Migration20260705000001_usage_samples',
+              class: Migration20260705000001_usage_samples,
+            },
+            {
+              name: 'Migration20260704000001_audit_logs',
+              class: Migration20260704000001_audit_logs,
+            },
           ],
           transactional: true,
           allOrNothing: true,
@@ -203,8 +227,9 @@ const ENTITIES = [
     { provide: RefreshTokenRepository, inject: [getRepositoryToken(RefreshToken, OPEN_BUCKET_ORM_CONTEXT)], useFactory: (r: RefreshTokenRepository) => r },
     { provide: EventDeliveryRepository, inject: [getRepositoryToken(EventDeliveryEntity, OPEN_BUCKET_ORM_CONTEXT)], useFactory: (r: EventDeliveryRepository) => r },
     { provide: ReplicationOutboxRepository, inject: [getRepositoryToken(ReplicationOutbox, OPEN_BUCKET_ORM_CONTEXT)], useFactory: (r: ReplicationOutboxRepository) => r },
+    { provide: AuditLogRepository, inject: [getRepositoryToken(AuditLog, OPEN_BUCKET_ORM_CONTEXT)], useFactory: (r: AuditLogRepository) => r },
   ],
-  exports: [MikroOrmModule, BucketRepository, ObjectRepository, AdminUserRepository, RefreshTokenRepository, EventDeliveryRepository, ReplicationOutboxRepository],
+  exports: [MikroOrmModule, BucketRepository, ObjectRepository, AdminUserRepository, RefreshTokenRepository, EventDeliveryRepository, ReplicationOutboxRepository, AuditLogRepository],
 })
 export class PersistenceModule implements OnModuleInit {
   private readonly logger = new Logger(PersistenceModule.name);

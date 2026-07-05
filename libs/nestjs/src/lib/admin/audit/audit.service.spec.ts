@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 
 import { AuditService, AuditEvent } from './audit.service';
+import { AuditSink } from './audit-sink';
 
 /**
  * TEST-0418 — AuditService (§5.9). Spies on the Nest `Logger.log` to verify the
@@ -54,5 +55,26 @@ describe('AuditService (TEST-0418)', () => {
 
     const loggerInstance = logSpy.mock.instances[0] as unknown as { context?: string };
     expect(loggerInstance.context).toBe('admin.audit');
+  });
+
+  it('case 5: emit dual-writes to the durable sink when one is provided (STORY-1103)', () => {
+    const sink = new AuditSink();
+    const withSink = new AuditService(sink);
+    withSink.emit({ event: 'bucket.created', subject: 'admin', bucket: 'b1' });
+
+    // Pino line still fired…
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'bucket.created', audit: true }),
+    );
+    // …and exactly one row was enqueued.
+    expect(sink.size).toBe(1);
+    const [row] = sink.drain();
+    expect(row.event).toBe('bucket.created');
+    expect(row.bucket).toBe('b1');
+  });
+
+  it('case 6: emit without a sink still logs (spec-export / library path)', () => {
+    expect(() => svc.emit({ event: 'admin.login', subject: 'admin', ip: '::1' })).not.toThrow();
+    expect(logSpy).toHaveBeenCalledTimes(1);
   });
 });

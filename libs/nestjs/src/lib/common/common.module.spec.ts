@@ -5,6 +5,7 @@ import { CommonModule } from './common.module';
 import { ConfigModule as AppConfigInternalModule } from './config/config.module';
 import { GlobalExceptionFilter } from './filters/global-exception.filter';
 import { ShutdownTrackerInterceptor } from './interceptors/shutdown-tracker.interceptor';
+import { RequestMetricsInterceptor } from './interceptors/request-metrics.interceptor';
 import { RequestClassifierMiddleware } from './middleware/request-classifier.middleware';
 import { RequestIdMiddleware } from './middleware/request-id.middleware';
 
@@ -38,8 +39,11 @@ describe('CommonModule', () => {
     expect(byToken(APP_PIPE)).toEqual([ZodValidationPipe]);
   });
 
-  it('case 4: APP_INTERCEPTOR is ShutdownTrackerInterceptor', () => {
-    expect(byToken(APP_INTERCEPTOR)).toEqual([ShutdownTrackerInterceptor]);
+  it('case 4: APP_INTERCEPTOR is the shutdown tracker + request-metrics interceptors', () => {
+    expect(byToken(APP_INTERCEPTOR)).toEqual([
+      ShutdownTrackerInterceptor,
+      RequestMetricsInterceptor,
+    ]);
   });
 
   it('case 5: re-exports config module and middlewares', () => {
