@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 
-import { authGuard, mustNotRotateGuard, unauthGuard } from './auth/auth.guard';
+import { authGuard, fullAdminGuard, mustNotRotateGuard, unauthGuard } from './auth/auth.guard';
 
 /**
  * SPA routes (§5.11). `/login` and `/force-rotate` sit outside the shell;
@@ -68,6 +68,15 @@ export const appRoutes: Routes = [
       {
         path: 'keys',
         loadComponent: () => import('./keys/keys-list.component').then((m) => m.KeysListComponent),
+      },
+      {
+        path: 'users',
+        // Full-admin only (EPIC-11): the fullAdminGuard redirects a read-only
+        // admin to `/`. The server-side RolesGuard remains authoritative.
+        canActivate: [fullAdminGuard],
+        data: { breadcrumb: 'sidebar.admin.users' },
+        loadComponent: () =>
+          import('./users/admin-users-list.component').then((m) => m.AdminUsersListComponent),
       },
       {
         path: 'settings',

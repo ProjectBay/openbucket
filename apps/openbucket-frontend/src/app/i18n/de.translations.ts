@@ -11,6 +11,7 @@ export default {
     admin: {
       backupRestore: 'Sicherung & Wiederherstellung',
       replication: 'Replikation',
+      users: 'Admin-Benutzer',
     },
   },
   replication: {
@@ -203,6 +204,40 @@ export default {
     resource: 'Ressource',
     decision: 'Entscheidung',
     run: 'Ausführen',
+  },
+  users: {
+    title: 'Admin-Benutzer',
+    subtitle: 'Operatoren, die sich an dieser Konsole anmelden können',
+    username: 'Benutzername',
+    password: 'Passwort',
+    passwordHint: 'Mindestens 12 Zeichen. Der Benutzer muss es bei der ersten Anmeldung ändern.',
+    role: 'Rolle',
+    roleAdmin: 'Voll-Administrator',
+    roleReadonly: 'Nur Lesen',
+    status: 'Status',
+    active: 'Aktiv',
+    mustChangePassword: 'Passwort muss geändert werden',
+    created: 'Erstellt',
+    actions: 'Aktionen',
+    you: '(Sie)',
+    create: 'Admin-Benutzer erstellen',
+    creating: 'Wird erstellt…',
+    createTitle: 'Admin-Benutzer erstellen',
+    createHint:
+      'Voll-Administratoren verwalten alles; Nur-Lesen-Administratoren können ansehen, aber nicht ändern.',
+    edit: 'Bearbeiten',
+    editTitle: 'Admin-Benutzer bearbeiten',
+    save: 'Speichern',
+    saving: 'Wird gespeichert…',
+    cancel: 'Abbrechen',
+    resetPassword: 'Passwort zurücksetzen (optional)',
+    resetPasswordHint: 'Leer lassen, um unverändert zu bleiben',
+    delete: 'Löschen',
+    deleteTitle: 'Admin-Benutzer löschen?',
+    deleteHint:
+      '"{{username}}" dauerhaft löschen? Der Benutzer wird sofort abgemeldet und hat keinen Zugriff mehr auf die Konsole. Dies kann nicht rückgängig gemacht werden.',
+    empty: 'Noch keine Admin-Benutzer',
+    emptyHint: 'Erstellen Sie einen Admin-Benutzer, um einem weiteren Operator Zugriff zu geben.',
   },
   bucketDetail: {
     tabs: {

@@ -322,14 +322,35 @@ the hot path. The 32-byte key-encryption key (KEK) is HKDF-derived from
 > undecryptable and must be re-minted. Set `KEY_ENCRYPTION_SECRET` (a strong,
 > 32+ char value) up front to decouple sub-key storage from the root credential.
 
-### Admin roles
+### Admin roles (multi-admin)
 
-The admin JWT identity currently carries a single implicit role: any
-authenticated admin has full control of the admin API. A minted **data-plane** key
-records `role: 'scoped'` when created with a scope and `role: 'root'` otherwise.
-`role` is **orthogonal to the admin API** — it labels a *data-plane* S3 key's reach,
-while the admin JWT gates the *admin* API. Finer-grained admin roles are a roadmap
-item; today the durable multi-tenant boundary is the scoped key described above.
+The admin plane supports **multiple admin users**, each carrying a `role`:
+
+- **`admin` (full admin)** — every state-changing admin action.
+- **`readonly`** — can sign in and read (all admin `GET`s succeed) but is `403`'d on
+  any state-changing admin operation.
+
+The first-run bootstrap admin (and every row created before this feature) defaults
+to **full admin**, so single-admin instances are unchanged. Manage admins at
+`/api/admin/users` — `listAdminUsers`, `createAdminUser`, `updateAdminUser` (reassign
+role and/or reset password), `deleteAdminUser` — all **full-admin-only**.
+
+Enforcement is server-authoritative and **default-deny by HTTP method**: a global
+`RolesGuard` `403`s any `POST`/`PUT`/`PATCH`/`DELETE` under `/api/admin/*` for a
+read-only principal, except two self-service routes (`settings/change-password`,
+`auth/logout`) and handlers explicitly marked `@AllowReadOnly()`. The role is read
+**fresh from the DB on every request** (not the JWT claim), so a demotion takes
+effect immediately even while an old token still verifies. `GET /api/admin/auth/me`
+returns the caller's `role` for UI gating.
+
+Two anti-lockout invariants are always enforced: you cannot delete or demote the
+**last full admin** (`409`), and you cannot **delete your own** account (`403`).
+Creating an admin forces a password change on first login; a password reset or a
+delete immediately evicts that user's live sessions.
+
+> **Data-plane vs admin roles.** A minted **S3 access key** records `role: 'scoped'`
+> (created with a scope) or `role: 'root'` (unscoped) — that labels a *data-plane*
+> key's reach and is orthogonal to the *admin* `admin`/`readonly` role above.
 
 ### Recipe: accept file uploads and store their URLs
 

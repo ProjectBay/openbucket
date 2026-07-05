@@ -3469,6 +3469,14 @@ export class AdminUser {
 
   @Property({ type: 'datetime' })
   createdAt: Date = new Date();
+
+  /**
+   * Authorization role (EPIC-11): `'admin'` (full) or `'readonly'`. Defaults to
+   * `'admin'` so the bootstrap seed and pre-migration rows stay full admins.
+   * Enforced by `RolesGuard` [see §5.3.1].
+   */
+  @Property({ type: 'string', length: 16, default: 'admin' })
+  role: AdminRole = 'admin';
 }
 ```
 
@@ -7198,6 +7206,29 @@ export class JwtAuthGuard implements CanActivate {
 ```
 
 The path-prefix guard at the top is the safety net: the `AdminModule` is mounted globally, but the S3 and SPA controller trees must never see a `401` from this guard. If they ever share a controller path, the JWT guard is invisible to them.
+
+### 5.3.1 Multi-admin roles and `RolesGuard` (EPIC-11)
+
+The admin plane supports **multiple admin users**, each carrying a `role` on the `AdminUser` row (`admin_users.role`, text-stored enum, `default 'admin'`):
+
+- **`admin` (full admin)** — every state-changing admin action.
+- **`readonly`** — may authenticate and read (all admin `GET`s), but is `403`'d on state-changing admin operations.
+
+The bootstrap seed and every pre-migration row default to `admin`, so the single-admin instance is unchanged (a `readonly` default would silently lock out the only operator).
+
+**Fresh-read enforcement.** `JwtAuthGuard` already re-reads the `AdminUser` row on every request for the forced-rotation check (CWE-620); it reuses that single read to overwrite `req.user.role` with the **live DB value**, not the token claim. `role` is also signed into the access token (at login and re-derived on refresh, defaulting to least-privilege `readonly` if the row vanished), but authorization always runs off the fresh value — so a demotion takes effect on the very next request even while an old 15-minute token still verifies. No extra query is issued.
+
+**`RolesGuard` — default-deny by HTTP method.** Bound as a second `APP_GUARD` immediately after `JwtAuthGuard` (global guards run in registration order, so `req.user.role` is populated first). Its logic, in order:
+
+1. Non-admin path (S3/SPA) → allow (mount-aware, lower-cased prefix, identical to `JwtAuthGuard` — case-insensitive to avoid the CWE-178 fail-open).
+2. Non-mutating method (`GET`/`HEAD`/…) → allow. Reads are always permitted.
+3. No `req.user` → allow. This is a `@Public()` mutating route (login/refresh); auth, not role, gates those.
+4. `role !== 'readonly'` (full admin) → allow everything.
+5. Read-only + mutating (`POST`/`PUT`/`PATCH`/`DELETE`): allow only if the handler/class is marked `@AllowReadOnly()` **or** the sub-path is on the self-service **allowlist** (`settings/change-password`, `auth/logout`); otherwise `403`.
+
+Default-deny by method means a newly-added mutating admin route is read-only-safe automatically, without remembering a decorator; the `@AllowReadOnly()` escape hatch is opt-in and greppable. `GET /api/admin/auth/me` echoes the caller's `role` so the console can gate its UI (defense in depth — the server stays authoritative).
+
+**Admin-user management** lives at `/api/admin/users` (`listAdminUsers` / `createAdminUser` / `updateAdminUser` / `deleteAdminUser`), full-admin-only via the method-based `RolesGuard`. The domain service (`AdminUsersService`) holds two **anti-lockout invariants**: it refuses to delete or demote the **last full admin** (`countByRole('admin') <= 1` → `409`), and forbids **self-delete** (`403`). A create sets `mustChangePassword: true` (the operator-set password must be rotated on first login); a password reset or delete calls `revokeAllForSubject` to evict the target's live sessions (CWE-613), mirroring change-password. Every mutation emits an audit event (`admin.user.created` / `admin.user.role.changed` / `admin.user.password.reset` / `admin.user.deleted`).
 
 ---
 

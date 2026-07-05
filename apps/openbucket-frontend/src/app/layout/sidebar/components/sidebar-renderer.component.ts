@@ -12,6 +12,7 @@ import {
   lucideLayoutDashboard,
   lucideRefreshCw,
   lucideSettings,
+  lucideUsers,
 } from '@ng-icons/lucide';
 import { HlmCollapsibleImports } from '@openbucket/spartan-ui/collapsible';
 import { HlmDropdownMenuImports } from '@openbucket/spartan-ui/dropdown-menu';
@@ -45,6 +46,7 @@ import { SidebarConfig } from '../types';
       lucideLayoutDashboard,
       lucideRefreshCw,
       lucideSettings,
+      lucideUsers,
     }),
   ],
   template: `

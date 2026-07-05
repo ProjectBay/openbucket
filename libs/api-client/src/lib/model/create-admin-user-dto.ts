@@ -9,13 +9,12 @@
  */
 
 
-export interface MeResponseDto { 
-    id: string;
+export interface CreateAdminUserDto { 
     username: string;
-    mustChangePassword: boolean;
-    role: MeResponseDtoRoleEnum;
+    password: string;
+    role: CreateAdminUserDtoRoleEnum;
 }
-export enum MeResponseDtoRoleEnum {
+export enum CreateAdminUserDtoRoleEnum {
     Admin = 'admin',
     Readonly = 'readonly'
 };

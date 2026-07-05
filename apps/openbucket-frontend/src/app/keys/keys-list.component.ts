@@ -31,6 +31,7 @@ import { ListStateComponent } from '../shared/ui/list-state.component';
 import { SortHeaderComponent, type SortDir } from '../shared/ui/sort-header.component';
 import { notify } from '../shared/ui/notify';
 import { PageHeaderService } from '../layout/shell/services';
+import { AuthService } from '../auth/auth.service';
 import { KeysSignalStore } from './keys.signal-store';
 import { KeyCreateDialogComponent } from './key-create-dialog.component';
 import { KeySecretOnceDialogComponent } from './key-secret-once-dialog.component';
@@ -190,6 +191,7 @@ interface ConfirmConfig {
                     <hlm-switch
                       [attr.aria-label]="'Toggle ' + k.label"
                       [checked]="!k.disabled"
+                      [disabled]="auth.isReadOnly()"
                       (checkedChange)="toggleEnabled(k, $event)"
                     />
                   </td>
@@ -197,6 +199,8 @@ interface ConfirmConfig {
                     hlmTd
                     class="text-right"
                   >
+                    <!-- EPIC-11: mutating actions hidden for read-only admins. -->
+                    @if (!auth.isReadOnly()) {
                     <button
                       hlmBtn
                       variant="ghost"
@@ -243,6 +247,7 @@ interface ConfirmConfig {
                         </button>
                       </hlm-dropdown-menu>
                     </ng-template>
+                    }
                   </td>
                 </tr>
               }
@@ -266,6 +271,7 @@ interface ConfirmConfig {
 export class KeysListComponent implements OnInit, OnDestroy {
   protected readonly store = inject(KeysSignalStore);
   private readonly pageHeader = inject(PageHeaderService);
+  protected readonly auth = inject(AuthService);
   private readonly i18n = inject(TranslateService);
 
   protected readonly createDialog = viewChild.required(KeyCreateDialogComponent);
@@ -301,7 +307,10 @@ export class KeysListComponent implements OnInit, OnDestroy {
 
   constructor() {
     this.pageHeader.setPageHeader('keys.title', 'keys.subtitle');
-    this.pageHeader.setActionButton('keys.create', () => this.createDialog().open());
+    // EPIC-11: no create action for read-only admins (UX; server is authoritative).
+    if (!this.auth.isReadOnly()) {
+      this.pageHeader.setActionButton('keys.create', () => this.createDialog().open());
+    }
   }
 
   ngOnInit(): void {

@@ -48,6 +48,10 @@ export interface AuditEvent {
  * | `key.revoked`               | access key revoked (disabled) | `subject`, `keyId`          |
  * | `key.deleted`               | access key removed        | `subject`, `keyId`              |
  * | `settings.changed`          | settings update           | `subject`, `field`              |
+ * | `admin.user.created`        | admin user created        | `subject`, `target`, `role`     |
+ * | `admin.user.role.changed`   | admin role reassigned     | `subject`, `target`, `from`, `to` |
+ * | `admin.user.password.reset` | admin password reset by peer | `subject`, `target`          |
+ * | `admin.user.deleted`        | admin user deleted        | `subject`, `target`             |
  * | `replication.reconcile.started`   | reconcile job accepted | `subject`, `jobId`, `bucket?` |
  * | `replication.reconcile.completed` | reconcile job finished | `subject`, `jobId`, `localScanned`, `remoteScanned`, `missingRequeued` |
  *

@@ -14,12 +14,19 @@ import type { Request } from 'express';
 import { IS_PUBLIC_KEY } from '../../common/auth/public.decorator';
 import { OPEN_BUCKET_OPTIONS, type ResolvedOpenBucketOptions } from '../../open-bucket-options';
 import { AdminUserRepository } from '../../persistence/index';
+import type { AdminRole } from '../../persistence/entities/types';
 
 /** The decoded admin access token attached to `req.user` on success (§5.3). */
 export interface AdminJwtPayload {
   sub: string;
   username: string;
   mustChangePassword: boolean;
+  /**
+   * Authorization role (EPIC-11). Signed into the token at login/refresh, but
+   * OVERWRITTEN on every request with the fresh DB value below so a demotion
+   * takes effect on the next request even while an old token still verifies.
+   */
+  role: AdminRole;
   iat: number;
   exp: number;
 }
@@ -91,6 +98,8 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('invalid token');
     }
     (req as Request & { user?: AdminJwtPayload }).user = payload;
+    // NOTE: `payload` and `req.user` are the same object reference, so mutating
+    // `payload.role` below is what refreshes the role on the request principal.
 
     // Forced-password-rotation enforcement (TASK-2102, CWE-620). Decide against a
     // FRESH DB read of `mustChangePassword`, not the JWT claim: the claim can go
@@ -98,6 +107,12 @@ export class JwtAuthGuard implements CanActivate {
     // guard that trusted the token could be bypassed. A principal still flagged
     // must-change is confined to the recovery routes until they rotate.
     const user = await this.users.findByUsername(payload.sub);
+    // Authorization runs off the LIVE DB role, not the (possibly stale) token
+    // claim (EPIC-11, mirrors the CWE-620 fresh-read for mustChangePassword). No
+    // extra query — this reuses the read already issued above. A vanished row
+    // defaults to least privilege so a deleted admin can't retain full rights.
+    payload.role = user?.role ?? 'readonly';
+
     if (user?.mustChangePassword === true && !this.isForcedRotationAllowed(req.path)) {
       throw new ForbiddenException('password change required');
     }

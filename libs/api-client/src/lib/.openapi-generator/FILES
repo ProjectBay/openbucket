@@ -3,6 +3,8 @@
 README.md
 api.base.service.ts
 api.module.ts
+api/admin-users.service.ts
+api/admin-users.serviceInterface.ts
 api/api.ts
 api/auth.service.ts
 api/auth.serviceInterface.ts
@@ -22,6 +24,7 @@ configuration.ts
 encoder.ts
 git_push.sh
 index.ts
+model/admin-user-summary-dto.ts
 model/bucket-policy-dto.ts
 model/bucket-replication-status-dto.ts
 model/bucket-summary-dto.ts
@@ -33,6 +36,7 @@ model/bulk-delete-response-dto.ts
 model/change-password-dto.ts
 model/cors-config-dto.ts
 model/cors-rule-dto.ts
+model/create-admin-user-dto.ts
 model/create-bucket-dto.ts
 model/create-key-dto-scope-one-of.ts
 model/create-key-dto-scope-one-of1-document-statement-inner-principal-any-of-aws.ts
@@ -79,6 +83,7 @@ model/rotated-key-dto.ts
 model/simulate-request-dto.ts
 model/simulate-response-dto.ts
 model/tagging-dto.ts
+model/update-admin-user-dto.ts
 model/update-key-dto.ts
 model/versioning-config-dto.ts
 param.ts

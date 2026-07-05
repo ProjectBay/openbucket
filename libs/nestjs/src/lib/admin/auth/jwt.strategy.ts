@@ -3,11 +3,15 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
+import type { AdminRole } from '../../persistence/entities/types';
+
 /** Decoded admin access-token claims (§5.2.2). */
 export interface AdminJwtPayload {
   sub: string;
   username: string;
   mustChangePassword: boolean;
+  /** Authorization role (EPIC-11). Signed at login/refresh; see JwtAuthGuard. */
+  role: AdminRole;
 }
 
 /**
@@ -33,6 +37,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       sub: payload.sub,
       username: payload.username,
       mustChangePassword: payload.mustChangePassword,
+      role: payload.role ?? 'readonly',
     };
   }
 }

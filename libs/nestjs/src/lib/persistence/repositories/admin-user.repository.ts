@@ -1,12 +1,18 @@
 import { EntityRepository } from '@mikro-orm/libsql';
 
 import { AdminUser } from '../entities/admin-user.entity';
+import type { AdminRole } from '../entities/types';
 
-/** Seed payload for the single admin row (§5.8). */
+/**
+ * Seed payload for an admin row (§5.8). `role` is optional: when omitted,
+ * `em.create` applies the `'admin'` initializer, so `AdminBootstrapService`'s
+ * existing `insert`/`upsert` calls keep seeding a full admin unchanged.
+ */
 export interface AdminUserSeed {
   username: string;
   passwordHash: string;
   mustChangePassword: boolean;
+  role?: AdminRole;
 }
 
 /**
@@ -52,11 +58,33 @@ export class AdminUserRepository extends EntityRepository<AdminUser> {
     return row;
   }
 
-  /** Apply field changes to an admin row by username (e.g. password rotation). */
+  /**
+   * Apply field changes to an admin row by username (e.g. password rotation or a
+   * role reassignment). `role` is included so the admin-users CRUD ([TASK-3022])
+   * can demote/promote via the same path.
+   */
   async update(
     username: string,
-    changes: Partial<Pick<AdminUser, 'passwordHash' | 'mustChangePassword'>>,
+    changes: Partial<Pick<AdminUser, 'passwordHash' | 'mustChangePassword' | 'role'>>,
   ): Promise<void> {
     await this.getEntityManager().nativeUpdate(AdminUser, { username }, changes);
+  }
+
+  /** All admin rows, ordered by username (used by the admin-users list API). */
+  async list(): Promise<AdminUser[]> {
+    return this.findAll({ orderBy: { username: 'ASC' } });
+  }
+
+  /**
+   * Count admin rows carrying `role`. The last-full-admin anti-lockout invariant
+   * ([TASK-3022]) is built on `countByRole('admin')`.
+   */
+  async countByRole(role: AdminRole): Promise<number> {
+    return this.count({ role });
+  }
+
+  /** Hard-delete an admin row by username (admin-users CRUD delete). */
+  async delete(username: string): Promise<void> {
+    await this.getEntityManager().nativeDelete(AdminUser, { username });
   }
 }

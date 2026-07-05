@@ -39,9 +39,9 @@ policies, and S3-style XML error responses.
 
 **Admin** — a JSON admin API (`/api/admin/*`) secured with argon2id passwords +
 rotating JWTs, plus an **Angular admin console**: bucket & object browser,
-upload/download, presigned share links, access-key management, per-bucket
-versioning / encryption / object-lock / lifecycle / CORS / policy editors,
-i18n (en/de), light/dark themes.
+upload/download, presigned share links, access-key management, **multi-admin users
+with full-admin / read-only roles**, per-bucket versioning / encryption /
+object-lock / lifecycle / CORS / policy editors, i18n (en/de), light/dark themes.
 
 **Developer file pipeline** — on-the-fly **image transformations** on GET
 (`?w=&h=&fit=&format=&q=`, cached derivatives), **object event notifications**
@@ -279,6 +279,18 @@ inspected via an **effective-permissions** allow/deny matrix and single-action
 [library README](./libs/nestjs/README.md#scoped-access-keys-multi-tenant) for the
 scope model, minting recipe, key lifecycle, and the `KEY_ENCRYPTION_SECRET`
 rotation caveat.
+
+### Multi-admin users & roles
+
+Beyond the single bootstrap admin, you can manage **multiple admin users** from the
+console (**Admin Users**) or the `/api/admin/users` API. Each admin is either a
+**full admin** (every action) or **read-only** (can sign in and view everything, but
+is `403`'d on any change). Enforcement is server-side and default-deny by HTTP
+method, read fresh from the DB on every request, so a demotion takes effect at once.
+You can't delete or demote the **last full admin**, and you can't delete your **own**
+account. Existing single-admin instances are unaffected — the bootstrap admin is a
+full admin. See the
+[library README](./libs/nestjs/README.md#admin-roles-multi-admin) for details.
 
 ### Async replication
 

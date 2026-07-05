@@ -119,6 +119,7 @@ export class AuthController {
       id: user.sub,
       username: user.username,
       mustChangePassword: user.mustChangePassword,
+      role: user.role,
     };
   }
 

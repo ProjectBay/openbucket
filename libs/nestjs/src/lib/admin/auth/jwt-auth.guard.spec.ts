@@ -23,15 +23,30 @@ function context(req: Record<string, unknown>): ExecutionContext {
 }
 
 function build(
-  opts: { isPublic?: boolean; verify?: jest.Mock; mustChangePassword?: boolean } = {},
+  opts: {
+    isPublic?: boolean;
+    verify?: jest.Mock;
+    mustChangePassword?: boolean;
+    role?: 'admin' | 'readonly';
+    /** When true, findByUsername resolves null (deleted row → least privilege). */
+    missingRow?: boolean;
+  } = {},
 ) {
   const reflector = { getAllAndOverride: jest.fn().mockReturnValue(opts.isPublic ?? false) };
   const jwt = { verifyAsync: opts.verify ?? jest.fn() };
-  // The persisted AdminUser row the guard reads for forced-rotation enforcement.
+  // The persisted AdminUser row the guard reads for forced-rotation + fresh role.
   const users = {
     findByUsername: jest
       .fn()
-      .mockResolvedValue({ username: 'admin', mustChangePassword: opts.mustChangePassword ?? false }),
+      .mockResolvedValue(
+        opts.missingRow
+          ? null
+          : {
+              username: 'admin',
+              mustChangePassword: opts.mustChangePassword ?? false,
+              role: opts.role ?? 'admin',
+            },
+      ),
   };
   const guard = new JwtAuthGuard(
     reflector as unknown as Reflector,
@@ -85,14 +100,37 @@ describe('JwtAuthGuard (TEST-0408)', () => {
     ).rejects.toThrow('invalid token');
   });
 
-  it('case 7: valid Bearer token → true and req.user is the decoded payload', async () => {
-    const payload = { sub: 'admin', username: 'admin', mustChangePassword: false, iat: 1, exp: 2 };
+  it('case 7: valid Bearer token → true and req.user is the decoded payload (with fresh role)', async () => {
+    const payload = { sub: 'admin', username: 'admin', mustChangePassword: false, role: 'admin', iat: 1, exp: 2 };
     const verify = jest.fn().mockResolvedValue(payload);
-    const { guard } = build({ verify });
+    const { guard } = build({ verify, role: 'admin' });
     const req: Record<string, unknown> = { path: '/api/admin/buckets', headers: { authorization: 'Bearer good' } };
 
     await expect(guard.canActivate(context(req))).resolves.toBe(true);
-    expect(req.user).toEqual(payload);
+    expect(req.user).toEqual({ ...payload, role: 'admin' });
+  });
+
+  // EPIC-11 (STORY-1002): authorization runs off the LIVE DB role, not the token
+  // claim, so a demotion takes effect on the very next request.
+  it('case 7b: attaches the fresh DB role, overriding a stale token claim', async () => {
+    const payload = { sub: 'admin', username: 'admin', mustChangePassword: false, role: 'admin', iat: 1, exp: 2 };
+    const verify = jest.fn().mockResolvedValue(payload);
+    // Token still says admin, but the persisted row was demoted to readonly.
+    const { guard } = build({ verify, role: 'readonly' });
+    const req: Record<string, unknown> = { path: '/api/admin/buckets', headers: { authorization: 'Bearer good' } };
+
+    await expect(guard.canActivate(context(req))).resolves.toBe(true);
+    expect((req.user as { role: string }).role).toBe('readonly');
+  });
+
+  it('case 7c: a vanished row defaults the attached role to readonly (least privilege)', async () => {
+    const payload = { sub: 'admin', username: 'admin', mustChangePassword: false, role: 'admin', iat: 1, exp: 2 };
+    const verify = jest.fn().mockResolvedValue(payload);
+    const { guard } = build({ verify, missingRow: true });
+    const req: Record<string, unknown> = { path: '/api/admin/buckets', headers: { authorization: 'Bearer good' } };
+
+    await expect(guard.canActivate(context(req))).resolves.toBe(true);
+    expect((req.user as { role: string }).role).toBe('readonly');
   });
 
   it('case 8: verification uses the openbucket issuer + audience', async () => {

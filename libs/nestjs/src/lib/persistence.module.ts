@@ -18,6 +18,7 @@ import { Migration20260710000001_replication_outbox } from './migrations/Migrati
 import { Migration20260711000001_object_tiering } from './migrations/Migration20260711000001_object_tiering';
 import { Migration20260712000001_reconcile_job } from './migrations/Migration20260712000001_reconcile_job';
 import { Migration20260704000001_access_key_scope } from './migrations/Migration20260704000001_access_key_scope';
+import { Migration20260704000001_admin_user_roles } from './migrations/Migration20260704000001_admin_user_roles';
 import {
   Bucket,
   ObjectEntity,
@@ -155,6 +156,10 @@ const ENTITIES = [
             {
               name: 'Migration20260704000001_access_key_scope',
               class: Migration20260704000001_access_key_scope,
+            },
+            {
+              name: 'Migration20260704000001_admin_user_roles',
+              class: Migration20260704000001_admin_user_roles,
             },
           ],
           transactional: true,
