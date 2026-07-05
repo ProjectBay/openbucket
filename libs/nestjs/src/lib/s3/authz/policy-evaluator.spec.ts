@@ -233,6 +233,38 @@ describe('evaluatePolicy', () => {
   });
 });
 
+describe('StringLike s3:prefix (TASK-3004)', () => {
+  const listStmt = {
+    Effect: 'Allow' as const,
+    Principal: '*' as const,
+    Action: 's3:ListBucket',
+    Resource: 'arn:aws:s3:::t-a',
+    Condition: { StringLike: { 's3:prefix': ['tenant-a/*', 'tenant-a/'] } },
+  };
+  const listCtx = (prefix: string | undefined) =>
+    ctx({ action: 's3:ListBucket', resource: 'arn:aws:s3:::t-a', prefix });
+
+  it('allows a ListBucket when the request prefix matches the scope prefix', () => {
+    expect(evaluatePolicy(policy(listStmt), listCtx('tenant-a/2024/'), { defaultAllow: false })).toBe('allow');
+    expect(evaluatePolicy(policy(listStmt), listCtx('tenant-a/'), { defaultAllow: false })).toBe('allow');
+  });
+
+  it('withholds the Allow (deny under implicit-deny) for an unprefixed or foreign prefix', () => {
+    expect(evaluatePolicy(policy(listStmt), listCtx(''), { defaultAllow: false })).toBe('deny');
+    expect(evaluatePolicy(policy(listStmt), listCtx(undefined), { defaultAllow: false })).toBe('deny');
+    expect(evaluatePolicy(policy(listStmt), listCtx('other/'), { defaultAllow: false })).toBe('deny');
+  });
+
+  it('supports StringNotLike as the negation', () => {
+    const notLike = {
+      ...listStmt,
+      Condition: { StringNotLike: { 's3:prefix': ['secret/*'] } },
+    };
+    expect(evaluatePolicy(policy(notLike), listCtx('public/x'), { defaultAllow: false })).toBe('allow');
+    expect(evaluatePolicy(policy(notLike), listCtx('secret/x'), { defaultAllow: false })).toBe('deny');
+  });
+});
+
 describe('operationToAction', () => {
   it('maps core object ops 1:1', () => {
     expect(operationToAction('GetObject')).toBe('s3:GetObject');

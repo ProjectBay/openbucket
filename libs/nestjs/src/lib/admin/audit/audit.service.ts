@@ -44,6 +44,8 @@ export interface AuditEvent {
  * | `key.created`               | access key minted         | `subject`, `keyId`              |
  * | `key.disabled`              | access key disabled       | `subject`, `keyId`              |
  * | `key.updated`               | access key edited         | `subject`, `keyId`              |
+ * | `key.rotated`               | access key secret rolled  | `subject`, `keyId`              |
+ * | `key.revoked`               | access key revoked (disabled) | `subject`, `keyId`          |
  * | `key.deleted`               | access key removed        | `subject`, `keyId`              |
  * | `settings.changed`          | settings update           | `subject`, `field`              |
  * | `replication.reconcile.started`   | reconcile job accepted | `subject`, `jobId`, `bucket?` |

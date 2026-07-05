@@ -21,6 +21,12 @@ export interface PolicyEvaluationContext {
   secureTransport: boolean;
   /** Client source IP (drives `aws:SourceIp`). */
   sourceIp: string;
+  /**
+   * S3 request key prefix (from `?prefix=` on a ListObjects/V2/Versions call),
+   * drives `StringLike`/`StringNotLike` `s3:prefix` (TASK-3004). Defaults to `''`
+   * when absent, so an unprefixed listing does not satisfy a prefix-gated Allow.
+   */
+  prefix?: string;
 }
 
 export type PolicyDecision = 'allow' | 'deny';
@@ -133,6 +139,15 @@ function evalConditionOperator(
   }
   if (operator === 'NotIpAddress' && key === 'aws:SourceIp') {
     return !ipInAnyCidr(ctx.sourceIp, values);
+  }
+  // s3:prefix glob (TASK-3004) — gates a prefix-scoped key's ListBucket grant so
+  // an unprefixed / mismatched listing can't enumerate the whole bucket. Reuses
+  // the same anchored IAM glob (`*`/`?`) as Action/Resource matching.
+  if (operator === 'StringLike' && key === 's3:prefix') {
+    return anyGlobMatches(values, ctx.prefix ?? '');
+  }
+  if (operator === 'StringNotLike' && key === 's3:prefix') {
+    return !anyGlobMatches(values, ctx.prefix ?? '');
   }
   return 'unknown';
 }

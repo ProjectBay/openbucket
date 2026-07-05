@@ -145,6 +145,12 @@ export const EnvSchema = z
       .string()
       .regex(/^[A-Z0-9]{16,32}$/, 'ROOT_ACCESS_KEY_ID must be 16-32 uppercase alphanumerics'),
     ROOT_SECRET_ACCESS_KEY: strongSecret('ROOT_SECRET_ACCESS_KEY'),
+    // Optional key-encryption secret (EPIC-11, TASK-3001): the material HKDF'd
+    // into the KEK that wraps scoped sub-key secrets at rest. When unset the KEK
+    // is derived from ROOT_SECRET_ACCESS_KEY — so rotating the root secret WITHOUT
+    // setting this invalidates existing sub-key secrets (they must be re-minted).
+    // Set it to decouple sub-key secret storage from the root credential.
+    KEY_ENCRYPTION_SECRET: strongSecret('KEY_ENCRYPTION_SECRET').optional(),
     OPENBUCKET_ENDPOINT: z
       .string()
       .regex(/^[a-z0-9.-]+$/, 'OPENBUCKET_ENDPOINT must be a DNS-safe hostname')

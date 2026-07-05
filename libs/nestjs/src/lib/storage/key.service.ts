@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { AccessKey } from '../persistence/index';
 import { OPEN_BUCKET_ORM_CONTEXT } from '../persistence/orm-context';
+import { SecretCipher } from '../domain/keys/secret-cipher';
 
 export interface KeyLookupResult {
   accessKeyId: string;
@@ -12,6 +13,12 @@ export interface KeyLookupResult {
   disabled: boolean;
   /** True when this key is the root pair from env, not a stored sub-key. */
   isRoot: boolean;
+  /**
+   * Compiled scope `PolicyDocument` (JSON text) for a scoped sub-key, or null
+   * for an unscoped sub-key / the env root key (EPIC-11, TASK-3001). Consumed by
+   * the SigV4 guard → `PolicyAuthorizationGuard` scope check (TASK-3002).
+   */
+  scopePolicy?: string | null;
 }
 
 @Injectable()
@@ -29,6 +36,7 @@ export class KeyService implements OnModuleInit {
   constructor(
     @InjectEntityManager(OPEN_BUCKET_ORM_CONTEXT) private readonly em: EntityManager,
     private readonly config: ConfigService,
+    private readonly cipher: SecretCipher,
   ) {}
 
   onModuleInit(): void {
@@ -39,6 +47,7 @@ export class KeyService implements OnModuleInit {
       secret: rootSecret,
       disabled: false,
       isRoot: true,
+      scopePolicy: null,
     });
     this.log.log(`KeyService loaded root access key (id=${redact(rootId)})`);
   }
@@ -58,13 +67,37 @@ export class KeyService implements OnModuleInit {
     const row = await this.em.findOne(AccessKey, { accessKeyId });
     if (!row) return null;
 
-    // v1: there is no plaintext-secret path for sub-keys (the DB stores an
-    // argon2id hash, which SigV4 can't use). Wired for future expansion.
-    this.log.warn(
-      `KeyService: accessKeyId=${redact(accessKeyId)} found in DB but no plaintext available — ` +
-        'sub-key support not enabled in v1',
-    );
-    return null;
+    // Sub-key (EPIC-11, TASK-3001): recover the plaintext secret by decrypting
+    // the at-rest GCM blob (the argon2id hash is retained for defence-in-depth
+    // but SigV4 can't use it). A missing blob or a decryption failure (tamper /
+    // KEK rotation) fails CLOSED — treat as an unknown key.
+    if (!row.secretEncrypted) {
+      this.log.warn(
+        `KeyService: accessKeyId=${redact(accessKeyId)} has no encrypted secret — treating as unknown`,
+      );
+      return null;
+    }
+    let secret: string;
+    try {
+      secret = this.cipher.decrypt(row.secretEncrypted);
+    } catch {
+      this.log.error(
+        `KeyService: failed to decrypt secret for accessKeyId=${redact(accessKeyId)} — failing closed`,
+      );
+      return null;
+    }
+
+    const result: KeyLookupResult = {
+      accessKeyId: row.accessKeyId,
+      secret,
+      disabled: row.disabled,
+      isRoot: false,
+      scopePolicy: row.scopePolicy ?? null,
+    };
+    // Cache exactly as the root path does — including a disabled negative cache
+    // (getSecret returns null for it below) so a flood can't hammer SQLite.
+    this.cache.set(accessKeyId, result);
+    return result.disabled ? null : result;
   }
 
   /**
@@ -90,6 +123,7 @@ export class KeyService implements OnModuleInit {
       secret: rootSecret,
       disabled: false,
       isRoot: true,
+      scopePolicy: null,
     });
   }
 }

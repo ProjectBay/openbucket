@@ -7,6 +7,7 @@ import {
   RequestTimeTooSkewedError,
 } from '../errors/s3-error';
 import { awsUriEncode, buildCanonicalRequest } from './canonical-request';
+import { parseScopePolicy } from '../../domain/keys/key-scope';
 import { KeyService } from './key.service';
 import { assertMandatorySignedHeaders } from './signed-headers';
 import { Sigv4Verifier } from './sigv4.verifier';
@@ -102,6 +103,10 @@ export async function verifyPresigned(
   if (!verifier.constantTimeEquals(expected, presentedSig)) return false;
 
   req.openbucket.accessKeyId = accessKeyId;
+  // Scope a presigned request identically to a header-signed one (EPIC-11,
+  // TASK-3002) — do not regress STORY-0104. Fail-closed on a corrupt scope.
+  req.openbucket.isRoot = key.isRoot;
+  req.openbucket.keyScope = key.scopePolicy ? parseScopePolicy(key.scopePolicy) : null;
   return true;
 }
 

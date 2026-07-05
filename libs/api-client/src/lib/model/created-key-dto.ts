@@ -7,6 +7,7 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { KeySummaryDtoScope } from './key-summary-dto-scope';
 
 
 export interface CreatedKeyDto { 
@@ -16,5 +17,6 @@ export interface CreatedKeyDto {
     label: string;
     role: string;
     createdAt: string;
+    scope: KeySummaryDtoScope | null;
 }
 

@@ -8,9 +8,15 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideEllipsisVertical, lucideTrash2 } from '@ng-icons/lucide';
+import {
+  lucideBan,
+  lucideEllipsisVertical,
+  lucideRotateCw,
+  lucideShieldCheck,
+  lucideTrash2,
+} from '@ng-icons/lucide';
 import { HlmTableImports } from '@openbucket/spartan-ui/table';
 import { HlmBadge } from '@openbucket/spartan-ui/badge';
 import { HlmButton } from '@openbucket/spartan-ui/button';
@@ -28,13 +34,23 @@ import { PageHeaderService } from '../layout/shell/services';
 import { KeysSignalStore } from './keys.signal-store';
 import { KeyCreateDialogComponent } from './key-create-dialog.component';
 import { KeySecretOnceDialogComponent } from './key-secret-once-dialog.component';
+import { KeyEffectivePermissionsComponent } from './key-effective-permissions.component';
 
 type KeySortKey = 'label' | 'lastUsed';
 
+interface ConfirmConfig {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  destructive: boolean;
+}
+
 /**
- * Access-keys management (STORY-0611): list/create/enable-disable/delete on
- * spartan-ng, with sortable headers, shared list-state, and a one-time secret
- * reveal. Title + Create action via the unified page header.
+ * Access-keys management (STORY-0611 / EPIC-11): list/create/enable-disable/
+ * delete on spartan-ng, plus scope minting, Rotate (one-time secret reveal),
+ * Revoke (reversible disable) and an effective-permissions panel. Sortable
+ * headers, shared list-state, one-time secret reveal. Title + Create action via
+ * the unified page header.
  */
 @Component({
   selector: 'ob-keys-list',
@@ -54,8 +70,17 @@ type KeySortKey = 'label' | 'lastUsed';
     SortHeaderComponent,
     KeyCreateDialogComponent,
     KeySecretOnceDialogComponent,
+    KeyEffectivePermissionsComponent,
   ],
-  providers: [provideIcons({ lucideEllipsisVertical, lucideTrash2 })],
+  providers: [
+    provideIcons({
+      lucideEllipsisVertical,
+      lucideTrash2,
+      lucideRotateCw,
+      lucideBan,
+      lucideShieldCheck,
+    }),
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="p-6">
@@ -91,6 +116,7 @@ type KeySortKey = 'label' | 'lastUsed';
                 </th>
                 <th hlmTh>{{ 'keys.accessKeyId' | translate }}</th>
                 <th hlmTh>{{ 'keys.role' | translate }}</th>
+                <th hlmTh>{{ 'keys.scope' | translate }}</th>
                 <th hlmTh>
                   <ob-sort-header
                     label="keys.lastUsed"
@@ -134,6 +160,26 @@ type KeySortKey = 'label' | 'lastUsed';
                     >
                   </td>
                   <td hlmTd>
+                    @if (k.scope; as s) {
+                      <div class="flex items-center gap-1">
+                        <span
+                          hlmBadge
+                          variant="secondary"
+                          >{{ 'keys.scoped' | translate }}</span
+                        >
+                        @if (s.bucket) {
+                          <code class="text-muted-foreground font-mono text-xs">
+                            {{ s.bucket }}/{{ s.prefix ?? '' }}
+                          </code>
+                        }
+                      </div>
+                    } @else {
+                      <span class="text-muted-foreground text-xs">{{
+                        'keys.root' | translate
+                      }}</span>
+                    }
+                  </td>
+                  <td hlmTd>
                     @if (k.lastUsedAt) {
                       {{ k.lastUsedAt | relativeTime }}
                     } @else {
@@ -165,7 +211,28 @@ type KeySortKey = 'label' | 'lastUsed';
                       />
                     </button>
                     <ng-template #rowMenu>
-                      <hlm-dropdown-menu class="w-40">
+                      <hlm-dropdown-menu class="w-44">
+                        <button
+                          hlmDropdownMenuItem
+                          (click)="onPermissions(k)"
+                        >
+                          <ng-icon name="lucideShieldCheck" />
+                          {{ 'keys.permissions' | translate }}
+                        </button>
+                        <button
+                          hlmDropdownMenuItem
+                          (click)="onRotate(k)"
+                        >
+                          <ng-icon name="lucideRotateCw" />
+                          {{ 'keys.rotate' | translate }}
+                        </button>
+                        <button
+                          hlmDropdownMenuItem
+                          (click)="onRevoke(k)"
+                        >
+                          <ng-icon name="lucideBan" />
+                          {{ 'keys.revoke' | translate }}
+                        </button>
                         <button
                           hlmDropdownMenuItem
                           class="text-destructive"
@@ -187,25 +254,33 @@ type KeySortKey = 'label' | 'lastUsed';
 
     <ob-key-create-dialog (created)="onCreated($event)" />
     <ob-key-secret-once-dialog />
+    <ob-key-effective-permissions />
     <ob-confirm-dialog
-      [title]="'keys.deleteTitle' | translate"
-      [description]="deleteDescription()"
-      [confirmLabel]="'keys.delete' | translate"
-      [destructive]="true"
+      [title]="confirmConfig().title"
+      [description]="confirmConfig().description"
+      [confirmLabel]="confirmConfig().confirmLabel"
+      [destructive]="confirmConfig().destructive"
     />
   `,
 })
 export class KeysListComponent implements OnInit, OnDestroy {
   protected readonly store = inject(KeysSignalStore);
   private readonly pageHeader = inject(PageHeaderService);
+  private readonly i18n = inject(TranslateService);
 
   protected readonly createDialog = viewChild.required(KeyCreateDialogComponent);
   protected readonly secretDialog = viewChild.required(KeySecretOnceDialogComponent);
   protected readonly confirmDialog = viewChild.required(ConfirmDialogComponent);
+  protected readonly permissionsPanel = viewChild.required(KeyEffectivePermissionsComponent);
 
-  protected readonly deleteTarget = signal<KeySummaryDto | null>(null);
   protected readonly sortKey = signal<KeySortKey>('label');
   protected readonly sortDir = signal<SortDir>('asc');
+  protected readonly confirmConfig = signal<ConfirmConfig>({
+    title: '',
+    description: '',
+    confirmLabel: '',
+    destructive: false,
+  });
 
   protected readonly sorted = computed(() => {
     const key = this.sortKey();
@@ -223,10 +298,6 @@ export class KeysListComponent implements OnInit, OnDestroy {
       return cmp * factor;
     });
   });
-  protected readonly deleteDescription = computed(
-    () =>
-      `Permanently delete the key "${this.deleteTarget()?.label ?? ''}"? Applications using it will stop working.`,
-  );
 
   constructor() {
     this.pageHeader.setPageHeader('keys.title', 'keys.subtitle');
@@ -263,9 +334,51 @@ export class KeysListComponent implements OnInit, OnDestroy {
     }
   }
 
+  protected onPermissions(k: KeySummaryDto): void {
+    void this.permissionsPanel().open(k);
+  }
+
+  async onRotate(k: KeySummaryDto): Promise<void> {
+    const ok = await this.ask({
+      title: this.i18n.instant('keys.rotateTitle'),
+      description: this.i18n.instant('keys.rotateHint', { label: k.label }),
+      confirmLabel: this.i18n.instant('keys.rotate'),
+      destructive: false,
+    });
+    if (!ok) return;
+    try {
+      const rotated = await this.store.rotate(k.id);
+      // RotatedKeyDto mirrors CreatedKeyDto — reuse the one-time secret reveal.
+      this.secretDialog().open(rotated);
+      notify.success('Access key rotated');
+    } catch {
+      notify.error('Failed to rotate key');
+    }
+  }
+
+  async onRevoke(k: KeySummaryDto): Promise<void> {
+    const ok = await this.ask({
+      title: this.i18n.instant('keys.revokeTitle'),
+      description: this.i18n.instant('keys.revokeHint', { label: k.label }),
+      confirmLabel: this.i18n.instant('keys.revoke'),
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await this.store.revoke(k.id);
+      notify.success('Access key revoked');
+    } catch {
+      notify.error('Failed to revoke key');
+    }
+  }
+
   async onDelete(k: KeySummaryDto): Promise<void> {
-    this.deleteTarget.set(k);
-    const ok = await this.confirmDialog().confirm();
+    const ok = await this.ask({
+      title: this.i18n.instant('keys.deleteTitle'),
+      description: this.i18n.instant('keys.deleteHint', { label: k.label }),
+      confirmLabel: this.i18n.instant('keys.delete'),
+      destructive: true,
+    });
     if (!ok) return;
     try {
       await this.store.remove(k.id);
@@ -273,5 +386,10 @@ export class KeysListComponent implements OnInit, OnDestroy {
     } catch {
       notify.error('Failed to delete key');
     }
+  }
+
+  private ask(config: ConfirmConfig): Promise<boolean> {
+    this.confirmConfig.set(config);
+    return this.confirmDialog().confirm();
   }
 }

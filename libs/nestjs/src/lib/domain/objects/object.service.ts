@@ -399,19 +399,28 @@ export class ObjectService {
     // EPIC-08 bucket policy, evaluated here (not the guard) because the principal
     // was unknown until the body was parsed. Identical semantics to
     // PolicyAuthorizationGuard: single-root default-allow, explicit Deny blocks.
+    const evalCtx = {
+      action: 's3:PutObject',
+      resource: `arn:aws:s3:::${bucket}/${key}`,
+      principal: post.accessKeyId,
+      secureTransport: req.secure === true,
+      sourceIp: req.ip ?? '',
+    };
     if (bkt.policy) {
-      const decision = evaluatePolicy(
-        bkt.policy,
-        {
-          action: 's3:PutObject',
-          resource: `arn:aws:s3:::${bucket}/${key}`,
-          principal: post.accessKeyId,
-          secureTransport: req.secure === true,
-          sourceIp: req.ip ?? '',
-        },
-        { defaultAllow: true },
-      );
+      const decision = evaluatePolicy(bkt.policy, evalCtx, { defaultAllow: true });
       if (decision === 'deny') throw new AccessDeniedError('Access Denied by bucket policy');
+    }
+
+    // EPIC-11 key scope (TASK-3002): the SigV4Guard defers POST to this handler,
+    // so the scope check must land here too — otherwise a scoped key could POST
+    // outside its prefix. Non-root scoped keys only, implicit-deny.
+    const isRoot = req.openbucket?.isRoot === true;
+    const keyScope = req.openbucket?.keyScope ?? null;
+    if (!isRoot && keyScope) {
+      const scopeDecision = evaluatePolicy(keyScope, evalCtx, { defaultAllow: false });
+      if (scopeDecision === 'deny') {
+        throw new AccessDeniedError('Access Denied: out of key scope');
+      }
     }
 
     const row = await this.writer.put({

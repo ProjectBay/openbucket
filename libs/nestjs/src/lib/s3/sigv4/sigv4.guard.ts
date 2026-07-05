@@ -8,6 +8,7 @@ import {
   SignatureDoesNotMatchError,
 } from '../errors/s3-error';
 import { isPostObjectForm } from '../routing/operation-resolver';
+import { parseScopePolicy } from '../../domain/keys/key-scope';
 import { KeyService } from './key.service';
 import { verifyPresigned } from './presigned';
 import { assertMandatorySignedHeaders } from './signed-headers';
@@ -112,6 +113,11 @@ export class SigV4Guard implements CanActivate {
     }
 
     req.openbucket.accessKeyId = parsed.accessKeyId;
+    // Stamp the resolved key's root-ness + scope (EPIC-11, TASK-3002) so the
+    // PolicyAuthorizationGuard can enforce the scope. `parseScopePolicy` fails
+    // closed (deny-all) on a corrupt stored scope.
+    req.openbucket.isRoot = key.isRoot;
+    req.openbucket.keyScope = key.scopePolicy ? parseScopePolicy(key.scopePolicy) : null;
 
     // Chunked upload: stash the verified seed + signing key so the
     // ChunkedDecoder can verify the per-chunk signature chain (STORY-0119).

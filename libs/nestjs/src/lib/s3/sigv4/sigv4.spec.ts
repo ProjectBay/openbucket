@@ -69,6 +69,8 @@ const ROOT_CREDS: AccessKey = {
   accessKeyId: 'AKIDEXAMPLE',
   secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
   disabled: false,
+  isRoot: true,
+  scopePolicy: null,
 };
 
 describe('SigV4 (TEST-0104)', () => {

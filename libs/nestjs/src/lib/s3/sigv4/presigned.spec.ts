@@ -14,7 +14,13 @@ import { Sigv4Verifier } from './sigv4.verifier';
  * signing (`signQuery`).
  */
 const SECRET = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
-const ROOT: AccessKey = { accessKeyId: 'AKIDEXAMPLE', secretAccessKey: SECRET, disabled: false };
+const ROOT: AccessKey = {
+  accessKeyId: 'AKIDEXAMPLE',
+  secretAccessKey: SECRET,
+  disabled: false,
+  isRoot: true,
+  scopePolicy: null,
+};
 const keyService = (key: AccessKey | null): KeyService => ({
   getSecret: jest.fn().mockResolvedValue(key),
 });

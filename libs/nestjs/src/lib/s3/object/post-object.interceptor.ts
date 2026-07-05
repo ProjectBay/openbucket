@@ -12,7 +12,8 @@ import {
   SignatureDoesNotMatchError,
 } from '../errors/s3-error';
 import { isPostObjectForm, type PostObjectShapeRequest } from '../routing/operation-resolver';
-import { KeyService } from '../sigv4/key.service';
+import { parseScopePolicy } from '../../domain/keys/key-scope';
+import { AccessKey, KeyService } from '../sigv4/key.service';
 import {
   accessKeyIdFromCredential,
   evaluatePostPolicy,
@@ -271,7 +272,15 @@ export class PostObjectInterceptor implements NestInterceptor {
     //    start streaming. A generic error on absent/mismatched key so we never
     //    leak whether the access-key exists.
     void this.authenticate(fields, routeBucket, accessKeyId, policy)
-      .then(() => {
+      .then((key) => {
+        // Stamp the resolved key's root-ness + scope so `objects.postObject` can
+        // enforce the scope for this browser-upload shape too (EPIC-11, TASK-3002)
+        // — the guard defers POST here, so the scope check must land in the handler.
+        const ob = (req as unknown as {
+          openbucket: { isRoot?: boolean; keyScope?: unknown };
+        }).openbucket;
+        ob.isRoot = key.isRoot;
+        ob.keyScope = key.scopePolicy ? parseScopePolicy(key.scopePolicy) : null;
         // `hooks.resolve()` no-ops if the request already failed/aborted
         // (settled), so a clean async gap never resurrects a torn-down request.
         fileStream.pipe(verifier);
@@ -290,7 +299,7 @@ export class PostObjectInterceptor implements NestInterceptor {
     routeBucket: string,
     accessKeyId: string,
     policy: PostPolicy,
-  ): Promise<void> {
+  ): Promise<AccessKey> {
     const secret = await this.keys.getSecret(accessKeyId);
     if (!secret || !verifyPostSignature(fields, secret.secretAccessKey)) {
       throw new SignatureDoesNotMatchError();
@@ -298,5 +307,6 @@ export class PostObjectInterceptor implements NestInterceptor {
     // Evaluate the non-length conditions up front (length enforced on the wire by
     // the verifier min/max). Fail-closed on any uncovered field.
     evaluatePostPolicy(policy, fields, routeBucket);
+    return secret;
   }
 }

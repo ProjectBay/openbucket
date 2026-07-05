@@ -90,6 +90,14 @@ function buildCoreImports(adminEnabled: boolean): Array<Type | DynamicModule> {
               '*.secretAccessKey',
               'OB_REPLICATION_SECRET_ACCESS_KEY',
               '*.OB_REPLICATION_SECRET_ACCESS_KEY',
+              // Scoped sub-key at-rest secret + KEK material (EPIC-11 / TASK-3001).
+              // The blob is ciphertext and the KEK lives only in config, but redact
+              // any `secretEncrypted` / `KEY_ENCRYPTION_SECRET` field so a stray
+              // config/row dump can never leak them (secrets hygiene).
+              'secretEncrypted',
+              '*.secretEncrypted',
+              'KEY_ENCRYPTION_SECRET',
+              '*.KEY_ENCRYPTION_SECRET',
               'authorization',
               '*.authorization',
             ],

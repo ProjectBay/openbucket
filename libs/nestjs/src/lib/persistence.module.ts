@@ -17,6 +17,7 @@ import { Migration20260702000001_event_deliveries } from './migrations/Migration
 import { Migration20260710000001_replication_outbox } from './migrations/Migration20260710000001_replication_outbox';
 import { Migration20260711000001_object_tiering } from './migrations/Migration20260711000001_object_tiering';
 import { Migration20260712000001_reconcile_job } from './migrations/Migration20260712000001_reconcile_job';
+import { Migration20260704000001_access_key_scope } from './migrations/Migration20260704000001_access_key_scope';
 import {
   Bucket,
   ObjectEntity,
@@ -150,6 +151,10 @@ const ENTITIES = [
             {
               name: 'Migration20260712000001_reconcile_job',
               class: Migration20260712000001_reconcile_job,
+            },
+            {
+              name: 'Migration20260704000001_access_key_scope',
+              class: Migration20260704000001_access_key_scope,
             },
           ],
           transactional: true,

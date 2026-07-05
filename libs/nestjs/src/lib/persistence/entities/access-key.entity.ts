@@ -33,4 +33,22 @@ export class AccessKey {
 
   @Property({ type: 'boolean', default: false })
   disabled = false;
+
+  /**
+   * Compiled scope `PolicyDocument` (JSON text) for a scoped sub-key
+   * (EPIC-11 / STORY-1000). Null ⇒ an unscoped key (root-equivalent grant).
+   * Root credentials are loaded from env and never persisted, so they can
+   * never carry a scope — the additive/opt-in guarantee holds structurally.
+   */
+  @Property({ type: 'text', nullable: true })
+  scopePolicy?: string | null;
+
+  /**
+   * The sub-key secret encrypted at rest with the instance KEK (AES-256-GCM,
+   * see `SecretCipher`). NEVER the plaintext — this blob is recoverable only
+   * with the KEK and is what SigV4 verification consumes (EPIC-11 / TASK-3001).
+   * Null for legacy rows and the env root key.
+   */
+  @Property({ type: 'text', nullable: true })
+  secretEncrypted?: string | null;
 }

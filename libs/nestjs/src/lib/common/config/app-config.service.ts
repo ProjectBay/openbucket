@@ -22,6 +22,7 @@ export class AppConfigService {
   get adminPasswordHash(): string { return this.raw.get('ADMIN_PASSWORD_HASH', { infer: true }); }
   get rootAccessKeyId(): string { return this.raw.get('ROOT_ACCESS_KEY_ID', { infer: true }); }
   get rootSecretAccessKey(): string { return this.raw.get('ROOT_SECRET_ACCESS_KEY', { infer: true }); }
+  get keyEncryptionSecret(): string | undefined { return this.raw.get('KEY_ENCRYPTION_SECRET', { infer: true }); }
   get endpoint(): string | undefined { return this.raw.get('OPENBUCKET_ENDPOINT', { infer: true }); }
   get region(): string { return this.raw.get('OPENBUCKET_REGION', { infer: true }); }
   get sseKey(): string | undefined { return this.raw.get('OPENBUCKET_SSE_KEY', { infer: true }); }

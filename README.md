@@ -264,6 +264,21 @@ commented list. The essentials:
 | `ADMIN_USERNAME`         |          | `admin`      | Admin login.                                                 |
 | `OPENBUCKET_REGION`      |          | `us-east-1`  | Region reported to clients.                                  |
 | `OPENBUCKET_SSE_KEY`     |          | generated    | base64 of 32 bytes; auto-generated to `<DATA_DIR>/sse.key`.  |
+| `KEY_ENCRYPTION_SECRET`  |          | root secret  | ≥ 32 chars; KEK for scoped sub-key secrets at rest. Falls back to `ROOT_SECRET_ACCESS_KEY` when unset (see caveat below). |
+
+### Scoped access keys (multi-tenant)
+
+The root credential is always unrestricted. Mint **scoped sub-keys** —
+SigV4-capable keys confined to a bucket/prefix — via
+`POST /api/admin/keys` with a `scope`. Scoping is enforced through the same
+policy evaluator as bucket policies, with implicit-deny, so a tenant key can't
+read outside its prefix, list the whole bucket, or enumerate all buckets. Keys can
+be **rotated** (roll the secret, shown once), **revoked** (reversible disable), and
+inspected via an **effective-permissions** allow/deny matrix and single-action
+**simulate** — all in the admin console and API. See the
+[library README](./libs/nestjs/README.md#scoped-access-keys-multi-tenant) for the
+scope model, minting recipe, key lifecycle, and the `KEY_ENCRYPTION_SECRET`
+rotation caveat.
 
 ### Async replication
 
