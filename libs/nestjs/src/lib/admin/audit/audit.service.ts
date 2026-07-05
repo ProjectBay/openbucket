@@ -41,6 +41,7 @@ export interface AuditEvent {
  * | `object.retention.changed`  | object retention set      | `subject`, `bucket`, `key`      |
  * | `object.legalhold.changed`  | object legal hold set     | `subject`, `bucket`, `key`      |
  * | `object.presigned`          | presigned URL minted      | `subject`, `bucket`, `key`, `expiresIn` |
+ * | `object.searched`           | cross-bucket search run   | `subject`, `mode`, `hasTag`, `count` (never the raw `q`) |
  * | `key.created`               | access key minted         | `subject`, `keyId`              |
  * | `key.disabled`              | access key disabled       | `subject`, `keyId`              |
  * | `key.updated`               | access key edited         | `subject`, `keyId`              |

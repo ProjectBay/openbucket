@@ -66,6 +66,12 @@ export const appRoutes: Routes = [
         ],
       },
       {
+        path: 'search',
+        data: { breadcrumb: 'search.title' },
+        loadComponent: () =>
+          import('./objects/object-search.component').then((m) => m.ObjectSearchComponent),
+      },
+      {
         path: 'keys',
         loadComponent: () => import('./keys/keys-list.component').then((m) => m.KeysListComponent),
       },

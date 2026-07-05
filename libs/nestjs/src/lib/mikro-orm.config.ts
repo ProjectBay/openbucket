@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   Bucket,
   ObjectEntity,
+  ObjectTag,
   ObjectVersion,
   MultipartUpload,
   MultipartPart,
@@ -16,6 +17,8 @@ import {
   EventDeliveryEntity,
   ReplicationOutbox,
   ReconcileJob,
+  UsageSample,
+  RequestMetricSample,
 } from './persistence/index';
 
 /**
@@ -41,6 +44,7 @@ export default defineConfig({
   entities: [
     Bucket,
     ObjectEntity,
+    ObjectTag,
     ObjectVersion,
     MultipartUpload,
     MultipartPart,
@@ -52,6 +56,8 @@ export default defineConfig({
     EventDeliveryEntity,
     ReplicationOutbox,
     ReconcileJob,
+    UsageSample,
+    RequestMetricSample,
   ],
 
   // ReflectMetadataProvider (not TsMorph): every entity property declares its

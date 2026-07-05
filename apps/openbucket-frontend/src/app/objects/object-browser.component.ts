@@ -14,7 +14,6 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { DomSanitizer, SafeResourceUrl, SafeUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -25,6 +24,7 @@ import {
   lucideCopy,
   lucideDownload,
   lucideEllipsisVertical,
+  lucideEye,
   lucideFile,
   lucideFileArchive,
   lucideFileAudio,
@@ -77,6 +77,8 @@ import { notify } from '../shared/ui/notify';
 import { ConfirmDialogComponent } from '../shared/ui/confirm-dialog.component';
 import { ObjectBreadcrumbComponent } from './object-breadcrumb.component';
 import { ObjectUploadComponent } from './object-upload.component';
+import { ObjectPreviewComponent } from './object-preview.component';
+import { fileIcon } from './object-icon';
 
 /**
  * Object browser (§5.14, rebuilt STORY-0604). Lists a bucket with delimiter `/`
@@ -113,6 +115,7 @@ import { ObjectUploadComponent } from './object-upload.component';
     ConfirmDialogComponent,
     ObjectBreadcrumbComponent,
     ObjectUploadComponent,
+    ObjectPreviewComponent,
   ],
   providers: [
     provideIcons({
@@ -123,6 +126,7 @@ import { ObjectUploadComponent } from './object-upload.component';
       lucideCopy,
       lucideDownload,
       lucideEllipsisVertical,
+      lucideEye,
       lucideFile,
       lucideFileArchive,
       lucideFileAudio,
@@ -446,6 +450,13 @@ import { ObjectUploadComponent } from './object-upload.component';
                         hlmDropdownMenuItem
                         (click)="openObject(o)"
                       >
+                        <ng-icon name="lucideEye" />
+                        {{ 'objects.preview' | translate }}
+                      </button>
+                      <button
+                        hlmDropdownMenuItem
+                        (click)="openObject(o)"
+                      >
                         <ng-icon name="lucideInfo" />
                         {{ 'objects.viewDetails' | translate }}
                       </button>
@@ -555,42 +566,11 @@ import { ObjectUploadComponent } from './object-upload.component';
                 hlmTabsContent="details"
                 class="min-h-0 flex-1 space-y-3 overflow-y-auto pt-3 text-sm"
               >
-                @if (previewLoading()) {
-                  <p class="text-muted-foreground">{{ 'objects.previewLoading' | translate }}</p>
-                } @else if (previewTooLarge()) {
-                  <p class="text-muted-foreground">{{ 'objects.previewTooLarge' | translate }}</p>
-                } @else {
-                  @switch (previewKind()) {
-                    @case ('image') {
-                      <img
-                        [src]="previewUrl()"
-                        [alt]="meta.key"
-                        class="mx-auto max-h-80 max-w-full rounded border bg-muted/30 object-contain"
-                      />
-                    }
-                    @case ('pdf') {
-                      <iframe
-                        [src]="previewPdf()"
-                        class="h-96 w-full rounded border"
-                        title="PDF preview"
-                      ></iframe>
-                    }
-                    @case ('video') {
-                      <video
-                        [src]="previewUrl()"
-                        controls
-                        class="max-h-80 w-full rounded border bg-black"
-                      ></video>
-                    }
-                    @case ('audio') {
-                      <audio
-                        [src]="previewUrl()"
-                        controls
-                        class="w-full"
-                      ></audio>
-                    }
-                  }
-                }
+                <ob-object-preview
+                  [bucket]="bucket()"
+                  [meta]="meta"
+                  (download)="download($event)"
+                />
 
                 <dl class="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1.5">
                   <dt class="text-muted-foreground">{{ 'objects.size' | translate }}</dt>
@@ -842,7 +822,6 @@ export class ObjectBrowserComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
-  private readonly sanitizer = inject(DomSanitizer);
 
   /** When false (embedded in a tab), drop the outer p-6 so the host can pad. */
   readonly padded = input(true);
@@ -866,13 +845,7 @@ export class ObjectBrowserComponent implements OnInit {
   readonly isCompliance = computed(
     () => this.retention()?.mode === RetentionDtoModeEnum.Compliance,
   );
-  readonly previewUrl = signal<SafeUrl | null>(null);
-  readonly previewPdf = signal<SafeResourceUrl | null>(null);
-  readonly previewKind = signal<'image' | 'pdf' | 'video' | 'audio' | null>(null);
-  readonly previewTooLarge = signal(false);
-  readonly previewLoading = signal(false);
   readonly newFolderName = signal('');
-  private readonly maxPreviewBytes = 50 * 1024 * 1024; // 50 MiB — skip inline preview above this
 
   readonly selection = signal<Set<string>>(new Set());
   readonly allSelected = computed(() => {
@@ -905,9 +878,6 @@ export class ObjectBrowserComponent implements OnInit {
   private readonly confirmDialog = viewChild.required(ConfirmDialogComponent);
   private readonly detailSheet = viewChild.required(HlmSheet);
   protected readonly folderDialog = viewChild.required(HlmDialog);
-
-  /** Raw object URL backing previewUrl, kept so it can be revoked. */
-  private previewRaw: string | null = null;
 
   /** (prefix, marker) breadcrumb for back-navigation; the head is the current page. */
   readonly stack: { prefix: string; marker?: string }[] = [];
@@ -964,25 +934,8 @@ export class ObjectBrowserComponent implements OnInit {
     return o.key.slice(this.prefix().length);
   }
 
-  /** Lucide icon name for an object, picked from its file extension. */
-  fileIcon(key: string): string {
-    const ext = key.includes('.') ? key.slice(key.lastIndexOf('.') + 1).toLowerCase() : '';
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'avif', 'bmp', 'ico', 'tif', 'tiff'].includes(ext))
-      return 'lucideImage';
-    if (['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', 'flv', 'wmv'].includes(ext)) return 'lucideFileVideo';
-    if (['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac', 'opus'].includes(ext)) return 'lucideFileAudio';
-    if (['zip', 'tar', 'gz', 'tgz', 'rar', '7z', 'bz2', 'xz', 'zst'].includes(ext)) return 'lucideFileArchive';
-    if (
-      [
-        'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'json', 'html', 'htm', 'css', 'scss', 'py', 'go',
-        'rs', 'java', 'c', 'cpp', 'h', 'hpp', 'sh', 'bash', 'yml', 'yaml', 'xml', 'rb', 'php', 'sql', 'toml',
-      ].includes(ext)
-    )
-      return 'lucideFileCode';
-    if (['txt', 'md', 'markdown', 'log', 'csv', 'tsv', 'pdf', 'doc', 'docx', 'rtf'].includes(ext))
-      return 'lucideFileText';
-    return 'lucideFile';
-  }
+  /** Lucide icon name for an object, picked from its file extension (shared map). */
+  readonly fileIcon = fileIcon;
 
   isSelected(key: string): boolean {
     return this.selection().has(key);
@@ -1130,12 +1083,13 @@ export class ObjectBrowserComponent implements OnInit {
   }
 
   async openObject(o: ObjectListItem): Promise<void> {
-    this.clearPreview();
     try {
       const meta = await firstValueFrom(this.objects$.getObject(this.bucket(), o.key));
       this.selected.set(meta ?? null);
       // Tags + user-metadata come from the object HEAD already loaded; Versions and
       // Retention/Legal-hold load lazily when their sheet tab is opened (onSheetTab).
+      // The inline preview reacts to `selected()` via ObjectPreviewComponent's `meta`
+      // input, so no preview fetch is orchestrated here.
       this.sheetLoaded.clear();
       this.versions.set([]);
       this.deleteMarkers.set([]);
@@ -1145,48 +1099,10 @@ export class ObjectBrowserComponent implements OnInit {
       );
       if (meta) {
         this.detailSheet().open();
-        await this.loadPreview(o.key, meta);
       }
     } catch {
       notify.error('Failed to load object details');
     }
-  }
-
-  /** Inline preview for image / pdf / video / audio (fetched with auth as a blob). */
-  private async loadPreview(key: string, meta: ObjectMetaDto): Promise<void> {
-    const kind = this.previewKindFor(meta.contentType);
-    this.previewKind.set(kind);
-    this.previewTooLarge.set(false);
-    if (!kind) return;
-    if ((meta.size ?? 0) > this.maxPreviewBytes) {
-      this.previewTooLarge.set(true);
-      return;
-    }
-    this.previewLoading.set(true);
-    try {
-      const blob = await firstValueFrom(
-        this.http.get(this.contentUrl(key), { responseType: 'blob' }),
-      );
-      this.previewRaw = URL.createObjectURL(blob);
-      if (kind === 'pdf') {
-        this.previewPdf.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.previewRaw));
-      } else {
-        this.previewUrl.set(this.sanitizer.bypassSecurityTrustUrl(this.previewRaw));
-      }
-    } catch {
-      /* preview is best-effort; the metadata panel still shows */
-    } finally {
-      this.previewLoading.set(false);
-    }
-  }
-
-  private previewKindFor(ct: string | undefined): 'image' | 'pdf' | 'video' | 'audio' | null {
-    if (!ct) return null;
-    if (ct.startsWith('image/')) return 'image';
-    if (ct === 'application/pdf') return 'pdf';
-    if (ct.startsWith('video/')) return 'video';
-    if (ct.startsWith('audio/')) return 'audio';
-    return null;
   }
 
   /** Create a zero-byte folder marker (key ending in `/`) under the current prefix. */
@@ -1390,7 +1306,6 @@ export class ObjectBrowserComponent implements OnInit {
   }
 
   closeMeta(): void {
-    this.clearPreview();
     this.selected.set(null);
   }
 
@@ -1406,24 +1321,11 @@ export class ObjectBrowserComponent implements OnInit {
     return `/api/admin/buckets/${this.bucket()}/objects/${encoded}?${download ? 'download' : 'content'}${v}`;
   }
 
-  private clearPreview(): void {
-    if (this.previewRaw) {
-      URL.revokeObjectURL(this.previewRaw);
-      this.previewRaw = null;
-    }
-    this.previewUrl.set(null);
-    this.previewPdf.set(null);
-    this.previewKind.set(null);
-    this.previewTooLarge.set(false);
-    this.previewLoading.set(false);
-  }
-
   /** List using the page at the top of the stack. */
   private async load(): Promise<void> {
     const top = this.stack[this.stack.length - 1];
     this.loading.set(true);
     this.error.set(null);
-    this.clearPreview();
     this.selected.set(null);
     this.selection.set(new Set());
     try {

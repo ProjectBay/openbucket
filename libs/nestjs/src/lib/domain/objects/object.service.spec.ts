@@ -5,7 +5,16 @@ import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { ConfigService } from '@nestjs/config';
 
+import { MikroORM } from '@mikro-orm/libsql';
+import { ReflectMetadataProvider } from '@mikro-orm/core';
+
 import type { BucketRepository, ObjectRepository } from '../../persistence/index';
+import {
+  Bucket,
+  ObjectEntity,
+  ObjectTag,
+  ObjectVersion,
+} from '../../persistence/index';
 
 import { InternalError, NoSuchBucketError, NoSuchKeyError } from '../../s3/errors/s3-error';
 import { BlobStore } from '../../storage/blob-store';
@@ -395,5 +404,84 @@ describe('ObjectService.deleteOne events (STORY-0801)', () => {
     expect(result).toEqual({});
     expect(versions.writeDeleteMarker).not.toHaveBeenCalled();
     expect(events.emitInProcess).not.toHaveBeenCalled();
+  });
+});
+
+// --- object_tags index write-path sync (STORY-1101, TASK-3312) ---
+describe('ObjectService tag-index sync (TEST-1101 cases 8, 9)', () => {
+  let orm: MikroORM;
+
+  beforeAll(async () => {
+    orm = await MikroORM.init({
+      dbName: ':memory:',
+      entities: [Bucket, ObjectEntity, ObjectTag, ObjectVersion],
+      metadataProvider: ReflectMetadataProvider,
+      metadataCache: { enabled: false },
+      allowGlobalContext: true,
+      forceUtcTimezone: true,
+      pool: {
+        afterCreate: (conn: any, done: (err?: Error) => void) => {
+          conn.pragma('foreign_keys = ON');
+          done();
+        },
+      },
+    });
+    await orm.schema.createSchema();
+  }, 60_000);
+
+  afterAll(async () => {
+    await orm?.close(true);
+  });
+
+  const svcFor = (repo: ObjectRepository): ObjectService =>
+    new ObjectService(
+      {} as ObjectWriterService,
+      {} as BucketRepository,
+      repo,
+      BLOBS,
+      VERSIONS,
+      SERIALIZER,
+      SSE,
+    );
+
+  const seedObject = async (bucket: string, key: string): Promise<ObjectRepository> => {
+    const em = orm.em.fork();
+    const b = em.create(Bucket, { name: bucket });
+    em.create(ObjectEntity, { id: `${bucket}/${key}`, bucket: b, key, etag: 'e' });
+    await em.flush();
+    return em.getRepository(ObjectEntity) as unknown as ObjectRepository;
+  };
+
+  it('case 8: setTaggingMap inserts object_tags rows; clearTaggingMap removes them', async () => {
+    const repo = await seedObject('tsync', 'k');
+    const svc = svcFor(repo);
+
+    await svc.setTaggingMap('tsync', 'k', { env: 'prod', team: 'infra' });
+    const em = orm.em.fork();
+    const afterSet = await em.find(ObjectTag, { object: 'tsync/k' });
+    expect(afterSet.map((t) => `${t.tagKey}=${t.tagValue}`).sort()).toEqual([
+      'env=prod',
+      'team=infra',
+    ]);
+
+    // Replace semantics: a new set fully rebuilds the rows.
+    await svc.setTaggingMap('tsync', 'k', { env: 'dev' });
+    const afterReplace = await orm.em.fork().find(ObjectTag, { object: 'tsync/k' });
+    expect(afterReplace.map((t) => `${t.tagKey}=${t.tagValue}`)).toEqual(['env=dev']);
+
+    await svc.clearTaggingMap('tsync', 'k');
+    const afterClear = await orm.em.fork().find(ObjectTag, { object: 'tsync/k' });
+    expect(afterClear).toHaveLength(0);
+  });
+
+  it('case 9: deleting the object cascade-deletes its object_tags rows', async () => {
+    const repo = await seedObject('tcasc', 'k');
+    const svc = svcFor(repo);
+    await svc.setTaggingMap('tcasc', 'k', { a: '1' });
+    expect(await orm.em.fork().count(ObjectTag, { object: 'tcasc/k' })).toBe(1);
+
+    const em = orm.em.fork();
+    await em.removeAndFlush(await em.findOneOrFail(ObjectEntity, { id: 'tcasc/k' }));
+    expect(await orm.em.fork().count(ObjectTag, { object: 'tcasc/k' })).toBe(0);
   });
 });

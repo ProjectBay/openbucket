@@ -11,6 +11,7 @@ import {
   lucideKey,
   lucideLayoutDashboard,
   lucideRefreshCw,
+  lucideSearch,
   lucideSettings,
   lucideUsers,
 } from '@ng-icons/lucide';
@@ -45,6 +46,7 @@ import { SidebarConfig } from '../types';
       lucideKey,
       lucideLayoutDashboard,
       lucideRefreshCw,
+      lucideSearch,
       lucideSettings,
       lucideUsers,
     }),

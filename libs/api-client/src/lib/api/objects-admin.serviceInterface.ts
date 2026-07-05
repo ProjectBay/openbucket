@@ -16,6 +16,7 @@ import { BulkDeleteResponseDto } from '../model/models';
 import { LegalHoldDto } from '../model/models';
 import { ListObjectsResponseDto } from '../model/models';
 import { ObjectMetaDto } from '../model/models';
+import { ObjectSearchResponseDto } from '../model/models';
 import { ObjectTaggingDto } from '../model/models';
 import { ObjectVersionsResponseDto } from '../model/models';
 import { PresignRequestDto } from '../model/models';
@@ -144,6 +145,19 @@ export interface ObjectsAdminServiceInterface {
      * @param objectTaggingDto 
      */
     putObjectTagging(name: string, key: string, objectTaggingDto: ObjectTaggingDto, extraHttpRequestParams?: any): Observable<{}>;
+
+    /**
+     * 
+     * 
+     * @param q 
+     * @param mode 
+     * @param bucket 
+     * @param tagKey 
+     * @param tagValue 
+     * @param cursor 
+     * @param limit 
+     */
+    searchObjects(q: string, mode?: 'prefix' | 'contains', bucket?: string, tagKey?: string, tagValue?: string, cursor?: string, limit?: number, extraHttpRequestParams?: any): Observable<ObjectSearchResponseDto>;
 
     /**
      * 

@@ -182,6 +182,21 @@ describe('ObjectsAdminController (TEST-0412)', () => {
     expect(objects.getObject).toHaveBeenCalledWith(req, res, 'b1', 'img.png');
     expect(res.json).not.toHaveBeenCalled();
     expect(res.setHeader).not.toHaveBeenCalledWith('Content-Disposition', expect.anything());
+    // TASK-3304: previewed bytes must never be cached (multi-operator installs).
+    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+  });
+
+  it('case 6b: GET ?download does NOT set the no-store Cache-Control (attachment path)', async () => {
+    const { objects, ctrl } = build();
+    objects.head.mockResolvedValue(headRow('report.pdf'));
+    const res = mockRes();
+    const req = reqWith(objectPath('b1', 'report.pdf'), {
+      query: { download: '' } as Request['query'],
+    });
+
+    await ctrl.get('b1', req, res as unknown as Response);
+
+    expect(res.setHeader).not.toHaveBeenCalledWith('Cache-Control', expect.anything());
   });
 
   it('case 7: GET ?download sets Content-Disposition (basename) and streams', async () => {

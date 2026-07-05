@@ -27,6 +27,8 @@ import { ListObjectsResponseDto } from '../model/list-objects-response-dto';
 // @ts-ignore
 import { ObjectMetaDto } from '../model/object-meta-dto';
 // @ts-ignore
+import { ObjectSearchResponseDto } from '../model/object-search-response-dto';
+// @ts-ignore
 import { ObjectTaggingDto } from '../model/object-tagging-dto';
 // @ts-ignore
 import { ObjectVersionsResponseDto } from '../model/object-versions-response-dto';
@@ -922,6 +924,83 @@ export class ObjectsAdminService extends BaseService implements ObjectsAdminServ
             {
                 context: localVarHttpContext,
                 body: objectTaggingDto,
+                params: localVarQueryParameters,
+                responseType: <any>responseType_,
+                ...(withCredentials ? { withCredentials } : {}),
+                headers: localVarHeaders,
+                observe: observe,
+                transferCache: localVarTransferCache,
+                reportProgress: reportProgress
+            }
+        );
+    }
+
+    /**
+     * 
+     * @param q 
+     * @param mode 
+     * @param bucket 
+     * @param tagKey 
+     * @param tagValue 
+     * @param cursor 
+     * @param limit 
+     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
+     * @param reportProgress flag to report request and response progress.
+     */
+    public searchObjects(q: string, mode?: 'prefix' | 'contains', bucket?: string, tagKey?: string, tagValue?: string, cursor?: string, limit?: number, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<ObjectSearchResponseDto>;
+    public searchObjects(q: string, mode?: 'prefix' | 'contains', bucket?: string, tagKey?: string, tagValue?: string, cursor?: string, limit?: number, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<ObjectSearchResponseDto>>;
+    public searchObjects(q: string, mode?: 'prefix' | 'contains', bucket?: string, tagKey?: string, tagValue?: string, cursor?: string, limit?: number, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<ObjectSearchResponseDto>>;
+    public searchObjects(q: string, mode?: 'prefix' | 'contains', bucket?: string, tagKey?: string, tagValue?: string, cursor?: string, limit?: number, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+        if (q === null || q === undefined) {
+            throw new Error('Required parameter q was null or undefined when calling searchObjects.');
+        }
+
+        let localVarQueryParameters = new HttpParams({encoder: this.encoder});
+        localVarQueryParameters = this.addToHttpParams(localVarQueryParameters,
+          <any>q, 'q');
+        localVarQueryParameters = this.addToHttpParams(localVarQueryParameters,
+          <any>mode, 'mode');
+        localVarQueryParameters = this.addToHttpParams(localVarQueryParameters,
+          <any>bucket, 'bucket');
+        localVarQueryParameters = this.addToHttpParams(localVarQueryParameters,
+          <any>tagKey, 'tagKey');
+        localVarQueryParameters = this.addToHttpParams(localVarQueryParameters,
+          <any>tagValue, 'tagValue');
+        localVarQueryParameters = this.addToHttpParams(localVarQueryParameters,
+          <any>cursor, 'cursor');
+        localVarQueryParameters = this.addToHttpParams(localVarQueryParameters,
+          <any>limit, 'limit');
+
+        let localVarHeaders = this.defaultHeaders;
+
+        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
+            'application/json'
+        ]);
+        if (localVarHttpHeaderAcceptSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
+        }
+
+        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
+
+        const localVarTransferCache: boolean = options?.transferCache ?? true;
+
+
+        let responseType_: 'text' | 'json' | 'blob' = 'json';
+        if (localVarHttpHeaderAcceptSelected) {
+            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
+                responseType_ = 'text';
+            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
+                responseType_ = 'json';
+            } else {
+                responseType_ = 'blob';
+            }
+        }
+
+        let localVarPath = `/api/admin/objects/search`;
+        const { basePath, withCredentials } = this.configuration;
+        return this.httpClient.request<ObjectSearchResponseDto>('get', `${basePath}${localVarPath}`,
+            {
+                context: localVarHttpContext,
                 params: localVarQueryParameters,
                 responseType: <any>responseType_,
                 ...(withCredentials ? { withCredentials } : {}),

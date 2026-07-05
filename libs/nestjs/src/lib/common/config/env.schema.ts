@@ -170,6 +170,14 @@ export const EnvSchema = z
     MAX_MULTIPART_PARTS: z.coerce.number().int().positive().max(10_000).default(10_000),
     MULTIPART_TTL_HOURS: z.coerce.number().int().positive().default(24),
 
+    // --- usage analytics rollup (STORY-1102) ---
+    // How often the usage-rollup runner snapshots storage + drains request
+    // metrics. Floor 60s so a misconfig can't hammer the DB (self-inflicted DoS).
+    USAGE_ROLLUP_INTERVAL_MS: z.coerce.number().int().min(60_000).default(900_000), // 15m
+    // Retention window for sample rows; the runner prunes anything older. The
+    // sole bound on the telemetry tables' growth (EPIC-08 STORY-0704 posture).
+    USAGE_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+
     // --- storage quota / free-space guard (TASK-2140, CWE-770) ---
     // Refuse writes once the DATA_DIR volume has less than this many bytes free,
     // so a credential holder can't fill the disk shared with the SQLite metadata

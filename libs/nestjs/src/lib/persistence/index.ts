@@ -4,6 +4,7 @@
 export * from './entities/types';
 export * from './entities/bucket.entity';
 export * from './entities/object.entity';
+export * from './entities/object-tag.entity';
 export * from './entities/object-version.entity';
 export * from './entities/multipart-upload.entity';
 export * from './entities/multipart-part.entity';
@@ -15,6 +16,8 @@ export * from './entities/tiering-state.entity';
 export * from './entities/event-delivery.entity';
 export * from './entities/replication-outbox.entity';
 export * from './entities/reconcile-job.entity';
+export * from './entities/usage-sample.entity';
+export * from './entities/request-metric-sample.entity';
 export * from './repositories/bucket.repository';
 export * from './repositories/object.repository';
 export * from './repositories/admin-user.repository';

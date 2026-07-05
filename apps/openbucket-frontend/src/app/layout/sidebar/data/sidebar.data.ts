@@ -20,6 +20,12 @@ export const sidebarConfig: SidebarConfig = {
           url: '/buckets',
         }),
         createSidebarConfig.item({
+          id: 'search',
+          title: 'sidebar.storage.search',
+          icon: 'lucideSearch',
+          url: '/search',
+        }),
+        createSidebarConfig.item({
           id: 'keys',
           title: 'sidebar.storage.keys',
           icon: 'lucideKey',

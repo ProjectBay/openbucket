@@ -37,6 +37,10 @@ export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
     MAX_OBJECT_SIZE_MB: opts.limits.maxObjectSizeMb,
     MAX_MULTIPART_PARTS: opts.limits.maxMultipartParts,
     MULTIPART_TTL_HOURS: opts.limits.multipartTtlHours,
+    // Usage analytics rollup (STORY-1102). Library hosts get the env-schema
+    // defaults; the env-driven standalone path can tune them.
+    USAGE_ROLLUP_INTERVAL_MS: 900_000,
+    USAGE_RETENTION_DAYS: 90,
     // Hardening limits (TASK-2140/2141/2143/2144). Library hosts get the same
     // defaults as the env schema; they front OpenBucket with their own process
     // and can tune these via the env-driven standalone path if needed.
