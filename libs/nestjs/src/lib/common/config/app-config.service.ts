@@ -84,10 +84,32 @@ export class AppConfigService {
   get replicationBatchKeys(): number { return this.raw.get('OB_REPLICATION_BATCH_KEYS', { infer: true }); }
   get replicationLargeObjectThresholdBytes(): number { return this.raw.get('OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES', { infer: true }); }
 
+  // --- scheduled backups & retention (STORY-1203) ---
+  get scheduledBackupEnabled(): boolean { return this.raw.get('OB_SCHEDULED_BACKUP_ENABLED', { infer: true }); }
+  get scheduledBackupScope(): Env['OB_SCHEDULED_BACKUP_SCOPE'] { return this.raw.get('OB_SCHEDULED_BACKUP_SCOPE', { infer: true }); }
+  get scheduledBackupIntervalMinutes(): number | undefined { return this.raw.get('OB_SCHEDULED_BACKUP_INTERVAL_MINUTES', { infer: true }); }
+  get scheduledBackupCron(): string | undefined { return this.raw.get('OB_SCHEDULED_BACKUP_CRON', { infer: true }); }
+  get scheduledBackupDir(): string | undefined { return this.raw.get('OB_SCHEDULED_BACKUP_DIR', { infer: true }); }
+  get scheduledBackupKeepLast(): number { return this.raw.get('OB_SCHEDULED_BACKUP_KEEP_LAST', { infer: true }); }
+  get scheduledBackupMaxAgeDays(): number { return this.raw.get('OB_SCHEDULED_BACKUP_MAX_AGE_DAYS', { infer: true }); }
+  get scheduledBackupCheckIntervalMs(): number { return this.raw.get('OB_SCHEDULED_BACKUP_CHECK_INTERVAL_MS', { infer: true }); }
+  get scheduledBackupPushToReplication(): boolean { return this.raw.get('OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION', { infer: true }); }
+
+  // --- Prometheus /metrics + OpenTelemetry (STORY-1202) ---
+  get metricsMode(): Env['METRICS_MODE'] { return this.raw.get('METRICS_MODE', { infer: true }); }
+  get metricsToken(): string | undefined { return this.raw.get('METRICS_TOKEN', { infer: true }); }
+  get tracingEnabled(): boolean { return this.raw.get('OTEL_TRACING_ENABLED', { infer: true }); }
+
   // --- cold-object tiering (STORY-0901) ---
   get tierEnabled(): boolean { return this.raw.get('OPENBUCKET_TIER_ENABLED', { infer: true }); }
   get tierInlineMaxBytes(): number { return this.raw.get('OPENBUCKET_TIER_INLINE_MAX_BYTES', { infer: true }); }
   get tierReadThroughTimeoutMs(): number { return this.raw.get('OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS', { infer: true }); }
   get tierMaxConcurrentRehydrate(): number { return this.raw.get('OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE', { infer: true }); }
   get tierPresignTtlSeconds(): number { return this.raw.get('OPENBUCKET_TIER_PRESIGN_TTL_SECONDS', { infer: true }); }
+
+  // --- background integrity scrubbing (STORY-1204) ---
+  get integrityScrubEnabled(): boolean { return this.raw.get('OB_INTEGRITY_SCRUB_ENABLED', { infer: true }); }
+  get integrityScrubIntervalMs(): number { return this.raw.get('OB_INTEGRITY_SCRUB_INTERVAL_MS', { infer: true }); }
+  get integrityScrubMaxObjectsPerTick(): number { return this.raw.get('OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK', { infer: true }); }
+  get integrityScrubMaxBytesPerTick(): number { return this.raw.get('OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK', { infer: true }); }
 }

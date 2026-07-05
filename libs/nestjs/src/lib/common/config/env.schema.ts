@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CronExpressionParser } from 'cron-parser';
 
 const portNumber = z.coerce.number().int().min(1).max(65_535);
 
@@ -98,6 +99,21 @@ export const S3_BUCKET_RE = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
  * replicated bytes are object PLAINTEXT, so an http endpoint leaks contents; not
  * hard-failed because MinIO on a trusted LAN is a legitimate dev case).
  */
+/**
+ * Validate a 5-field cron expression (scheduled backups, STORY-1203). Operator
+ * boot config, not request input. Returns an error message, or `null` when the
+ * expression parses. Parsed with `cron-parser` so a malformed schedule fails
+ * fast at boot rather than silently never firing (or throwing mid-tick).
+ */
+export const validateCronExpression = (cron: string): string | null => {
+  try {
+    CronExpressionParser.parse(cron);
+    return null;
+  } catch (err) {
+    return `OB_SCHEDULED_BACKUP_CRON is not a valid cron expression: ${(err as Error).message}`;
+  }
+};
+
 export const validateReplicationEndpoint = (
   endpoint: string,
 ): { error?: string; insecure?: boolean } => {
@@ -283,6 +299,39 @@ export const EnvSchema = z
       .positive()
       .default(64 * 1024 * 1024),
 
+    // --- scheduled backups & retention (STORY-1203) ---
+    // Off by default: absence ⇒ disabled, so deployments that don't want an
+    // automatic snapshot pay nothing. When ENABLED=true exactly one of
+    // INTERVAL_MINUTES / CRON must be set (enforced by the superRefine below).
+    OB_SCHEDULED_BACKUP_ENABLED: envBoolean(false),
+    // `instance` = one whole-instance snapshot; `buckets` = one snapshot per bucket.
+    OB_SCHEDULED_BACKUP_SCOPE: z.enum(['instance', 'buckets']).default('instance'),
+    // Fixed interval between snapshots (minutes). Floor 5m so a misconfig can't
+    // hammer the disk; ceiling 30d. Mutually exclusive with CRON.
+    OB_SCHEDULED_BACKUP_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(43_200).optional(),
+    // 5-field cron schedule (validated by the superRefine below). Mutually
+    // exclusive with INTERVAL_MINUTES.
+    OB_SCHEDULED_BACKUP_CRON: z.string().optional(),
+    // Absolute snapshot directory. Defaults to `<DATA_DIR>/backups` at resolve time.
+    OB_SCHEDULED_BACKUP_DIR: z.string().optional(),
+    // Retention: keep the newest N snapshots (a hard floor — an old-but-within-N
+    // snapshot is retained regardless of age).
+    OB_SCHEDULED_BACKUP_KEEP_LAST: z.coerce.number().int().min(1).max(1_000).default(7),
+    // Retention: also keep anything younger than this many days (union with
+    // keep-last: a fresh snapshot is never deleted by the age rule).
+    OB_SCHEDULED_BACKUP_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(3_650).default(30),
+    // Fixed wake tick: how often the runner checks whether a snapshot is due.
+    // Floor 10s so a hostile-tiny value can't busy-loop the scheduler.
+    OB_SCHEDULED_BACKUP_CHECK_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .min(10_000)
+      .max(3_600_000)
+      .default(60_000),
+    // Also push each finished snapshot .zip to the replication target under a
+    // reserved prefix. A no-op (with a boot warning) when replication is disabled.
+    OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION: envBoolean(false),
+
     // --- cold-object tiering (STORY-0901) ---
     // Master switch; still a no-op unless a STORY-0900 remote target is configured.
     OPENBUCKET_TIER_ENABLED: envBoolean(false),
@@ -299,10 +348,54 @@ export const EnvSchema = z
     // TTL for presigned redirect URLs.
     OPENBUCKET_TIER_PRESIGN_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
 
+    // --- background integrity scrubbing (STORY-1204) ---
+    // Off by default: a fresh install performs zero extra disk reads / DB writes.
+    // The scrubber walks current/local objects, re-hashes each blob vs the stored
+    // sha256, and marks a per-object verdict — strictly rate-limited so it never
+    // starves request traffic.
+    OB_INTEGRITY_SCRUB_ENABLED: envBoolean(false),
+    // Tick interval (ms). Floor 1s so a misconfig can't hot-loop the scheduler.
+    OB_INTEGRITY_SCRUB_INTERVAL_MS: z.coerce.number().int().min(1_000).default(60_000),
+    // Hard per-tick object cap — bounds detection work regardless of blob sizes.
+    OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK: z.coerce.number().int().min(1).default(1_000),
+    // Per-tick byte budget: stop the tick once this many bytes have been hashed
+    // (disk-read amplification throttle). Default 1 GiB/tick.
+    OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(1_073_741_824),
+
+    // --- Prometheus /metrics scrape endpoint (STORY-1202) ---
+    // Off by default: the endpoint falls through to the S3 route and leaks no
+    // registry body. `public` serves an unauthenticated scrape (trusted network);
+    // `token` requires a bearer token (validated strong + required by the
+    // superRefine below, fail-closed — never expose metrics behind a weak token).
+    METRICS_MODE: z.enum(['off', 'public', 'token']).default('off'),
+    METRICS_TOKEN: z.string().optional(), // validated by superRefine when MODE=token
+
+    // --- OpenTelemetry tracing (STORY-1202) ---
+    // Off by default. When enabled the library wraps request handling in a span,
+    // but only if `@opentelemetry/api` (an OPTIONAL peer) is installed AND an SDK
+    // is registered — otherwise it is a hard no-op (see TracingService).
+    OTEL_TRACING_ENABLED: envBoolean(false),
+
     // --- shutdown ---
     SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
   })
   .superRefine((env, ctx) => {
+    // Cross-field: `token` mode must carry a strong bearer token (fail-closed —
+    // never expose /metrics behind a weak/empty token, CWE-521). Mirrors the
+    // webhook url/secret pairing.
+    if (env.METRICS_MODE === 'token') {
+      const tokenResult = strongSecret('METRICS_TOKEN').safeParse(env.METRICS_TOKEN);
+      if (!tokenResult.success) {
+        for (const issue of tokenResult.error.issues) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['METRICS_TOKEN'], message: issue.message });
+        }
+      }
+    }
+
     // Cross-field: when replication is enabled, the endpoint (optional for real
     // AWS but validated when present), bucket, and both credentials are required
     // together — a partial config must refuse to boot (mirrors the webhook /
@@ -331,6 +424,32 @@ export const EnvSchema = z
         const { error } = validateReplicationEndpoint(env.OB_REPLICATION_ENDPOINT);
         if (error) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['OB_REPLICATION_ENDPOINT'], message: error });
+        }
+      }
+    }
+
+    // Cross-field: when scheduled backups are enabled, exactly one of interval /
+    // cron must be set (a partial/ambiguous schedule must refuse to boot), and a
+    // cron expression must parse — fail fast at boot, never mid-tick. A
+    // push-to-replication with replication OFF is NOT a hard failure (the flag is
+    // a no-op) — the runtime factory logs a boot WARNING so an operator can toggle
+    // replication on later without being blocked here.
+    if (env.OB_SCHEDULED_BACKUP_ENABLED) {
+      const hasInterval = env.OB_SCHEDULED_BACKUP_INTERVAL_MINUTES != null;
+      const hasCron = env.OB_SCHEDULED_BACKUP_CRON != null && env.OB_SCHEDULED_BACKUP_CRON !== '';
+      if (hasInterval === hasCron) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['OB_SCHEDULED_BACKUP_CRON'],
+          message:
+            'exactly one of OB_SCHEDULED_BACKUP_INTERVAL_MINUTES or OB_SCHEDULED_BACKUP_CRON ' +
+            'must be set when OB_SCHEDULED_BACKUP_ENABLED=true',
+        });
+      }
+      if (hasCron) {
+        const cronError = validateCronExpression(env.OB_SCHEDULED_BACKUP_CRON as string);
+        if (cronError) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['OB_SCHEDULED_BACKUP_CRON'], message: cronError });
         }
       }
     }

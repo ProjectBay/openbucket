@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   S3_BUCKET_RE,
   strongSecret,
+  validateCronExpression,
   validateReplicationEndpoint,
   validateWebhookUrl,
 } from './common/config/env.schema';
@@ -119,6 +120,57 @@ export interface OpenBucketModuleOptions {
     /** Objects larger than this stream via multipart. Default 64 MiB. */
     largeObjectThresholdBytes?: number;
   };
+
+  /**
+   * Scheduled backups & retention (STORY-1203). Omit to disable — no snapshot
+   * runs and the runner is a no-op. When present, a background tick writes a
+   * `.zip` snapshot (identical to the admin download) to `dir` on the configured
+   * schedule, prunes old snapshots by the retention policy, and (optionally)
+   * pushes the snapshot to the replication target. Exactly one of `cron` /
+   * `intervalMinutes` must be set (validated at boot). NOTE: snapshots contain
+   * decrypted plaintext object bytes — `dir` inherits the data volume's trust
+   * boundary (written `0o600` under a `0o700` dir).
+   */
+  backups?: {
+    /** `instance` (default) = one whole-instance snapshot; `buckets` = one per bucket. */
+    scope?: 'instance' | 'buckets';
+    /** 5-field cron schedule — validated at boot. Mutually exclusive with `intervalMinutes`. */
+    cron?: string;
+    /** Fixed interval between snapshots (minutes). Mutually exclusive with `cron`. */
+    intervalMinutes?: number;
+    /** Absolute snapshot directory. Default `<dataDir>/backups`. */
+    dir?: string;
+    /** Keep the newest N snapshots (a hard retention floor). Default 7. */
+    keepLast?: number;
+    /** Also keep anything younger than this many days (union). Default 30. */
+    maxAgeDays?: number;
+    /** Wake tick (ms) — how often to check whether a snapshot is due. Default 60000. */
+    checkIntervalMs?: number;
+    /** Push each finished snapshot to the replication target. Default false. */
+    pushToReplication?: boolean;
+  };
+
+  /**
+   * Prometheus scrape endpoint at `<mountPath>/metrics` (STORY-1202). Default
+   * `off` — the endpoint serves nothing (falls through to the S3 route, no
+   * registry body leaked). `public` serves an unauthenticated scrape (a trusted
+   * network); `token` requires `Authorization: Bearer <token>` and the token
+   * must be strong (validated at boot).
+   */
+  metrics?: {
+    mode?: 'off' | 'public' | 'token';
+    /** Bearer token — required (and validated strong) when `mode: 'token'`. */
+    token?: string;
+  };
+
+  /**
+   * OpenTelemetry tracing (STORY-1202). Default disabled. When enabled the
+   * library wraps request handling in a span — but ONLY if the host installs
+   * `@opentelemetry/api` (an optional peer) and registers an SDK; otherwise it
+   * is a hard no-op. The library never hard-depends on any `@opentelemetry/*`
+   * package.
+   */
+  tracing?: { enabled?: boolean };
 }
 
 /** Async variant for DI'd secrets (e.g. from the host's ConfigService). */
@@ -187,6 +239,23 @@ export interface ResolvedOpenBucketOptions {
     batchKeys?: number;
     largeObjectThresholdBytes?: number;
   };
+  backups?: {
+    scope?: 'instance' | 'buckets';
+    cron?: string;
+    intervalMinutes?: number;
+    dir?: string;
+    keepLast?: number;
+    maxAgeDays?: number;
+    checkIntervalMs?: number;
+    pushToReplication?: boolean;
+  };
+  metrics: {
+    mode: 'off' | 'public' | 'token';
+    token?: string;
+  };
+  tracing: {
+    enabled: boolean;
+  };
 }
 
 const DEFAULT_MOUNT = '/storage';
@@ -251,6 +320,22 @@ export function resolveOptions(o: OpenBucketModuleOptions): ResolvedOpenBucketOp
           return o.replication;
         })()
       : undefined,
+    // Scheduled backups (STORY-1203). Passed through as-is (numeric defaults +
+    // the `<dataDir>/backups` default dir are applied in config-source when
+    // mapping to the env-shaped config). `undefined` keeps backups disabled. The
+    // cron/interval mutual-exclusion + cron syntax are enforced by
+    // `validateSecurityCriticalOptions` so an embedder gets the same fail-fast.
+    backups: o.backups,
+    // Prometheus /metrics (STORY-1202). Default `off`; the token (when mode is
+    // `token`) is format-validated by `validateSecurityCriticalOptions`.
+    metrics: {
+      mode: o.metrics?.mode ?? 'off',
+      token: o.metrics?.token,
+    },
+    // OpenTelemetry tracing (STORY-1202). Default disabled.
+    tracing: {
+      enabled: o.tracing?.enabled ?? false,
+    },
   };
 }
 
@@ -315,6 +400,49 @@ export function validateSecurityCriticalOptions(o: ResolvedOpenBucketOptions): v
           }),
       })
       .optional(),
+    // Scheduled backups (STORY-1203): exactly one of cron / intervalMinutes,
+    // and a cron expression must parse — same fail-fast boot guarantee the
+    // standalone env schema gives (never a schedule that silently never fires or
+    // throws mid-tick).
+    backups: z
+      .object({
+        cron: z.string().optional(),
+        intervalMinutes: z.number().int().min(5).max(43_200).optional(),
+      })
+      .passthrough()
+      .superRefine((b, ctx) => {
+        const hasInterval = b.intervalMinutes != null;
+        const hasCron = typeof b.cron === 'string' && b.cron !== '';
+        if (hasInterval === hasCron) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'exactly one of `backups.cron` or `backups.intervalMinutes` must be set',
+          });
+        }
+        if (hasCron) {
+          const err = validateCronExpression(b.cron as string);
+          if (err) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['cron'], message: err });
+        }
+      })
+      .optional(),
+    // Prometheus /metrics (STORY-1202): a `token` mode must carry a strong
+    // bearer token — same fail-closed contract as admin.jwtSecret /
+    // webhooks.secret. A `token` mode with a weak/empty token must fail at boot,
+    // not silently expose metrics.
+    metrics: z
+      .object({
+        mode: z.enum(['off', 'public', 'token']),
+        token: z.string().optional(),
+      })
+      .superRefine((m, ctx) => {
+        if (m.mode !== 'token') return;
+        const result = strongSecret('metrics.token').safeParse(m.token);
+        if (!result.success) {
+          for (const issue of result.error.issues) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['token'], message: issue.message });
+          }
+        }
+      }),
   });
   const result = schema.safeParse(o);
   if (!result.success) {

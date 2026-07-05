@@ -3,6 +3,7 @@ import { EntityRepository } from '@mikro-orm/libsql';
 
 import { ObjectEntity } from '../entities/object.entity';
 import { ObjectVersion } from '../entities/object-version.entity';
+import { IntegrityStatus, ObjectLocation } from '../entities/types';
 
 export interface ListPage {
   items: ObjectEntity[];
@@ -231,6 +232,72 @@ export class ObjectRepository extends EntityRepository<ObjectEntity> {
       objectCount: Number(r.objectCount),
       sizeBytes: Number(r.sizeBytes),
     }));
+  }
+
+  /**
+   * One page of objects for the background integrity scrubber (STORY-1204),
+   * paged by a keyset cursor over `(bucket, key)` — the SAME indexed range scan
+   * the tiering/reconcile runners use, never a `LIKE` or `OFFSET`. Only rows the
+   * scrubber can actually re-hash locally are returned:
+   *   - `softDeleted = false`      — the current, live pointer row;
+   *   - `location = 'local'`       — tiered objects live on the remote and are
+   *                                  re-verified on rehydrate, so they're excluded;
+   *   - `contentSha256 IS NOT NULL`— pre-F1 writes carry no stored digest and are
+   *                                  skipped (never marked corrupt).
+   * `populate: ['bucket']` so the runner can read `o.bucket.name` + `o.encryption`
+   * without an extra query per object. Requests exactly `limit` rows in
+   * `(bucket, key)` order; the caller advances the cursor from the last row.
+   */
+  async scanForScrub(input: {
+    afterBucket?: string;
+    afterKey?: string;
+    limit: number;
+  }): Promise<ObjectEntity[]> {
+    const where: Record<string, unknown> = {
+      softDeleted: false,
+      location: ObjectLocation.Local,
+      contentSha256: { $ne: null },
+    };
+
+    if (input.afterBucket !== undefined && input.afterKey !== undefined) {
+      // Row strictly after (afterBucket, afterKey) in (bucket, key) order.
+      where.$or = [
+        { bucket: { name: { $gt: input.afterBucket } } },
+        {
+          $and: [
+            { bucket: { name: input.afterBucket } },
+            { key: { $gt: input.afterKey } },
+          ],
+        },
+      ];
+    }
+
+    return this.find(where, {
+      populate: ['bucket'],
+      orderBy: { bucket: { name: 'ASC' }, key: 'ASC' },
+      limit: input.limit,
+    });
+  }
+
+  /**
+   * The paged corrupt-object list for the admin integrity surface (STORY-1204).
+   * `WHERE integrity_status = 'corrupt'` rides `ix_objects_integrity`. Bounded by
+   * `limit`/`offset` (the DTO caps `limit`) so the admin route can't be turned
+   * into an unbounded scan. Returns the rows plus the total corrupt count so the
+   * UI can paginate.
+   */
+  async listCorrupt(input: {
+    limit: number;
+    offset: number;
+  }): Promise<{ rows: ObjectEntity[]; total: number }> {
+    const where = { integrityStatus: IntegrityStatus.Corrupt };
+    const [rows, total] = await this.findAndCount(where, {
+      populate: ['bucket'],
+      orderBy: { integrityCheckedAt: 'DESC', bucket: 'ASC', key: 'ASC' },
+      limit: input.limit,
+      offset: input.offset,
+    });
+    return { rows, total };
   }
 
   /** Returns the most recent version row for (bucket, key). */

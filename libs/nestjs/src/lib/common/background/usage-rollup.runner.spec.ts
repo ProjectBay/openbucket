@@ -9,20 +9,45 @@ import { UsageSample } from '../../persistence/entities/usage-sample.entity';
 import { RequestMetricSample } from '../../persistence/entities/request-metric-sample.entity';
 import { ObjectRepository } from '../../persistence/repositories/object.repository';
 import type { BucketService } from '../../domain/buckets/bucket.service';
+import type { ReplicationStatusService } from '../../domain/replication/replication-status.service';
+import type { ReplicationConfig } from '../../storage/replication/replication-config';
 import type { AppConfigService } from '../config/app-config.service';
 import type { Clock } from '../clock/clock';
 import { RequestMetricsService } from '../metrics/request-metrics.service';
+import { buildPromMetrics, type PromMetrics } from '../metrics/metrics.registry';
 import { UsageRollupRunner } from './usage-rollup.runner';
 
 const DAY = 86_400_000;
 const NOW = 1_800_000_000_000;
 
-/** TEST-1102 (cases 2, 4, 5) — aggregateByBucket + UsageRollupRunner. */
-describe('UsageRollupRunner (TEST-1102)', () => {
+/** Read a per-`bucket` gauge into a plain `{ bucket: value }` map. */
+async function gaugeMap(gauge: PromMetrics['storageBytes']): Promise<Record<string, number>> {
+  const { values } = await gauge.get();
+  const out: Record<string, number> = {};
+  for (const v of values) out[String(v.labels.bucket)] = v.value;
+  return out;
+}
+
+/** Read a per-`status` gauge into a plain `{ status: value }` map. */
+async function statusMap(
+  gauge: PromMetrics['replicationOutboxDepth'],
+): Promise<Record<string, number>> {
+  const { values } = await gauge.get();
+  const out: Record<string, number> = {};
+  for (const v of values) out[String(v.labels.status)] = v.value;
+  return out;
+}
+
+/** TEST-1102 / TEST-1202 — aggregateByBucket + UsageRollupRunner (samples + gauges). */
+describe('UsageRollupRunner (TEST-1102 / TEST-1202)', () => {
   let orm: MikroORM;
   let metrics: RequestMetricsService;
+  let prom: PromMetrics;
   let clockNow: number;
   let runner: UsageRollupRunner;
+  let bucketNames: string[];
+  let replicationEnabled: boolean;
+  let getStatusCalls: number;
 
   const repo = (): ObjectRepository =>
     orm.em.fork().getRepository(ObjectEntity) as unknown as ObjectRepository;
@@ -53,12 +78,41 @@ describe('UsageRollupRunner (TEST-1102)', () => {
     await seed.flush();
 
     metrics = new RequestMetricsService();
+    prom = buildPromMetrics();
     clockNow = NOW;
+    bucketNames = ['b1', 'empty1'];
+    replicationEnabled = false;
+    getStatusCalls = 0;
+
     const clock = { nowMs: () => clockNow } as unknown as Clock;
     const config = { usageRollupIntervalMs: 900_000, usageRetentionDays: 90 } as AppConfigService;
     const buckets = {
-      list: async () => [{ name: 'b1' }, { name: 'empty1' }],
+      list: async () => bucketNames.map((name) => ({ name })),
     } as unknown as BucketService;
+    const replicationConfig = {
+      get enabled() {
+        return replicationEnabled;
+      },
+    } as ReplicationConfig;
+    const replicationStatus = {
+      getStatus: async () => {
+        getStatusCalls += 1;
+        return { pendingCount: 3, inflightCount: 2, failedCount: 1 };
+      },
+    } as unknown as ReplicationStatusService;
+    const integrityStatus = {
+      getStatus: async () => ({
+        enabled: false,
+        scanned: 0,
+        ok: 0,
+        corrupt: 0,
+        unchecked: 0,
+        repaired: 0,
+        lastRunAt: null,
+        cursor: null,
+      }),
+    } as unknown as import('../../domain/integrity/integrity-status.service').IntegrityStatusService;
+
     runner = new UsageRollupRunner(
       orm.em as EntityManager,
       buckets,
@@ -66,6 +120,10 @@ describe('UsageRollupRunner (TEST-1102)', () => {
       metrics,
       config,
       clock,
+      prom,
+      replicationStatus,
+      replicationConfig,
+      integrityStatus,
     );
   }, 60_000);
 
@@ -116,6 +174,46 @@ describe('UsageRollupRunner (TEST-1102)', () => {
     });
   });
 
+  it('run() sets the storage/object-count gauges from the same tick data', async () => {
+    // (gauge state carried from the previous run() — same seed numbers)
+    expect(await gaugeMap(prom.storageBytes)).toEqual({ b1: 300, empty1: 0 });
+    expect(await gaugeMap(prom.objectCount)).toEqual({ b1: 2, empty1: 0 });
+  });
+
+  it('replication disabled → depth gauges all zero and no status query issued', async () => {
+    expect(await statusMap(prom.replicationOutboxDepth)).toEqual({
+      pending: 0,
+      inflight: 0,
+      failed: 0,
+    });
+    expect(getStatusCalls).toBe(0);
+  });
+
+  it('deleting a bucket and running a tick evicts its gauge series (reconcileGauge)', async () => {
+    // Drop empty1 from the live bucket list and re-run.
+    bucketNames = ['b1'];
+    await runner.run();
+
+    const storage = await gaugeMap(prom.storageBytes);
+    const counts = await gaugeMap(prom.objectCount);
+    expect(storage).toEqual({ b1: 300 });
+    expect(counts).toEqual({ b1: 2 });
+    expect(storage).not.toHaveProperty('empty1');
+    expect(counts).not.toHaveProperty('empty1');
+  });
+
+  it('replication enabled → depth gauges reflect getStatus counts', async () => {
+    replicationEnabled = true;
+    await runner.run();
+
+    expect(await statusMap(prom.replicationOutboxDepth)).toEqual({
+      pending: 3,
+      inflight: 2,
+      failed: 1,
+    });
+    expect(getStatusCalls).toBe(1);
+  });
+
   it('a later run() past the retention window prunes the earlier batch', async () => {
     // Advance the clock 91 days (> 90d retention) and run again.
     clockNow = NOW + 91 * DAY;
@@ -123,8 +221,8 @@ describe('UsageRollupRunner (TEST-1102)', () => {
 
     const em = orm.em.fork();
     const usage = await em.find(UsageSample, {}, { orderBy: { sampledAt: 'ASC' } });
-    // Only the new tick's two rows remain; the first batch was pruned.
-    expect(usage).toHaveLength(2);
+    // Only the new tick's row remains (bucketNames is now just b1); earlier pruned.
+    expect(usage).toHaveLength(1);
     for (const u of usage) expect(u.sampledAt.getTime()).toBe(clockNow);
 
     const reqs = await em.find(RequestMetricSample, {});

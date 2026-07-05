@@ -35,6 +35,7 @@ import { KeysListComponent } from '../keys/keys-list.component';
 import { AdminUsersListComponent } from '../users/admin-users-list.component';
 import { BackupRestoreComponent } from '../backup-restore/backup-restore.component';
 import { ReplicationComponent } from '../replication/replication.component';
+import { IntegrityComponent } from '../integrity/integrity.component';
 import { AuditLogComponent } from '../audit/audit-log.component';
 
 /**
@@ -62,6 +63,7 @@ import { AuditLogComponent } from '../audit/audit-log.component';
     AdminUsersListComponent,
     BackupRestoreComponent,
     ReplicationComponent,
+    IntegrityComponent,
     AuditLogComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -199,6 +201,10 @@ import { AuditLogComponent } from '../audit/audit-log.component';
           <ob-replication />
         }
 
+        @case ('integrity') {
+          <ob-integrity />
+        }
+
         @case ('audit') {
           <ob-audit-log />
         }
@@ -224,6 +230,7 @@ export class SettingsComponent implements OnInit {
       { id: 'users', label: 'sidebar.admin.users' },
       { id: 'backup-restore', label: 'backupRestore.title' },
       { id: 'replication', label: 'replication.title' },
+      { id: 'integrity', label: 'integrity.title' },
       { id: 'audit', label: 'sidebar.admin.audit' },
     ];
     return this.auth.isFullAdmin() ? base : base.filter((t) => t.id !== 'users');

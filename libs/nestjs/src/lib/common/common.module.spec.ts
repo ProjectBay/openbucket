@@ -6,6 +6,8 @@ import { ConfigModule as AppConfigInternalModule } from './config/config.module'
 import { GlobalExceptionFilter } from './filters/global-exception.filter';
 import { ShutdownTrackerInterceptor } from './interceptors/shutdown-tracker.interceptor';
 import { RequestMetricsInterceptor } from './interceptors/request-metrics.interceptor';
+import { MetricsModule } from './metrics/metrics.module';
+import { TracingModule } from './tracing/tracing.module';
 import { RequestClassifierMiddleware } from './middleware/request-classifier.middleware';
 import { RequestIdMiddleware } from './middleware/request-id.middleware';
 
@@ -25,10 +27,14 @@ function byToken(token: unknown): unknown[] {
 }
 
 describe('CommonModule', () => {
-  it('case 1: imports exactly AppConfigInternalModule', () => {
+  it('case 1: imports AppConfigInternalModule + the @Global Metrics/Tracing modules', () => {
     const imports = (Reflect.getMetadata('imports', CommonModule) ?? []) as unknown[];
     expect(imports).toContain(AppConfigInternalModule);
-    expect(imports).toHaveLength(1);
+    // STORY-1202: the @Global metrics + tracing modules are imported so the
+    // request-metrics interceptor can inject PROM_METRICS / TracingService.
+    expect(imports).toContain(MetricsModule);
+    expect(imports).toContain(TracingModule);
+    expect(imports).toHaveLength(3);
   });
 
   it('case 2: APP_FILTER is the single GlobalExceptionFilter dispatcher', () => {

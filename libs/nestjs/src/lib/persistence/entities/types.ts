@@ -35,6 +35,19 @@ export enum ObjectLocation {
 /** The storage classes a lifecycle transition may move an object to. */
 export type TransitionStorageClass = 'STANDARD_IA' | 'GLACIER' | 'DEEP_ARCHIVE';
 
+/**
+ * Per-object integrity verdict from the background scrubber (STORY-1204). Every
+ * pre-existing row defaults to `Unchecked` until the scrub reaches it; the
+ * scrubber flips it to `Ok` (re-hash matched the stored `contentSha256`) or
+ * `Corrupt` (bit-rot / tampering at rest). A repair from the replication target
+ * flips a `Corrupt` row back to `Ok`.
+ */
+export enum IntegrityStatus {
+  Unchecked = 'unchecked',
+  Ok = 'ok',
+  Corrupt = 'corrupt',
+}
+
 export interface ObjectLockBucketConfig {
   enabled: boolean;
   mode?: ObjectLockMode;

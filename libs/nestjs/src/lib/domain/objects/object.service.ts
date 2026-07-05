@@ -1,5 +1,4 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
-import { createHash } from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
 import { raw, type EntityManager } from '@mikro-orm/core';
 import type { Request, Response } from 'express';
@@ -19,6 +18,7 @@ import {
 import { TieringService } from '../tiering/tiering.service';
 
 import { BlobStore } from '../../storage/blob-store';
+import { IntegrityVerifier } from '../../storage/integrity-verifier.service';
 import { ObjectWriterService } from '../../storage/object-writer.service';
 import { ObjectEventsService } from '../../events/object-events.service';
 import { OBJECT_EVENTS, type ObjectEvent } from '../../events/object-event.types';
@@ -228,6 +228,12 @@ export class ObjectService {
     // cold-object tiering. @Optional so existing tests construct ObjectService
     // without it; when absent every object is treated as LOCAL (no behaviour change).
     @Optional() private readonly tiering?: TieringService,
+    // Optional (STORY-1204): the shared re-hashing core the read gate and the
+    // background scrubber both use. @Optional so the many positional
+    // `new ObjectService(...)` unit tests need no change — when absent
+    // verifyBlobIntegrity constructs an equivalent verifier from its own
+    // BlobStore + SseKeyService (identical F1 behaviour).
+    @Optional() private readonly integrityVerifier?: IntegrityVerifier,
   ) {}
 
   /**
@@ -770,27 +776,21 @@ export class ObjectService {
     expectedSha256: string,
     encryption?: { iv: string },
   ): Promise<void> {
-    let stream: import('node:fs').ReadStream;
+    // Delegate the hashing core to the shared IntegrityVerifier (STORY-1204) so
+    // the read gate and the background scrubber can never drift. Preserve the
+    // exact F1 contract here: ENOENT → NoSuchKey, a mismatch → the same logged
+    // 500 (corruption is never served as bytes).
+    const verifier = this.integrityVerifier ?? new IntegrityVerifier(this.blobs, this.sseKey);
+    let result: { ok: boolean; actualSha256: string };
     try {
-      ({ stream } = await this.blobs.getBlob(bucket, key));
+      result = await verifier.verify(bucket, key, expectedSha256, { encryption });
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') throw new NoSuchKeyError(key);
       throw err;
     }
-    const sha = createHash('sha256');
-    const plaintext: NodeJS.ReadableStream = encryption
-      ? stream.pipe(createSseDecipher(this.sseKey.key(), Buffer.from(encryption.iv, 'base64')))
-      : stream;
-    await new Promise<void>((resolve, reject) => {
-      plaintext.on('data', (c: Buffer) => sha.update(c));
-      plaintext.on('end', () => resolve());
-      plaintext.on('error', reject);
-      if (plaintext !== stream) stream.on('error', reject);
-    });
-    const actual = sha.digest('hex');
-    if (actual !== expectedSha256) {
+    if (!result.ok) {
       new Logger('ObjectService').error(
-        `integrity check FAILED for ${bucket}/${key}: on-disk sha256=${actual} != stored ${expectedSha256} (corrupted at rest)`,
+        `integrity check FAILED for ${bucket}/${key}: on-disk sha256=${result.actualSha256} != stored ${expectedSha256} (corrupted at rest)`,
       );
       throw new InternalError();
     }

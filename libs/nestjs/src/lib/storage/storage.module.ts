@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { BlobStore } from './blob-store';
 import { DerivativeCacheService } from './derivative-cache.service';
 import { FreeSpaceService } from './free-space.service';
+import { IntegrityRepairService } from './integrity-repair.service';
+import { IntegrityVerifier } from './integrity-verifier.service';
 import { KeyService } from './key.service';
 import { ObjectWriterService } from './object-writer.service';
 import { RecoveryService } from './recovery.service';
@@ -17,7 +19,7 @@ import { SecretCipher } from '../domain/keys/secret-cipher';
  * and VersionStoreService (§3.11, STORY-0213).
  */
 @Module({
-  providers: [BlobStore, DerivativeCacheService, FreeSpaceService, ObjectWriterService, RecoveryService, KeyService, SseKeyService, VersionStoreService, SecretCipher],
-  exports: [BlobStore, DerivativeCacheService, FreeSpaceService, ObjectWriterService, RecoveryService, KeyService, SseKeyService, VersionStoreService, SecretCipher],
+  providers: [BlobStore, DerivativeCacheService, FreeSpaceService, IntegrityVerifier, IntegrityRepairService, ObjectWriterService, RecoveryService, KeyService, SseKeyService, VersionStoreService, SecretCipher],
+  exports: [BlobStore, DerivativeCacheService, FreeSpaceService, IntegrityVerifier, IntegrityRepairService, ObjectWriterService, RecoveryService, KeyService, SseKeyService, VersionStoreService, SecretCipher],
 })
 export class StorageModule {}

@@ -17,6 +17,8 @@ import { Migration20260702000001_event_deliveries } from './migrations/Migration
 import { Migration20260710000001_replication_outbox } from './migrations/Migration20260710000001_replication_outbox';
 import { Migration20260711000001_object_tiering } from './migrations/Migration20260711000001_object_tiering';
 import { Migration20260712000001_reconcile_job } from './migrations/Migration20260712000001_reconcile_job';
+import { Migration20260716000001_object_integrity } from './migrations/Migration20260716000001_object_integrity';
+import { Migration20260716000002_scrub_state } from './migrations/Migration20260716000002_scrub_state';
 import { Migration20260704000001_access_key_scope } from './migrations/Migration20260704000001_access_key_scope';
 import { Migration20260704000001_admin_user_roles } from './migrations/Migration20260704000001_admin_user_roles';
 import { Migration20260704000001_object_tags_index } from './migrations/Migration20260704000001_object_tags_index';
@@ -37,6 +39,7 @@ import {
   EventDeliveryEntity,
   ReplicationOutbox,
   ReconcileJob,
+  ScrubState,
   UsageSample,
   RequestMetricSample,
   AuditLog,
@@ -65,6 +68,7 @@ const ENTITIES = [
   EventDeliveryEntity,
   ReplicationOutbox,
   ReconcileJob,
+  ScrubState,
   UsageSample,
   RequestMetricSample,
   AuditLog,
@@ -164,6 +168,14 @@ const ENTITIES = [
             {
               name: 'Migration20260712000001_reconcile_job',
               class: Migration20260712000001_reconcile_job,
+            },
+            {
+              name: 'Migration20260716000001_object_integrity',
+              class: Migration20260716000001_object_integrity,
+            },
+            {
+              name: 'Migration20260716000002_scrub_state',
+              class: Migration20260716000002_scrub_state,
             },
             {
               name: 'Migration20260704000001_access_key_scope',

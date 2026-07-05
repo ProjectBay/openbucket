@@ -55,6 +55,7 @@ must not allocate outside their range.
 | EPIC-10  | STORY-0900..0999     | TASK-2700..2999      | TEST-0900..0999      |
 | EPIC-11  | STORY-1000..1099     | TASK-3000..3299      | TEST-1000..1099      |
 | EPIC-12  | STORY-1100..1199     | TASK-3300..3599      | TEST-1100..1199      |
+| EPIC-13  | STORY-1200..1299     | TASK-3600..3899      | TEST-1200..1299      |
 
 If an agent exhausts its range, stop and raise a gap — do not encroach.
 

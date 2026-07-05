@@ -154,6 +154,66 @@ row is stored, any secret-looking field (`/secret|password|hash|token|authorizat
 is stripped and the JSON `detail` is dropped if it exceeds ~2 KiB (defense-in-depth;
 the v1 catalogue never carries secrets). Read-only `GET`s are **not** audited.
 
+### Prometheus metrics & OpenTelemetry
+
+A Prometheus scrape endpoint is served at `<mountPath>/metrics` (text exposition
+format `0.0.4`). It is **off by default** — enable it via the `metrics` option:
+
+```ts
+OpenBucketModule.forRoot({
+  // …
+  metrics: {
+    mode: 'token',        // 'off' (default) | 'public' | 'token'
+    token: process.env.METRICS_TOKEN, // required + validated strong when mode: 'token'
+  },
+  tracing: { enabled: false }, // OpenTelemetry (see below)
+});
+```
+
+Standalone / env: `METRICS_MODE=off|public|token`, `METRICS_TOKEN=…`.
+
+- **`off`** — the route is not served (falls through to the S3 route; no registry
+  body is ever leaked).
+- **`public`** — an unauthenticated scrape (the intended default on a trusted
+  network / an internal Prometheus).
+- **`token`** — requires `Authorization: Bearer <token>`; the token is compared in
+  **constant time** (`crypto.timingSafeEqual`) and must be strong (the app
+  **refuses to boot** with a weak/empty token in `token` mode). The token is never
+  logged (redacted with the rest of `authorization`).
+
+The `/metrics` request skips SigV4 verification (the classifier tags it
+`admin`-kind), and its route is mapped **before** the greedy S3 `:bucket` route so
+a bucket literally named `metrics` can't shadow it.
+
+Exported families (all with **bounded** label cardinality — never a raw URL,
+object key, bucket beyond its public name, or client IP; CWE-770):
+
+| Metric | Type | Labels |
+| --- | --- | --- |
+| `openbucket_http_requests_total` | counter | `surface`, `method`, `route_class`, `status_class` |
+| `openbucket_http_request_duration_seconds` | histogram | same as above |
+| `openbucket_s3_operations_total` | counter | `operation` (the finite S3 op names) |
+| `openbucket_storage_bytes` | gauge | `bucket` |
+| `openbucket_object_count` | gauge | `bucket` |
+| `openbucket_replication_outbox_depth` | gauge | `status` (`pending`/`inflight`/`failed`) |
+| `openbucket_process_*` / `openbucket_nodejs_*` | default | — |
+
+HTTP counters/histograms are live immediately (recorded by the single global
+request interceptor). The gauges are refreshed on the **usage-rollup** tick
+(`USAGE_ROLLUP_INTERVAL_MS`, default 15 min) from the same in-memory aggregate the
+analytics rollup already computes — so a scrape never runs a query — and a deleted
+bucket's series is evicted on the next tick. Host apps that want to scrape the
+registry directly can inject `PROM_METRICS` / `METRICS_REGISTRY`.
+
+**Tracing** — `tracing: { enabled: true }` (env `OTEL_TRACING_ENABLED=true`) wraps
+each request in an OpenTelemetry span named by `surface`/`route_class` with only
+bounded attributes (`http.method`, `route_class`, `surface`). The library **never
+hard-depends** on any `@opentelemetry/*` package: it resolves `@opentelemetry/api`
+dynamically and is a genuine **no-op** unless you install `@opentelemetry/api` *and*
+register an SDK (`trace.setGlobalTracerProvider(...)`). If tracing is enabled but the
+api is absent, it logs one boot warning and no-ops (fail-open — tracing is
+non-critical telemetry).
+
 ## Async configuration
 
 For secrets resolved at runtime (e.g. from the host's `ConfigService`). Note
@@ -574,6 +634,102 @@ Notes:
 - Your app’s multipart parsing is independent of OpenBucket — its S3 routes mount
   under `mountPath` and handle their own request bodies.
 
+#### One-line wiring: the multer storage engine
+
+If your app already uses `FileInterceptor`, swap its storage for OpenBucket — the
+file streams **straight into the store** (no temp file, no `file.buffer`, no
+explicit `uploadFrom` call). The engine sniffs + validates + picks a safe key,
+then merges the committed `{ bucket, key, url, etag, size, contentType }` onto the
+file, which `@UploadedToBucket()` hands your handler. These three symbols ship
+behind the dedicated **`@openbucket/nestjs/multer`** subpath export (`multer` is an
+_optional_ peer, already present via `@nestjs/platform-express` — headless hosts
+that never import this subpath never pull it in):
+
+```ts
+import { Controller, Post, UseFilters, UseInterceptors } from '@nestjs/common';
+import {
+  UploadedToBucket,
+  UploadValidationExceptionFilter,
+  type UploadedFileInfo,
+} from '@openbucket/nestjs/multer';
+import { OpenBucketFileInterceptor } from './open-bucket-file.interceptor'; // ← below
+
+@Controller('files')
+@UseFilters(UploadValidationExceptionFilter) // maps a rejected upload → HTTP 400
+export class FilesController {
+  @Post()
+  @UseInterceptors(
+    OpenBucketFileInterceptor('file', {
+      bucket: 'uploads',
+      key: 'uuid', // built-in strategy, OR a (req, file) => string function (always assertSafeKey-guarded)
+      validate: { maxBytes: 10 * 1024 * 1024, allowedContentTypes: ['image/*'] },
+    }),
+  )
+  upload(@UploadedToBucket() file: UploadedFileInfo) {
+    // Already committed to OpenBucket — persist the STABLE key (not the signed url).
+    return { key: file.key, contentType: file.contentType, size: file.size };
+  }
+}
+```
+
+**The `this.ob` caveat.** `openBucketStorage` needs the `OpenBucketService`
+_instance_, but inside a class-property `@UseInterceptors(...)` decorator `this`
+is not available at decoration time. The DI-friendly fix is a tiny `mixin`
+interceptor that receives `ob` from the container and builds the storage engine at
+construction — define it once and reuse it everywhere:
+
+```ts
+// open-bucket-file.interceptor.ts
+import {
+  Injectable,
+  mixin,
+  type NestInterceptor,
+  type Type,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { OpenBucketService } from '@openbucket/nestjs';
+import { openBucketStorage, type OpenBucketStorageOptions } from '@openbucket/nestjs/multer';
+
+/** A `FileInterceptor` whose storage is a DI-resolved OpenBucket engine. */
+export function OpenBucketFileInterceptor(
+  field: string,
+  opts: OpenBucketStorageOptions,
+): Type<NestInterceptor> {
+  @Injectable()
+  class OpenBucketInterceptor implements NestInterceptor {
+    private readonly delegate: NestInterceptor;
+    constructor(ob: OpenBucketService) {
+      const Base = FileInterceptor(field, { storage: openBucketStorage(ob, opts) });
+      this.delegate = new Base();
+    }
+    intercept(...args: Parameters<NestInterceptor['intercept']>) {
+      return this.delegate.intercept(...args);
+    }
+  }
+  return mixin(OpenBucketInterceptor);
+}
+```
+
+Notes:
+
+- **Rejected uploads → 400.** With `@UseFilters(UploadValidationExceptionFilter)`
+  a too-large / disallowed-type / active-content / unsafe-key upload renders a
+  stable `{ statusCode: 400, error: 'Bad Request', code, message }` body instead of
+  an opaque `500`. Register it per-controller (above) or globally
+  (`app.useGlobalFilters(new UploadValidationExceptionFilter())`). It is scoped by
+  `@Catch(UploadValidationError)`, so an S3 error like `NoSuchBucketError` (absent
+  bucket) is **not** swallowed — make sure the bucket exists (step 1 above).
+- **Key safety.** Pass `key` as a built-in strategy name or a `(req, file) => string`
+  function (e.g. `(req) => `tenant/${req.user.id}/${randomUUID()}`); either way the
+  derived key is routed through `assertSafeKey`, so a `../evil` / control-char key
+  is rejected — a raw, unsanitized key string is never used verbatim.
+- **Store the key, presign on read.** The engine attaches a `url`, but the robust
+  default is still to persist the stable `{ bucket, key }` and mint a fresh
+  `presignGetUrl(...)` on read (the `#toDto` pattern above) — no expiry to babysit.
+- For an array of files use `FilesInterceptor` inside the same mixin and read a
+  `UploadedFileInfo[]` via `@UploadedToBucket()`; for a `FileFieldsInterceptor`
+  pass a field name, `@UploadedToBucket('avatar')`.
+
 ## Options
 
 | Option | Required | Default | Notes |
@@ -587,6 +743,9 @@ Notes:
 | `admin` | | — | **Omit to disable the admin surface entirely** (headless S3-only). When present: `{ username, passwordHash (argon2id), jwtSecret, serveUi?, jwtAccessTtl?, jwtRefreshTtl? }` — `username`/`passwordHash`/`jwtSecret` are all required. |
 | `limits` | | | `{ maxObjectSizeMb?, maxMultipartParts?, multipartTtlHours? }`. |
 | `replication` | | — | **Omit to disable.** Async one-way replication to an external S3-compatible target — see [Async replication](#async-replication-to-an-external-s3-target). |
+| `backups` | | — | **Omit to disable.** Scheduled `.zip` snapshots + retention — see [Scheduled backups](#scheduled-backups--retention). `{ scope?, cron?, intervalMinutes?, dir?, keepLast?, maxAgeDays?, checkIntervalMs?, pushToReplication? }`; exactly one of `cron`/`intervalMinutes` (validated at boot). |
+| `metrics` | | `{ mode: 'off' }` | Prometheus `/metrics` endpoint: `{ mode: 'off'\|'public'\|'token', token? }`. `token` requires a strong `token` (validated at boot). See [Prometheus metrics & OpenTelemetry](#prometheus-metrics--opentelemetry). |
+| `tracing` | | `{ enabled: false }` | OpenTelemetry span-per-request. No-op unless `@opentelemetry/api` + an SDK are installed. |
 
 `forRootAsync` adds two **static** options alongside `useFactory`/`inject`:
 `serveUi?` (default `true`) and `admin?` (default `true` — set `false` for headless).
@@ -701,6 +860,68 @@ The admin console surfaces this at **/replication**: health stat cards (pending,
 lag, failed), a per-bucket table, and a confirm-guarded "Reconcile" action that
 starts a job and polls it to completion.
 
+## Scheduled backups & retention
+
+Beyond the on-demand backup/restore endpoints, OpenBucket can write **`.zip`
+snapshots on a schedule** and prune them by a retention policy. A snapshot is the
+exact same archive as the admin download (identical `manifest.json` v1 + per-object
+data entries), written through the shared read path — so a scheduled snapshot and a
+manual download are byte-for-byte the same format.
+
+```ts
+OpenBucketModule.forRoot({
+  dataDir: '/data',
+  rootCredentials: { /* … */ },
+  backups: {
+    scope: 'instance',        // or 'buckets' — one snapshot per bucket
+    intervalMinutes: 1440,    // OR cron: '0 3 * * *' (exactly one; validated at boot)
+    dir: '/data/backups',     // default <dataDir>/backups
+    keepLast: 7,              // retention floor: keep the newest N
+    maxAgeDays: 30,           // union: also keep anything younger than this
+    pushToReplication: false, // also push each .zip to the replication target
+  },
+});
+```
+
+Behaviour and guarantees:
+
+- **Runs on the background tick.** A `checkIntervalMs` wake tick (default 60s) asks
+  "is a snapshot due?" from the cron/interval schedule plus a filesystem-persisted
+  last-run marker (`<dir>/state.json`) — no DB table or migration, so the feature
+  stays embeddable. A schedule change takes effect immediately (`nextRunAt` is
+  computed on read, never stored).
+- **Atomic + durable.** Each snapshot streams into `<final>.part`, is `fsync`'d,
+  then `rename`'d to the final `.zip` — a crash leaves only a `.part` (swept the
+  next cycle), never a torn `.zip` seen as a good backup. A `<name>.json` sidecar
+  records `{ createdAt, scope, bucket?, bytes, objectCount, sha256 }`.
+- **Union retention.** `retain = (rank < keepLast) OR (ageDays < maxAgeDays)` — so
+  keep-last-N is a hard floor (an old-but-within-N snapshot is kept) and max-age can
+  never delete a fresh snapshot. For `scope: 'buckets'` retention is per bucket.
+- **Bounded / fail-safe.** A pre-flight free-space guard skips a cycle (never fills
+  the disk); `scope: 'buckets'` isolates per-bucket failures; an optional push to
+  the replication target (`_ob_backups/<scope>/…`, multipart above the threshold) is
+  **non-fatal** — the local snapshot is the system of record.
+
+**Security:** snapshots contain **decrypted plaintext object bytes** (same posture
+as the download / replication), so files are `0o600` under a `0o700` dir and the
+backup volume inherits the data volume's trust boundary. `dir` is boot config only
+— never derived from request input.
+
+Two JWT-guarded admin routes (mounted under `/api/admin/backup/schedule`, in the
+OpenAPI doc so the generated client has a typed `BackupScheduleService`):
+
+| Route | operationId | Purpose |
+| --- | --- | --- |
+| `GET /api/admin/backup/schedule` | `getBackupSchedule` | **Redacted** status: `enabled`, `scope`, `schedule`, `lastRunAt`/`nextRunAt`, `lastStatus`/`lastError`, counts, retention numbers, `snapshotCount`. Carries no `dir`, credentials, or object keys. |
+| `POST /api/admin/backup/schedule/run-now` | `runBackupNow` | Trigger a snapshot now (`202`). Shares the in-flight lock with the scheduled tick: a concurrent call **joins** and returns `{ started: false }` rather than launching a second cycle (the DoS guard). |
+
+The admin console's **Settings → Backup & Restore** tab shows last-run / next-run
++ a snapshot count and a **Run now** button.
+
+Standalone (env) equivalents: `OB_SCHEDULED_BACKUP_ENABLED`, `_SCOPE`,
+`_INTERVAL_MINUTES` / `_CRON`, `_DIR`, `_KEEP_LAST`, `_MAX_AGE_DAYS`,
+`_CHECK_INTERVAL_MS`, `_PUSH_TO_REPLICATION` — see `.env.example`.
+
 ## Cold-object tiering (read-through)
 
 OpenBucket can **offload cold objects** to the same external S3-compatible target
@@ -764,6 +985,96 @@ Security / durability notes:
 - The **remote key is internal** (key-codec encoded, bucket-scoped) and is never
   exposed on the S3 wire or admin API — the admin object metadata surfaces only
   `location` (`local`/`remote`) + `storageClass`.
+
+## Integrity scrubbing (bit-rot detection & repair)
+
+Beyond the F1 **read-time** integrity gate (every full GET re-hashes the blob and
+`500`s rather than serve corrupted bytes), a **background scrubber** proactively
+walks current/local objects, re-computes each blob's whole-object plaintext
+SHA-256 through the *same* shared `IntegrityVerifier` as the read gate, and records
+a per-object verdict (`unchecked` → `ok`/`corrupt`) on the object row. When a blob
+is `corrupt` **and** a replication target is configured, it fetches the good remote
+copy (async replication stores it plaintext under the raw key), stages it through
+the two-phase blob writer, re-verifies the on-disk bytes against the stored
+`contentSha256`, and atomically swaps it in — flipping the row back to `ok`. A
+remote copy that *also* fails the digest is rolled back (via `backupCurrentBlob`),
+never overwriting the local blob.
+
+It is **default-off** and strictly rate-limited so it never starves request
+traffic: each tick is bounded by a hard per-tick object cap **and** a per-tick byte
+budget, persists a resume cursor between ticks, and yields to the event loop
+between batches (the same throttling shape as the tiering/reconcile runners).
+Tiered objects (`location !== 'local'`) and pre-F1 rows without a stored
+`contentSha256` are skipped, never marked corrupt.
+
+Standalone deployments configure it via `OB_INTEGRITY_SCRUB_*` environment
+variables (defaults shown):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OB_INTEGRITY_SCRUB_ENABLED` | `false` | Master switch. A fresh install performs zero extra disk reads / DB writes. |
+| `OB_INTEGRITY_SCRUB_INTERVAL_MS` | `60000` | Tick interval (floor 1s). |
+| `OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK` | `1000` | Hard per-tick object cap — bounds detection work regardless of blob sizes. |
+| `OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK` | `1073741824` (1 GiB) | Per-tick byte budget: the tick stops once this many bytes have been hashed. |
+
+The admin API exposes a read model + a manual trigger under `/api/admin/integrity`
+(JWT-guarded, in the OpenAPI doc so the generated client has a typed
+`IntegrityAdminService`):
+
+| Method & path | operationId | Purpose |
+| --- | --- | --- |
+| `GET /api/admin/integrity/status` | `getIntegrityStatus` | Summary: `enabled`, lifetime `scanned`/`repaired`, live `ok`/`corrupt`/`unchecked` counts, `lastRunAt`, and the resume `cursor`. Always `200`, even when disabled/unconfigured. |
+| `GET /api/admin/integrity/corrupt` | `listCorruptObjects` | Paged corrupt-object list (`limit` capped at 200). Each row is `{ bucket, key, checkedAt, detail }` — counts + identities only, never a target endpoint/credential. |
+| `POST /api/admin/integrity/scrub` | `startIntegrityScrub` | Kick a one-shot pass on the next tick (does **not** bypass the byte/object budget). Audited (`integrity.scrub.started`); `202`. |
+
+The admin console surfaces this at **/settings?tab=integrity**: scanned/ok/corrupt/
+repaired stat cards, a corrupt-object table, a clean panel when there is no
+corruption, and a "Scrub now" button — plus a small red corrupt-count badge in the
+sidebar (hidden at zero). If the Prometheus `/metrics` endpoint is enabled it also
+exposes `openbucket_integrity_objects{status="ok|corrupt|unchecked"}` and
+`openbucket_integrity_last_run_timestamp` (counts + a timestamp only — never an
+object key or a secret).
+
+## `openbucket` CLI
+
+The package ships an **`openbucket` command-line client** for the admin API (a
+`bin`, so `npx openbucket …` or a global install both work). It is
+**dependency-free** — built entirely on Node built-ins (`fetch`, `parseArgs`,
+`readline`), so it drags nothing extra into your install.
+
+```bash
+export OPENBUCKET_ENDPOINT=https://your-host/storage   # default http://127.0.0.1:3900
+export OPENBUCKET_USERNAME=admin
+export OPENBUCKET_PASSWORD=…            # or omit to be prompted (no echo); never a flag
+
+openbucket buckets ls
+openbucket buckets mb reports --versioning enabled
+openbucket buckets rb reports
+
+openbucket keys list
+openbucket keys create --label ci --scope prefix:reports/2026/   # secret shown ONCE
+openbucket keys revoke <id>
+
+openbucket backup create -o snapshot.zip                  # whole-instance .zip
+openbucket backup create --bucket reports -o reports.zip  # single bucket
+openbucket backup restore -f snapshot.zip --yes           # RESETS the target — gated by --yes
+
+openbucket replication status
+```
+
+**Security posture** (mirrors the server's): the password is read only from
+`$OPENBUCKET_PASSWORD` or an interactive non-echoing prompt — **never** from a
+flag (so it can't land on `argv`/`ps`); the bearer token lives in memory for the
+invocation only; and **every** error path is run through a central redactor that
+strips `Bearer` tokens, JWTs, and `secretAccessKey`/`password` values before
+anything reaches stderr. Data goes to **stdout** (`--json` for a single pipeable
+JSON document, `--quiet` for just the essential datum); human errors go to
+**stderr**.
+
+Set `$OPENBUCKET_TOKEN` to reuse an existing bearer token and skip login (handy in
+CI, where there is no TTY — the CLI then fails fast with an instructive message
+instead of hanging). Exit codes: `0` success, `1` error, `2` usage, `3` auth (401),
+`4` rate-limited (429). `backup restore` is destructive and requires `--yes`.
 
 ## Caveats
 

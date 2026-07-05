@@ -4,7 +4,9 @@ import { createReadStream, createWriteStream, promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
+import { Readable } from 'node:stream';
 import archiver from 'archiver';
+import yauzl from 'yauzl';
 
 import type { BucketService } from '../../domain/buckets/bucket.service';
 import type { ObjectService } from '../../domain/objects/object.service';
@@ -149,5 +151,110 @@ describe('BackupService restore caps (TEST-0704)', () => {
     await expect(svc.restoreBucket('mybucket', createReadStream(zip))).resolves.toEqual({
       objectsRestored: 1,
     });
+  });
+});
+
+/**
+ * TEST-1203 (case 1) — the sink-based `writeSnapshot` seam (TASK-3630). Writes a
+ * snapshot to a file on disk (the shape the scheduled runner uses) and re-reads
+ * the manifest + payload entries back out of the archive.
+ */
+describe('BackupService.writeSnapshot (TEST-1203)', () => {
+  let dataDir: string;
+
+  /** Read a single entry's bytes out of a .zip on disk (manifest / payload). */
+  function readEntry(zipPath: string, name: string): Promise<Buffer | null> {
+    return new Promise((resolve, reject) => {
+      yauzl.open(zipPath, { lazyEntries: true }, (err, zf) => {
+        if (err || !zf) return reject(err ?? new Error('no zipfile'));
+        let found = false;
+        zf.on('entry', (entry: yauzl.Entry) => {
+          if (entry.fileName !== name) return zf.readEntry();
+          found = true;
+          zf.openReadStream(entry, (e, rs) => {
+            if (e || !rs) return reject(e ?? new Error('no stream'));
+            const chunks: Buffer[] = [];
+            rs.on('data', (c: Buffer) => chunks.push(c));
+            rs.on('end', () => resolve(Buffer.concat(chunks)));
+          });
+        });
+        zf.on('end', () => (found ? undefined : resolve(null)));
+        zf.readEntry();
+      });
+    });
+  }
+
+  function makeService(rows: Array<{ key: string; body: string }>): BackupService {
+    const config = { getOrThrow: (k: string) => (k === 'DATA_DIR' ? dataDir : 0) } as unknown as ConfigService;
+    const bucketRepo = {
+      getByName: jest.fn().mockResolvedValue({ name: 'mybucket', region: 'us-east-1' }),
+      listAll: jest.fn().mockResolvedValue([{ name: 'mybucket' }]),
+    } as unknown as BucketRepository;
+    const objectRepo = {
+      listByPrefix: jest.fn().mockResolvedValue({
+        rows: rows.map((r) => ({
+          key: r.key,
+          size: BigInt(r.body.length),
+          etag: 'e',
+          contentType: 'text/plain',
+          softDeleted: false,
+        })),
+        truncated: false,
+      }),
+    } as unknown as ObjectRepository;
+    const objects = {
+      openObjectStream: jest.fn().mockImplementation(async (_b: string, key: string) => {
+        const row = rows.find((r) => r.key === key);
+        return row ? { stream: Readable.from([Buffer.from(row.body)]), size: row.body.length } : null;
+      }),
+    } as unknown as ObjectService;
+    const buckets = {} as unknown as BucketService;
+    const writer = {} as unknown as ObjectWriterService;
+    return new BackupService(buckets, bucketRepo, objects, objectRepo, writer, config);
+  }
+
+  beforeEach(async () => {
+    dataDir = join(process.cwd(), 'tmp', 'openbucket-snapshot-test', randomUUID());
+    await fs.mkdir(dataDir, { recursive: true });
+  });
+  afterEach(async () => {
+    await fs.rm(dataDir, { recursive: true, force: true });
+  });
+
+  it('writes a byte-counted snapshot to a file sink and the manifest round-trips', async () => {
+    const svc = makeService([{ key: 'f.txt', body: 'hello world' }]);
+    const zipPath = join(dataDir, 'snap.zip');
+    const ws = createWriteStream(zipPath);
+
+    const result = await svc.writeSnapshot(ws, 'instance', ['mybucket']);
+    await once(ws, 'close');
+
+    expect(result.objectCount).toBe(1);
+    expect(result.bytes).toBeGreaterThan(0);
+
+    const manifestBuf = await readEntry(zipPath, 'manifest.json');
+    expect(manifestBuf).not.toBeNull();
+    const manifest = JSON.parse((manifestBuf as Buffer).toString('utf8'));
+    expect(manifest.version).toBe(1);
+    expect(manifest.kind).toBe('instance');
+    expect(manifest.buckets).toEqual([
+      { name: 'mybucket', versioning: 'disabled', objectLock: false, region: 'us-east-1' },
+    ]);
+    expect(manifest.objects.map((o: { key: string }) => o.key)).toEqual(['f.txt']);
+
+    const payload = await readEntry(zipPath, 'data/mybucket/f.txt');
+    expect((payload as Buffer).toString('utf8')).toBe('hello world');
+  });
+
+  it('an empty instance still writes a valid manifest with empty arrays', async () => {
+    const svc = makeService([]);
+    const zipPath = join(dataDir, 'empty.zip');
+    const ws = createWriteStream(zipPath);
+    const result = await svc.writeSnapshot(ws, 'instance', []);
+    await once(ws, 'close');
+    expect(result.objectCount).toBe(0);
+    const manifest = JSON.parse((await readEntry(zipPath, 'manifest.json') as Buffer).toString('utf8'));
+    expect(manifest.buckets).toEqual([]);
+    expect(manifest.objects).toEqual([]);
   });
 });

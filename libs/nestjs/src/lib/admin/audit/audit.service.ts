@@ -41,6 +41,7 @@ export const AUDIT_EVENT_CATALOG = [
   'admin.user.deleted',
   'replication.reconcile.started',
   'replication.reconcile.completed',
+  'integrity.scrub.started',
 ] as const;
 
 /**

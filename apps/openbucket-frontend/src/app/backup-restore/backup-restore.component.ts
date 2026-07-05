@@ -4,13 +4,14 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideDownload, lucideUpload, lucideDatabase, lucideServer } from '@ng-icons/lucide';
+import { lucideDownload, lucideUpload, lucideDatabase, lucideServer, lucideCalendarClock, lucidePlay } from '@ng-icons/lucide';
 
 import { HlmCardImports } from '@openbucket/spartan-ui/card';
 import { HlmButton } from '@openbucket/spartan-ui/button';
 
-import { BucketsAdminService } from '@openbucket/api-client';
+import { BucketsAdminService, BackupScheduleService, ScheduleStatusDto } from '@openbucket/api-client';
 import { notify } from '../shared/ui/notify';
+import { RelativeTimePipe } from '../shared/ui/relative-time.pipe';
 import { ConfirmDialogComponent } from '../shared/ui/confirm-dialog.component';
 
 /**
@@ -24,10 +25,95 @@ import { ConfirmDialogComponent } from '../shared/ui/confirm-dialog.component';
   selector: 'ob-backup-restore',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, TranslateModule, NgIcon, HlmCardImports, HlmButton, ConfirmDialogComponent],
-  providers: [provideIcons({ lucideDownload, lucideUpload, lucideDatabase, lucideServer })],
+  imports: [FormsModule, TranslateModule, NgIcon, HlmCardImports, HlmButton, RelativeTimePipe, ConfirmDialogComponent],
+  providers: [provideIcons({ lucideDownload, lucideUpload, lucideDatabase, lucideServer, lucideCalendarClock, lucidePlay })],
   template: `
     <div class="space-y-6 p-6">
+      <!-- Scheduled backups -->
+      <section hlmCard>
+        <div hlmCardHeader>
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 hlmCardTitle class="flex items-center gap-2">
+                <ng-icon name="lucideCalendarClock" size="18" /> {{ 'backupRestore.schedule.title' | translate }}
+              </h3>
+              <p hlmCardDescription>{{ 'backupRestore.schedule.description' | translate }}</p>
+            </div>
+            @if (schedule(); as s) {
+              <span
+                class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                [class]="s.enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'"
+              >
+                {{ (s.enabled ? 'backupRestore.schedule.enabled' : 'backupRestore.schedule.disabled') | translate }}
+              </span>
+            }
+          </div>
+        </div>
+        <div hlmCardContent class="space-y-4">
+          @if (schedule(); as s) {
+            @if (s.enabled) {
+              <dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
+                <div>
+                  <dt class="text-muted-foreground text-xs">{{ 'backupRestore.schedule.scope' | translate }}</dt>
+                  <dd>
+                    {{ (s.scope === 'instance' ? 'backupRestore.schedule.scopeInstance' : 'backupRestore.schedule.scopeBuckets') | translate }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-muted-foreground text-xs">{{ 'backupRestore.schedule.scheduleLabel' | translate }}</dt>
+                  <dd>
+                    @if (s.schedule.cron) {
+                      <code class="text-xs">{{ s.schedule.cron }}</code>
+                    } @else {
+                      {{ 'backupRestore.schedule.every' | translate: { minutes: s.schedule.intervalMinutes } }}
+                    }
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-muted-foreground text-xs">{{ 'backupRestore.schedule.retention' | translate }}</dt>
+                  <dd>{{ 'backupRestore.schedule.retentionValue' | translate: { keepLast: s.keepLast, maxAgeDays: s.maxAgeDays } }}</dd>
+                </div>
+                <div>
+                  <dt class="text-muted-foreground text-xs">{{ 'backupRestore.schedule.lastRun' | translate }}</dt>
+                  <dd class="flex items-center gap-1.5">
+                    @if (s.lastRunAt) {
+                      <span>{{ s.lastRunAt | relativeTime }}</span>
+                      <span
+                        class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
+                        [class]="statusBadgeClass(s.lastStatus)"
+                      >
+                        {{ statusLabel(s.lastStatus) | translate }}
+                      </span>
+                    } @else {
+                      {{ 'backupRestore.schedule.never' | translate }}
+                    }
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-muted-foreground text-xs">{{ 'backupRestore.schedule.nextRun' | translate }}</dt>
+                  <dd>{{ s.nextRunAt ? (s.nextRunAt | relativeTime) : ('backupRestore.schedule.never' | translate) }}</dd>
+                </div>
+                <div>
+                  <dt class="text-muted-foreground text-xs">{{ 'backupRestore.schedule.snapshots' | translate }}</dt>
+                  <dd>{{ s.snapshotCount }}</dd>
+                </div>
+              </dl>
+              @if (s.lastError) {
+                <p class="text-destructive text-xs">{{ s.lastError }}</p>
+              }
+              <div class="flex flex-wrap gap-2">
+                <button hlmBtn size="sm" [disabled]="busy() || scheduleBusy()" (click)="runNow()">
+                  <ng-icon name="lucidePlay" size="16" class="mr-1.5" />
+                  {{ (scheduleBusy() ? 'backupRestore.schedule.running' : 'backupRestore.schedule.runNow') | translate }}
+                </button>
+              </div>
+            } @else {
+              <p class="text-muted-foreground text-sm">{{ 'backupRestore.schedule.offHint' | translate }}</p>
+            }
+          }
+        </div>
+      </section>
+
       <!-- Per-bucket -->
       <section hlmCard>
         <div hlmCardHeader>
@@ -107,11 +193,17 @@ import { ConfirmDialogComponent } from '../shared/ui/confirm-dialog.component';
 export class BackupRestoreComponent {
   private readonly http = inject(HttpClient);
   private readonly bucketsApi = inject(BucketsAdminService);
+  private readonly scheduleApi = inject(BackupScheduleService);
   private readonly confirmDialog = viewChild.required(ConfirmDialogComponent);
 
   readonly buckets = signal<string[]>([]);
   readonly selectedBucket = signal('');
   readonly busy = signal(false);
+
+  /** Scheduled-backup status (STORY-1203). Null until first load / when the
+   *  endpoint fails; the card just stays hidden. */
+  readonly schedule = signal<ScheduleStatusDto | null>(null);
+  readonly scheduleBusy = signal(false);
 
   readonly confirmTitle = signal('');
   readonly confirmDesc = signal('');
@@ -119,6 +211,7 @@ export class BackupRestoreComponent {
 
   constructor() {
     void this.loadBuckets();
+    void this.loadSchedule();
   }
 
   private async loadBuckets(): Promise<void> {
@@ -127,6 +220,41 @@ export class BackupRestoreComponent {
       this.buckets.set((res?.buckets ?? []).map((b) => b.name));
     } catch {
       /* leave empty; the selector just shows nothing */
+    }
+  }
+
+  // ---- scheduled backups ----------------------------------------------
+  private async loadSchedule(): Promise<void> {
+    try {
+      this.schedule.set(await firstValueFrom(this.scheduleApi.getBackupSchedule()));
+    } catch {
+      this.schedule.set(null); // hide the card when the status can't be read
+    }
+  }
+
+  /** i18n key for a run status badge. */
+  statusLabel(status: ScheduleStatusDto['lastStatus']): string {
+    return `backupRestore.schedule.status${status.charAt(0).toUpperCase()}${status.slice(1)}`;
+  }
+
+  /** Tailwind colour classes for a run status badge (ok/error/skipped). */
+  statusBadgeClass(status: ScheduleStatusDto['lastStatus']): string {
+    if (status === 'ok') return 'bg-primary/10 text-primary';
+    if (status === 'error') return 'bg-destructive/10 text-destructive';
+    return 'bg-muted text-muted-foreground';
+  }
+
+  async runNow(): Promise<void> {
+    this.scheduleBusy.set(true);
+    try {
+      const res = await firstValueFrom(this.scheduleApi.runBackupNow());
+      notify.success(res?.started ? 'Backup started' : 'A backup is already running');
+      // Reflect the new lastRunAt once the snapshot has had a moment to complete.
+      setTimeout(() => void this.loadSchedule(), 2000);
+    } catch {
+      notify.error('Could not start backup');
+    } finally {
+      this.scheduleBusy.set(false);
     }
   }
 
