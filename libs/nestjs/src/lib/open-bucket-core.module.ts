@@ -15,6 +15,7 @@ import { CommonModule } from './common/common.module';
 import { ClockModule } from './common/clock/clock.module';
 import { PersistenceModule } from './persistence.module';
 import { EventsModule } from './events/events.module';
+import { ReplicationModule } from './storage/replication/replication.module';
 import { StorageModule } from './storage/storage.module';
 import { DomainModule } from './domain/domain.module';
 import { BackgroundModule } from './common/background/background.module';
@@ -80,6 +81,17 @@ function buildCoreImports(adminEnabled: boolean): Array<Type | DynamicModule> {
               // stray config dump can't leak it (EPIC-08 / STORY-0705 secrets hygiene).
               'webhookSecret',
               '*.webhookSecret',
+              // Replication target secret (STORY-0900). Same defence-in-depth: it
+              // lives only in config / the S3Client credentials closure and is
+              // never intentionally logged, but redact any `secretAccessKey` /
+              // `OB_REPLICATION_SECRET_ACCESS_KEY` field so a stray config or SDK
+              // request dump can't leak it, along with the SDK `authorization` header.
+              'secretAccessKey',
+              '*.secretAccessKey',
+              'OB_REPLICATION_SECRET_ACCESS_KEY',
+              '*.OB_REPLICATION_SECRET_ACCESS_KEY',
+              'authorization',
+              '*.authorization',
             ],
             censor: '[redacted]',
           },
@@ -116,6 +128,12 @@ function buildCoreImports(adminEnabled: boolean): Array<Type | DynamicModule> {
     //     ObjectEventsService below without an import cycle. Calls
     //     EventEmitterModule.forRoot() exactly once app-wide.
     EventsModule,
+
+    // 3c. Async replication to an external S3 target (STORY-0900). @Global, so
+    //     the writer + ObjectService can inject the @Optional enqueue seam and
+    //     the background drain worker can inject the target client. Resolves to
+    //     `{ enabled: false }` (and never builds an S3Client) unless configured.
+    ReplicationModule,
 
     // 4. Lower layers. PersistenceModule is live (EPIC-03); Storage/Domain
     //    remain placeholders until later EPIC-03/02 stories fill them.

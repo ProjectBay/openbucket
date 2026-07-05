@@ -7,6 +7,9 @@ import { BucketService } from './buckets/bucket.service';
 import { LifecycleService } from './lifecycle/lifecycle.service';
 import { MultipartService } from './multipart/multipart.service';
 import { ObjectService } from './objects/object.service';
+import { TieringService } from './tiering/tiering.service';
+import { ReconcileService } from './replication/reconcile.service';
+import { ReplicationStatusService } from './replication/replication-status.service';
 
 /**
  * Hosts the S3 domain services consumed by both the S3 controller tree
@@ -26,9 +29,20 @@ import { ObjectService } from './objects/object.service';
     ObjectService,
     MultipartService,
     LifecycleService,
+    TieringService,
+    ReconcileService,
+    ReplicationStatusService,
     XmlSerializer,
     ContinuationToken,
   ],
-  exports: [BucketService, ObjectService, MultipartService, LifecycleService],
+  exports: [
+    BucketService,
+    ObjectService,
+    MultipartService,
+    LifecycleService,
+    TieringService,
+    ReconcileService,
+    ReplicationStatusService,
+  ],
 })
 export class DomainModule {}

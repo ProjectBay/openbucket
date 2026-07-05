@@ -15,5 +15,6 @@ export interface ObjectListItem {
     etag: string;
     lastModified: string;
     storageClass: string;
+    location: string;
 }
 

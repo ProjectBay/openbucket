@@ -14,6 +14,8 @@ api/keys-admin.service.ts
 api/keys-admin.serviceInterface.ts
 api/objects-admin.service.ts
 api/objects-admin.serviceInterface.ts
+api/replication-admin.service.ts
+api/replication-admin.serviceInterface.ts
 api/settings-admin.service.ts
 api/settings-admin.serviceInterface.ts
 configuration.ts
@@ -21,6 +23,7 @@ encoder.ts
 git_push.sh
 index.ts
 model/bucket-policy-dto.ts
+model/bucket-replication-status-dto.ts
 model/bucket-summary-dto.ts
 model/bulk-delete-deleted-item.ts
 model/bulk-delete-dto-keys-inner.ts
@@ -55,6 +58,10 @@ model/object-version-dto.ts
 model/object-versions-response-dto.ts
 model/presign-request-dto.ts
 model/presigned-url-dto.ts
+model/reconcile-job-dto.ts
+model/reconcile-request-dto.ts
+model/replication-last-error-dto.ts
+model/replication-status-dto.ts
 model/retention-dto.ts
 model/tagging-dto.ts
 model/update-key-dto.ts

@@ -232,6 +232,97 @@ describe('loadEnv', () => {
     });
     expect(env.WEBHOOK_URL).toBe('http://localhost:4000/hooks');
   });
+
+  // --- async replication to external S3 target (STORY-0900) ---
+  it('case 22: replication off by default with documented drain/dead-letter defaults', () => {
+    const env = loadEnv({ ...baseEnv });
+    expect(env.OB_REPLICATION_ENABLED).toBe(false);
+    expect(env.OB_REPLICATION_REGION).toBe('us-east-1');
+    expect(env.OB_REPLICATION_FORCE_PATH_STYLE).toBe(true);
+    expect(env.OB_REPLICATION_MAX_ATTEMPTS).toBe(12);
+    expect(env.OB_REPLICATION_DRAIN_INTERVAL_MS).toBe(5_000);
+    expect(env.OB_REPLICATION_BATCH_KEYS).toBe(50);
+    expect(env.OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES).toBe(64 * 1024 * 1024);
+  });
+
+  it('case 23: a full replication config boots and enables replication', () => {
+    const env = loadEnv({
+      ...baseEnv,
+      OB_REPLICATION_ENABLED: 'true',
+      OB_REPLICATION_ENDPOINT: 'https://s3.example.com',
+      OB_REPLICATION_BUCKET: 'remote-mirror',
+      OB_REPLICATION_ACCESS_KEY_ID: 'AKIAEXAMPLE1234567890',
+      OB_REPLICATION_SECRET_ACCESS_KEY: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
+    });
+    expect(env.OB_REPLICATION_ENABLED).toBe(true);
+    expect(env.OB_REPLICATION_BUCKET).toBe('remote-mirror');
+  });
+
+  it('case 24: ENABLED=true but missing bucket/creds refuses to boot (fail-closed)', () => {
+    expect(() => loadEnv({ ...baseEnv, OB_REPLICATION_ENABLED: 'true' })).toThrow(
+      'Refusing to boot: invalid environment.',
+    );
+    const joined = errSpy.mock.calls[0][0] as string;
+    expect(joined).toContain('OB_REPLICATION_BUCKET');
+    expect(joined).toContain('OB_REPLICATION_ACCESS_KEY_ID');
+    expect(joined).toContain('OB_REPLICATION_SECRET_ACCESS_KEY');
+  });
+
+  it('case 25: ENABLED=true with a malformed remote bucket name is rejected', () => {
+    expect(() =>
+      loadEnv({
+        ...baseEnv,
+        OB_REPLICATION_ENABLED: 'true',
+        OB_REPLICATION_BUCKET: 'Invalid_Bucket_NAME',
+        OB_REPLICATION_ACCESS_KEY_ID: 'AKIAEXAMPLE1234567890',
+        OB_REPLICATION_SECRET_ACCESS_KEY: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
+      }),
+    ).toThrow('Refusing to boot: invalid environment.');
+    expect(errSpy.mock.calls[0][0]).toContain('OB_REPLICATION_BUCKET must be a valid S3 bucket name');
+  });
+
+  it('case 26: ENABLED=true with a malformed endpoint URL is rejected', () => {
+    expect(() =>
+      loadEnv({
+        ...baseEnv,
+        OB_REPLICATION_ENABLED: 'true',
+        OB_REPLICATION_ENDPOINT: 'not-a-url',
+        OB_REPLICATION_BUCKET: 'remote-mirror',
+        OB_REPLICATION_ACCESS_KEY_ID: 'AKIAEXAMPLE1234567890',
+        OB_REPLICATION_SECRET_ACCESS_KEY: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
+      }),
+    ).toThrow('Refusing to boot: invalid environment.');
+    expect(errSpy.mock.calls[0][0]).toContain('OB_REPLICATION_ENDPOINT');
+  });
+
+  it('case 27: cold-object tiering knobs apply their documented defaults (STORY-0901)', () => {
+    const env = loadEnv({ ...baseEnv });
+    expect(env.OPENBUCKET_TIER_ENABLED).toBe(false);
+    expect(env.OPENBUCKET_TIER_INLINE_MAX_BYTES).toBe(256 * 1024 * 1024);
+    expect(env.OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS).toBe(30_000);
+    expect(env.OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE).toBe(8);
+    expect(env.OPENBUCKET_TIER_PRESIGN_TTL_SECONDS).toBe(300);
+  });
+
+  it('case 28: OPENBUCKET_TIER_ENABLED=false coerces to boolean false (STORY-0901)', () => {
+    // envBoolean, not z.coerce.boolean(), so the string "false" disables it.
+    expect(loadEnv({ ...baseEnv, OPENBUCKET_TIER_ENABLED: 'false' }).OPENBUCKET_TIER_ENABLED).toBe(
+      false,
+    );
+    expect(loadEnv({ ...baseEnv, OPENBUCKET_TIER_ENABLED: 'true' }).OPENBUCKET_TIER_ENABLED).toBe(
+      true,
+    );
+  });
+
+  it('case 29: out-of-range tiering knobs are rejected at boot (STORY-0901)', () => {
+    // presign TTL is bounded [30, 3600]; a negative concurrency cap is rejected.
+    expect(() => loadEnv({ ...baseEnv, OPENBUCKET_TIER_PRESIGN_TTL_SECONDS: '5' })).toThrow(
+      'Refusing to boot: invalid environment.',
+    );
+    expect(() => loadEnv({ ...baseEnv, OPENBUCKET_TIER_PRESIGN_TTL_SECONDS: '99999' })).toThrow();
+    expect(() => loadEnv({ ...baseEnv, OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE: '-1' })).toThrow();
+    expect(() => loadEnv({ ...baseEnv, OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS: '0' })).toThrow();
+  });
 });
 
 describe('AppConfigService', () => {
@@ -288,6 +379,14 @@ describe('AppConfigService', () => {
       'object.deleted',
       'multipart.completed',
     ]);
+    // replication getters (STORY-0900): off by default with resolved defaults.
+    expect(service.replicationEnabled).toBe(false);
+    expect(service.replicationRegion).toBe('us-east-1');
+    expect(service.replicationForcePathStyle).toBe(true);
+    expect(service.replicationMaxAttempts).toBe(12);
+    expect(service.replicationDrainIntervalMs).toBe(5_000);
+    expect(service.replicationBatchKeys).toBe(50);
+    expect(service.replicationLargeObjectThresholdBytes).toBe(64 * 1024 * 1024);
 
     await moduleRef.close();
   });

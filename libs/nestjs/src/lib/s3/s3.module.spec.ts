@@ -7,8 +7,11 @@ import { firstValueFrom, of } from 'rxjs';
 import { AppConfigService } from '../common/config/app-config.service';
 import { BucketService } from '../domain/buckets/bucket.service';
 import { LifecycleService } from '../domain/lifecycle/lifecycle.service';
+import { TieringService } from '../domain/tiering/tiering.service';
 import { MultipartService } from '../domain/multipart/multipart.service';
 import { ObjectService } from '../domain/objects/object.service';
+import { ReconcileService } from '../domain/replication/reconcile.service';
+import { ReplicationStatusService } from '../domain/replication/replication-status.service';
 import { BlobStore } from '../storage/blob-store';
 import { DerivativeCacheService } from '../storage/derivative-cache.service';
 import { KeyService as StorageKeyService } from '../storage/key.service';
@@ -58,6 +61,12 @@ describe('S3 controller topology (TEST-0100)', () => {
       .overrideProvider(MultipartService)
       .useValue({})
       .overrideProvider(LifecycleService)
+      .useValue({})
+      .overrideProvider(TieringService)
+      .useValue({})
+      .overrideProvider(ReconcileService)
+      .useValue({})
+      .overrideProvider(ReplicationStatusService)
       .useValue({})
       .overrideProvider(BlobStore)
       .useValue({})

@@ -401,6 +401,14 @@ import { ObjectUploadComponent } from './object-upload.component';
                       >{{ o.storageClass }}</span
                     >
                   }
+                  @if (o.location && o.location !== 'local') {
+                    <span
+                      hlmBadge
+                      variant="outline"
+                      class="ml-1"
+                      >{{ 'objects.tiered' | translate }}</span
+                    >
+                  }
                 </td>
                 <td
                   hlmTd

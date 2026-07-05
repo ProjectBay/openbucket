@@ -18,6 +18,23 @@ export enum StorageClass {
   DeepArchive = 'DEEP_ARCHIVE',
 }
 
+/**
+ * Where an object's bytes physically live (STORY-0901, cold-object tiering).
+ * Defaults to `Local` so every pre-tiering row is served exactly as before —
+ * the feature is inert until a transition rule + remote target are configured.
+ */
+export enum ObjectLocation {
+  /** Blob is on the local FS (default, back-compat). */
+  Local = 'local',
+  /** Blob offloaded to the STORY-0900 remote; the row is a metadata stub. */
+  Remote = 'remote',
+  /** Read-through rehydration in progress (single-flight marker). */
+  Rehydrating = 'rehydrating',
+}
+
+/** The storage classes a lifecycle transition may move an object to. */
+export type TransitionStorageClass = 'STANDARD_IA' | 'GLACIER' | 'DEEP_ARCHIVE';
+
 export interface ObjectLockBucketConfig {
   enabled: boolean;
   mode?: ObjectLockMode;
@@ -63,6 +80,14 @@ export interface LifecycleRule {
   expiredObjectDeleteMarker?: boolean;
   noncurrentVersionExpirationDays?: number;
   abortIncompleteMultipartUploadDays?: number;
+  /**
+   * Cold-object tiering transition (STORY-0901). Independent of the expiration
+   * fields — a rule may carry both. `transitionDays` is the age (in days, since
+   * last access) after which a current, local object is offloaded to the remote
+   * target; `transitionStorageClass` is the class recorded on the tiered stub.
+   */
+  transitionDays?: number;
+  transitionStorageClass?: TransitionStorageClass;
 }
 
 export interface PolicyDocument {

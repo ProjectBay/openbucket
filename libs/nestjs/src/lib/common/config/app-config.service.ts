@@ -62,4 +62,24 @@ export class AppConfigService {
       .map((s) => s.trim())
       .filter(Boolean);
   }
+
+  // --- async replication to external S3 target (STORY-0900) ---
+  get replicationEnabled(): boolean { return this.raw.get('OB_REPLICATION_ENABLED', { infer: true }); }
+  get replicationEndpoint(): string | undefined { return this.raw.get('OB_REPLICATION_ENDPOINT', { infer: true }); }
+  get replicationRegion(): string { return this.raw.get('OB_REPLICATION_REGION', { infer: true }); }
+  get replicationBucket(): string | undefined { return this.raw.get('OB_REPLICATION_BUCKET', { infer: true }); }
+  get replicationAccessKeyId(): string | undefined { return this.raw.get('OB_REPLICATION_ACCESS_KEY_ID', { infer: true }); }
+  get replicationSecretAccessKey(): string | undefined { return this.raw.get('OB_REPLICATION_SECRET_ACCESS_KEY', { infer: true }); }
+  get replicationForcePathStyle(): boolean { return this.raw.get('OB_REPLICATION_FORCE_PATH_STYLE', { infer: true }); }
+  get replicationMaxAttempts(): number { return this.raw.get('OB_REPLICATION_MAX_ATTEMPTS', { infer: true }); }
+  get replicationDrainIntervalMs(): number { return this.raw.get('OB_REPLICATION_DRAIN_INTERVAL_MS', { infer: true }); }
+  get replicationBatchKeys(): number { return this.raw.get('OB_REPLICATION_BATCH_KEYS', { infer: true }); }
+  get replicationLargeObjectThresholdBytes(): number { return this.raw.get('OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES', { infer: true }); }
+
+  // --- cold-object tiering (STORY-0901) ---
+  get tierEnabled(): boolean { return this.raw.get('OPENBUCKET_TIER_ENABLED', { infer: true }); }
+  get tierInlineMaxBytes(): number { return this.raw.get('OPENBUCKET_TIER_INLINE_MAX_BYTES', { infer: true }); }
+  get tierReadThroughTimeoutMs(): number { return this.raw.get('OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS', { infer: true }); }
+  get tierMaxConcurrentRehydrate(): number { return this.raw.get('OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE', { infer: true }); }
+  get tierPresignTtlSeconds(): number { return this.raw.get('OPENBUCKET_TIER_PRESIGN_TTL_SECONDS', { infer: true }); }
 }

@@ -352,6 +352,7 @@ Notes:
 | `sseKey` | | generated | base64 of 32 bytes; else generated + persisted to `<dataDir>/sse.key`. |
 | `admin` | | — | **Omit to disable the admin surface entirely** (headless S3-only). When present: `{ username, passwordHash (argon2id), jwtSecret, serveUi?, jwtAccessTtl?, jwtRefreshTtl? }` — `username`/`passwordHash`/`jwtSecret` are all required. |
 | `limits` | | | `{ maxObjectSizeMb?, maxMultipartParts?, multipartTtlHours? }`. |
+| `replication` | | — | **Omit to disable.** Async one-way replication to an external S3-compatible target — see [Async replication](#async-replication-to-an-external-s3-target). |
 
 `forRootAsync` adds two **static** options alongside `useFactory`/`inject`:
 `serveUi?` (default `true`) and `admin?` (default `true` — set `false` for headless).
@@ -388,6 +389,147 @@ OpenBucket encrypts objects at rest with a **single, backend-managed 32-byte key
   not disclose plaintext (the on-disk bytes are ciphertext) and is caught on read by
   the `contentSha256` integrity gate. Known residual gaps: legacy objects without a
   stored `contentSha256`, and range reads above the range-verify cap.
+
+## Async replication to an external S3-compatible target
+
+OpenBucket can asynchronously mirror every object mutation to an **external
+S3-compatible bucket** (AWS S3, Cloudflare R2, Backblaze B2, MinIO, or another
+OpenBucket). Replication is **one-way** (local → remote) and reflects the
+**current visible state** of each object — per-version history is not replicated.
+
+It is built as a **transactional outbox**: every committed `PUT`/`DELETE` writes a
+durable intent row in the *same* database transaction as the object metadata, so an
+intent is never lost and never orphaned by a rollback. A background worker drains
+the outbox with **per-key ordering**, **last-writer-wins coalescing** (two PUTs then
+a DELETE on one key result in a single remote DELETE), **exponential-backoff retry**,
+and a **dead-letter cap**. Because intents are durable, the worker simply resumes on
+boot after a crash or a remote outage — local reads/writes keep working while the
+remote is unreachable, and the backlog drains on recovery.
+
+```ts
+OpenBucketModule.forRoot({
+  dataDir: '/var/lib/openbucket',
+  rootCredentials: { accessKeyId: process.env.OB_ACCESS_KEY!, secretAccessKey: process.env.OB_SECRET_KEY! },
+  replication: {
+    // Omit `endpoint` for real AWS S3 (the SDK derives it from `region`).
+    endpoint: 'https://<accountid>.r2.cloudflarestorage.com', // R2 / B2 / MinIO
+    region: 'auto',
+    bucket: 'my-remote-mirror',              // must already exist
+    credentials: {
+      accessKeyId: process.env.OB_REPL_KEY!,
+      secretAccessKey: process.env.OB_REPL_SECRET!,
+    },
+    forcePathStyle: true,                    // true for MinIO/S3-compat; false for AWS
+    // Tuning (all optional, defaults shown):
+    maxAttempts: 12,                         // dead-letter cap
+    drainIntervalMs: 5000,                   // background tick interval
+    batchKeys: 50,                           // distinct keys drained per tick
+    largeObjectThresholdBytes: 64 * 1024 * 1024, // switch to multipart above this
+  },
+})
+```
+
+Standalone (env-configured) deployments use the equivalent `OB_REPLICATION_*`
+variables — see the [root README](../../README.md#async-replication).
+
+- **A present-but-partial `replication` block refuses to boot** (you must supply
+  `bucket` and both credentials), matching the fail-closed posture of the other
+  security-critical options.
+- **Plaintext transport warning.** The worker sends object *plaintext* (SSE is
+  decrypted before sending), so an `http://` endpoint leaks object contents and logs
+  a boot-time warning. Prefer `https://` unless the target is MinIO on a trusted LAN.
+- **Credentials are never logged** — the replication secret lives only in the S3
+  client's credential closure and is in the pino redact paths.
+
+### Monitoring & reconcile
+
+The admin API exposes a read model + a backfill trigger for replication, mounted
+under `/api/admin/replication` (JWT-guarded, in the OpenAPI doc so the generated
+client has a typed `ReplicationAdminService`):
+
+| Method & path | operationId | Purpose |
+| --- | --- | --- |
+| `GET /api/admin/replication/status` | `getReplicationStatus` | Read model: `enabled`, pending/inflight/failed depth, replication **lag** (age of the oldest pending intent), the last error, and a per-bucket breakdown. Pure GROUP-BY aggregates over the outbox — never materialises the table, never 500s on an unconfigured instance. |
+| `POST /api/admin/replication/reconcile` | `startReconcile` | Start a reconcile/backfill job (`{ bucket? }` — omit for the whole instance). **Single-flight**: a second call while a job is active returns `409`. Returns a `ReconcileJob` (`202`). |
+| `GET /api/admin/replication/reconcile/:jobId` | `getReconcileJob` | Poll a job to a terminal `completed`/`failed` state. |
+
+Reconcile runs on the background tick (`reconcile`, 5s): it pages local objects,
+diffs each against `ListObjectsV2` on the remote target, and re-enqueues anything
+**missing or size-divergent** into the outbox — the drain worker then ships it.
+It is bounded (a per-tick batch cap, resuming from a persisted cursor so a huge
+bucket never loads whole into memory) and durable (the job row survives a
+restart). One-way only: an object present remotely but not locally is counted,
+never deleted. Redaction is preserved end-to-end — neither the status `lastError`,
+the job `error`, nor the `replication.reconcile.{started,completed}` audit events
+ever carry the remote endpoint, bucket, or credentials.
+
+The admin console surfaces this at **/replication**: health stat cards (pending,
+lag, failed), a per-bucket table, and a confirm-guarded "Reconcile" action that
+starts a job and polls it to completion.
+
+## Cold-object tiering (read-through)
+
+OpenBucket can **offload cold objects** to the same external S3-compatible target
+used for replication, then transparently **rehydrate them on read** — so a rarely
+accessed object's bytes live remotely while the object stays fully readable
+through the S3 API. It reuses the replication target, so no extra remote needs
+configuring.
+
+How it works:
+
+- A **transition rule** on a bucket's lifecycle configuration selects cold
+  objects. Add a `<Transition>` to a lifecycle rule with `Days` (age since **last
+  access**) and a `StorageClass` (`STANDARD_IA`, `GLACIER`, or `DEEP_ARCHIVE`):
+
+  ```xml
+  <Rule>
+    <ID>tier-cold-logs</ID>
+    <Status>Enabled</Status>
+    <Filter><Prefix>logs/</Prefix></Filter>
+    <Transition><Days>30</Days><StorageClass>GLACIER</StorageClass></Transition>
+  </Rule>
+  ```
+
+- A **60s sweep** (`tiering-sweep`) pages current, local objects per rule and,
+  for each object whose last access is older than the window, streams its
+  plaintext bytes to the remote, **confirms durability**, then flips the row to a
+  remote *stub* and soft-deletes the local blob (recoverable during the trash
+  grace window). The row keeps `size`/`etag`/`contentSha256`, so `HEAD` answers
+  from metadata **without** touching the remote.
+- On **GET**, a tiered object is transparently **rehydrated** (read-through): the
+  bytes are fetched back, staged via the two-phase blob store, **integrity-verified**
+  against the stored digest, and the row flips back to local — then served
+  identically (same `ETag`, same bytes). Concurrent reads of the same key
+  rehydrate **once** (single-flight). Objects larger than the inline cap are
+  answered with a **307 redirect to a short-lived presigned URL** instead of being
+  proxied through the process. `x-amz-storage-class` is emitted on `GET`/`HEAD`
+  for any non-`STANDARD` object (S3 parity); `GetObjectAttributes` reports the
+  tiered class.
+
+Tiering is **off by default** and a no-op unless it is explicitly enabled **and** a
+replication target is configured — a fresh single-node install behaves exactly as
+before. Standalone deployments configure it via `OPENBUCKET_TIER_*` environment
+variables (defaults shown):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OPENBUCKET_TIER_ENABLED` | `false` | Master switch. Still a no-op unless a replication target is configured. |
+| `OPENBUCKET_TIER_INLINE_MAX_BYTES` | `268435456` (256 MiB) | Objects at/under this size are proxied on read-through; larger ones get a presigned **redirect**. |
+| `OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS` | `30000` | Hard latency bound on a proxied remote fetch before returning `503 SlowDown`. |
+| `OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE` | `8` | Global cap on concurrent rehydrations (disk + egress governor); excess reads get `503 SlowDown`. `0` = unlimited. |
+| `OPENBUCKET_TIER_PRESIGN_TTL_SECONDS` | `300` | TTL for presigned redirect URLs (30–3600). |
+
+Security / durability notes:
+
+- **No data-loss window.** The local blob is deleted only *after* the remote copy
+  is confirmed; a crash mid-offload simply leaves the object local and it is
+  retried. Rehydrated bytes are integrity-verified **before** they are served
+  (F1) — a corrupt/truncated remote yields a `500`, never bad data.
+- **Object lock is unaffected** — tiering only moves the bytes; the row + lock
+  stay, so retention/legal-hold are still enforced.
+- The **remote key is internal** (key-codec encoded, bucket-scoped) and is never
+  exposed on the S3 wire or admin API — the admin object metadata surfaces only
+  `location` (`local`/`remote`) + `storageClass`.
 
 ## Caveats
 

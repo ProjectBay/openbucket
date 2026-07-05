@@ -8,9 +8,12 @@ import type { Readable } from 'node:stream';
 import {
   BucketRepository,
   ObjectEntity,
+  ObjectLocation,
   ObjectLockMode,
   ObjectRepository,
+  StorageClass,
 } from '../../persistence/index';
+import { TieringService } from '../tiering/tiering.service';
 
 import { BlobStore } from '../../storage/blob-store';
 import { ObjectWriterService } from '../../storage/object-writer.service';
@@ -24,6 +27,7 @@ import {
 } from '../../storage/sse-cipher';
 import { SseKeyService } from '../../storage/sse-key.service';
 import { VersionStoreService } from '../../storage/version-store.service';
+import { ReplicationOutboxService } from '../../storage/replication/replication-outbox.service';
 import {
   AccessDeniedError,
   InternalError,
@@ -103,6 +107,8 @@ export interface AdminObjectListItem {
   etag: string;
   lastModified: Date;
   storageClass: string;
+  /** Physical location (STORY-0901): `local` vs `remote`/`rehydrating` (tiered). */
+  location: string;
 }
 
 /** One page of an admin object listing (§5.6). */
@@ -124,6 +130,9 @@ export interface AdminObjectMeta {
   tagging?: Record<string, string>;
   versionId?: string;
   storageClass: string;
+  /** Physical location (STORY-0901): `local` vs `remote`/`rehydrating` (tiered).
+   *  The remote key/endpoint is deliberately NOT surfaced (internal detail). */
+  location: string;
 }
 
 /**
@@ -179,6 +188,14 @@ export class ObjectService {
     // @Optional so existing unit tests can construct ObjectService without it and
     // a missing/throwing handler can never break a delete.
     @Optional() private readonly events?: ObjectEventsService,
+    // Optional (STORY-0900): enqueues a durable DELETE replication intent IN the
+    // delete's transaction (transactional outbox). @Optional so existing unit
+    // tests construct ObjectService without it and a disabled deployment no-ops.
+    @Optional() private readonly outbox?: ReplicationOutboxService,
+    // Optional (STORY-0901): read-through rehydration + last-access stamping for
+    // cold-object tiering. @Optional so existing tests construct ObjectService
+    // without it; when absent every object is treated as LOCAL (no behaviour change).
+    @Optional() private readonly tiering?: TieringService,
   ) {}
 
   /**
@@ -222,6 +239,7 @@ export class ObjectService {
         etag: o.etag,
         lastModified: o.modifiedAt,
         storageClass: o.storageClass,
+        location: o.location,
       })),
       commonPrefixes,
       nextMarker,
@@ -243,6 +261,7 @@ export class ObjectService {
       tagging: o.tagging,
       versionId: o.currentVersionId,
       storageClass: o.storageClass,
+      location: o.location,
     };
   }
 
@@ -541,6 +560,27 @@ export class ObjectService {
       range = parsed;
     }
 
+    // Cold-object tiering (STORY-0901): a stub's bytes live on the remote. Large
+    // objects redirect (307) to a short-lived presigned URL so the bytes never
+    // pass through this process; smaller ones rehydrate (read-through) and then
+    // fall through to the normal local path (the blob is local afterwards). The
+    // SigV4 + policy guard already ran, so this only serves an authorized read.
+    if (this.tiering && obj.location && obj.location !== ObjectLocation.Local) {
+      if (obj.storageClass && obj.storageClass !== StorageClass.Standard) {
+        res.setHeader('x-amz-storage-class', obj.storageClass);
+      }
+      if (obj.remoteKey && size > this.tiering.inlineMaxBytes) {
+        const url = await this.tiering.redirectUrlFor(
+          bucket,
+          obj.remoteKey,
+          typeof rangeHeader === 'string' && rangeHeader.length > 0 ? rangeHeader : undefined,
+        );
+        res.redirect(307, url);
+        return undefined;
+      }
+      await this.tiering.rehydrate(bucket, key);
+    }
+
     // For an encrypted Range read we must fetch from the block-aligned offset so
     // the CTR keystream lines up; the intra-block prefix is dropped after decrypt.
     const readRange =
@@ -577,6 +617,10 @@ export class ObjectService {
     res.setHeader('Last-Modified', obj.modifiedAt.toUTCString());
     res.setHeader('Accept-Ranges', 'bytes');
     if (obj.currentVersionId) res.setHeader('x-amz-version-id', obj.currentVersionId);
+    // S3 emits x-amz-storage-class only for non-STANDARD classes (STORY-0901).
+    if (obj.storageClass && obj.storageClass !== StorageClass.Standard) {
+      res.setHeader('x-amz-storage-class', obj.storageClass);
+    }
     if (range) {
       res.status(206);
       res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
@@ -611,7 +655,28 @@ export class ObjectService {
     source.on('error', onErr);
     if (outStream !== source) outStream.on('error', onErr);
     outStream.pipe(res);
+    this.touchLastAccessed(obj);
     return undefined;
+  }
+
+  /**
+   * Best-effort stamp of `lastAccessedAt = now` for cold-object tiering
+   * (STORY-0901): what makes cold-selection mean "not *read* recently", not just
+   * "not *written* recently". Throttled to at most one write per 60s per key (so a
+   * byte-range poll can't turn one GET into many writes) and fire-and-forget off
+   * the hot path. No-op unless tiering is wired (nothing consumes the clock
+   * otherwise) so pre-tiering deployments write nothing extra.
+   */
+  private touchLastAccessed(obj: ObjectEntity): void {
+    if (!this.tiering || !obj.bucket) return;
+    const now = Date.now();
+    const last = obj.lastAccessedAt?.getTime() ?? 0;
+    if (now - last < 60_000) return; // throttle
+    void this.objects
+      .getEntityManager()
+      .fork()
+      .nativeUpdate(ObjectEntity, { bucket: { name: obj.bucket.name }, key: obj.key }, { lastAccessedAt: new Date(now) })
+      .catch(() => undefined);
   }
 
   /**
@@ -672,7 +737,13 @@ export class ObjectService {
       res.setHeader(`x-amz-meta-${name}`, value);
     }
     if (obj.currentVersionId) res.setHeader('x-amz-version-id', obj.currentVersionId);
+    // S3 emits x-amz-storage-class only for non-STANDARD classes (STORY-0901).
+    // HEAD answers from the row — a tiered stub is never rehydrated on HEAD.
+    if (obj.storageClass && obj.storageClass !== StorageClass.Standard) {
+      res.setHeader('x-amz-storage-class', obj.storageClass);
+    }
     res.status(200);
+    this.touchLastAccessed(obj);
     return undefined;
   }
 
@@ -725,6 +796,11 @@ export class ObjectService {
           eventTime: new Date().toISOString(),
         };
         this.events?.enqueueInTx(em, deletedEvent);
+        // Async replication (STORY-0900): a versioned delete hides the current
+        // version, so one-way replication reflects the VISIBLE state by deleting
+        // the remote key (per-version history is NOT replicated in v1). Enqueued
+        // on the marker's transaction via the same beforeCommit seam as webhooks.
+        this.outbox?.enqueue(em, { bucket: mk.bucket, key, op: 'DELETE' });
       });
       if (deletedEvent) this.events?.emitInProcess(deletedEvent);
       return { deleteMarker: true, versionId: marker.versionId };
@@ -761,6 +837,10 @@ export class ObjectService {
         eventTime: row.modifiedAt.toISOString(),
       };
       this.events?.enqueueInTx(em, deletedEvent);
+
+      // Async replication (STORY-0900): the object is gone locally, so reflect the
+      // visible state remotely by enqueuing a DELETE intent in this transaction.
+      this.outbox?.enqueue(em, { bucket: row.bucket, key, op: 'DELETE' });
 
       await em.commit();
       this.events?.emitInProcess(deletedEvent);
@@ -817,6 +897,43 @@ export class ObjectService {
   }
 
   /**
+   * Cold-object tiering scan seam (STORY-0901). Extends {@link scanForLifecycle}
+   * with the fields the sweep's cold predicate needs — `location`, `size`, and
+   * both access clocks — so the runner selects cold objects without a second
+   * query. Same cursor-paged prefix range-scan as ListObjectsV2.
+   */
+  async scanForTiering(input: {
+    bucket: string;
+    prefix: string;
+    afterKey: string | null;
+    limit: number;
+  }): Promise<
+    Array<{
+      bucket: string;
+      key: string;
+      location: ObjectLocation;
+      size: number;
+      lastAccessedAt?: Date;
+      modifiedAt: Date;
+    }>
+  > {
+    const { rows } = await this.objects.listByPrefix(
+      input.bucket,
+      input.prefix,
+      input.afterKey ?? undefined,
+      input.limit,
+    );
+    return rows.map((r) => ({
+      bucket: input.bucket,
+      key: r.key,
+      location: r.location,
+      size: Number(r.size),
+      lastAccessedAt: r.lastAccessedAt,
+      modifiedAt: r.modifiedAt,
+    }));
+  }
+
+  /**
    * Soft-delete (bucket, key) and move its blob to trash, joining the caller's
    * transaction (`input.em`) so a batch of expirations commits atomically. The
    * trash-purge tick (STORY-0316) performs the actual unlink after the grace
@@ -829,6 +946,10 @@ export class ObjectService {
     row.softDeleted = true;
     row.modifiedAt = new Date();
     em.persist(row);
+    // Async replication (STORY-0900): a lifecycle expiry removes the visible
+    // object — enqueue a DELETE intent on the runner's transaction so it rides
+    // along on the same atomic commit as the batch of expirations.
+    this.outbox?.enqueue(em, { bucket: row.bucket, key, op: 'DELETE' });
     await this.blobs.deleteBlob(bucket, key);
   }
 

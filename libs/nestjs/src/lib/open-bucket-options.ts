@@ -1,7 +1,12 @@
 import type { ModuleMetadata, Type } from '@nestjs/common';
 import { z } from 'zod';
 
-import { strongSecret, validateWebhookUrl } from './common/config/env.schema';
+import {
+  S3_BUCKET_RE,
+  strongSecret,
+  validateReplicationEndpoint,
+  validateWebhookUrl,
+} from './common/config/env.schema';
 
 /**
  * Configuration for {@link OpenBucketModule}. Replaces the standalone app's
@@ -84,6 +89,36 @@ export interface OpenBucketModuleOptions {
     /** Delivery tick interval (ms). Default 15000. */
     pollMs?: number;
   };
+
+  /**
+   * Async one-way replication of the current visible object state to an external
+   * S3-compatible target (STORY-0900) — R2 / B2 / MinIO / AWS S3. Omit to disable
+   * replication entirely (the outbox stays empty and the drain worker no-ops).
+   * Every committed PUT/DELETE enqueues a durable intent in the same transaction;
+   * a background worker drains it with per-key ordering, retry/backoff, and a
+   * dead-letter cap. NOTE: the worker sends object PLAINTEXT (SSE decrypted), so
+   * prefer an `https` endpoint — an `http` endpoint logs a boot-time warning.
+   */
+  replication?: {
+    /** S3-compatible endpoint (R2/B2/MinIO). Omit for real AWS S3. */
+    endpoint?: string;
+    /** Target region. Default `us-east-1`. */
+    region?: string;
+    /** Remote target bucket (must already exist). */
+    bucket: string;
+    /** Target credentials. */
+    credentials: { accessKeyId: string; secretAccessKey: string };
+    /** Path-style addressing — true for MinIO/S3-compat, false for AWS. Default true. */
+    forcePathStyle?: boolean;
+    /** Max attempts before an intent is dead-lettered. Default 12. */
+    maxAttempts?: number;
+    /** Drain tick interval (ms). Default 5000. */
+    drainIntervalMs?: number;
+    /** Distinct keys drained per tick. Default 50. */
+    batchKeys?: number;
+    /** Objects larger than this stream via multipart. Default 64 MiB. */
+    largeObjectThresholdBytes?: number;
+  };
 }
 
 /** Async variant for DI'd secrets (e.g. from the host's ConfigService). */
@@ -141,6 +176,17 @@ export interface ResolvedOpenBucketOptions {
     timeoutMs?: number;
     pollMs?: number;
   };
+  replication?: {
+    endpoint?: string;
+    region?: string;
+    bucket: string;
+    credentials: { accessKeyId: string; secretAccessKey: string };
+    forcePathStyle?: boolean;
+    maxAttempts?: number;
+    drainIntervalMs?: number;
+    batchKeys?: number;
+    largeObjectThresholdBytes?: number;
+  };
 }
 
 const DEFAULT_MOUNT = '/storage';
@@ -186,6 +232,25 @@ export function resolveOptions(o: OpenBucketModuleOptions): ResolvedOpenBucketOp
     // config-source when mapping to the env-shaped config). `undefined` keeps
     // webhooks disabled.
     webhooks: o.webhooks,
+    // Replication block passed through as-is (defaults applied in config-source).
+    // `undefined` keeps replication disabled. A present-but-partial block is a
+    // footgun: require the bucket + both credentials, or omit `replication`.
+    replication: o.replication
+      ? (() => {
+          if (
+            !o.replication.bucket ||
+            !o.replication.credentials?.accessKeyId ||
+            !o.replication.credentials?.secretAccessKey
+          ) {
+            throw new Error(
+              'OpenBucketModule: `replication` requires a non-empty `bucket` and ' +
+                '`credentials.accessKeyId` / `credentials.secretAccessKey`. Omit ' +
+                '`replication` entirely to disable replication.',
+            );
+          }
+          return o.replication;
+        })()
+      : undefined,
   };
 }
 
@@ -230,6 +295,24 @@ export function validateSecurityCriticalOptions(o: ResolvedOpenBucketOptions): v
           if (err) ctx.addIssue({ code: z.ZodIssueCode.custom, message: err });
         }),
         secret: strongSecret('webhooks.secret'),
+      })
+      .optional(),
+    // Replication (STORY-0900): a malformed endpoint or bucket name fails at boot
+    // rather than at first drain. The endpoint scheme (http warning) is handled
+    // at runtime in the REPLICATION_CONFIG factory — not a hard failure here.
+    replication: z
+      .object({
+        bucket: z
+          .string()
+          .regex(S3_BUCKET_RE, 'replication.bucket must be a valid S3 bucket name (3-63 chars)'),
+        endpoint: z
+          .string()
+          .optional()
+          .superRefine((e, ctx) => {
+            if (!e) return;
+            const { error } = validateReplicationEndpoint(e);
+            if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
+          }),
       })
       .optional(),
   });

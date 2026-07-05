@@ -281,6 +281,21 @@ describe('ObjectService.headObject safe headers (TASK-2110)', () => {
     expect(res._headers['content-disposition']).toBeUndefined();
     expect(res._headers['content-security-policy']).toBe("default-src 'none'; sandbox");
   });
+
+  // --- x-amz-storage-class (STORY-0901, TASK-2714) ---
+  it('HEAD of a tiered (GLACIER) object emits x-amz-storage-class', async () => {
+    const svc = makeSvc({ ...baseObj, contentType: 'text/plain', storageClass: 'GLACIER' });
+    const res = mkRes();
+    await svc.headObject(mkReq({}), res, 'b', 'k');
+    expect(res._headers['x-amz-storage-class']).toBe('GLACIER');
+  });
+
+  it('HEAD of a STANDARD object omits x-amz-storage-class (S3 parity)', async () => {
+    const svc = makeSvc({ ...baseObj, contentType: 'text/plain', storageClass: 'STANDARD' });
+    const res = mkRes();
+    await svc.headObject(mkReq({}), res, 'b', 'k');
+    expect(res._headers['x-amz-storage-class']).toBeUndefined();
+  });
 });
 
 // --- deleteOne object.deleted events (STORY-0801) ---

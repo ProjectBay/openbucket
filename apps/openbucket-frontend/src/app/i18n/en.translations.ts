@@ -10,6 +10,41 @@ export default {
     help: 'Help',
     admin: {
       backupRestore: 'Backup & Restore',
+      replication: 'Replication',
+    },
+  },
+  replication: {
+    title: 'Replication',
+    subtitle:
+      'Async replication health to the external target, and a reconcile action to backfill anything missing remotely.',
+    disabled: {
+      title: 'Replication not configured',
+      description: 'Set a replication target to enable async replication and reconcile.',
+    },
+    stats: {
+      pending: 'Pending',
+      lag: 'Replication lag',
+      failed: 'Failed',
+    },
+    reconcile: {
+      title: 'Reconcile',
+      description:
+        'Scan local objects and re-enqueue anything missing on the replication target.',
+      all: 'Reconcile all',
+      progress: 'Requeued / scanned',
+      confirmLabel: 'Reconcile',
+    },
+    perBucket: {
+      title: 'Per-bucket status',
+      bucket: 'Bucket',
+      pending: 'Pending',
+      inflight: 'In-flight',
+      failed: 'Failed',
+      lag: 'Lag',
+      actions: 'Actions',
+      reconcile: 'Reconcile',
+      empty: 'Nothing to replicate',
+      emptyHint: 'No pending or failed replication for any bucket.',
     },
   },
   backupRestore: {
@@ -198,6 +233,7 @@ export default {
     selectAll: 'Select all objects',
     name: 'Name',
     storage: 'Storage',
+    tiered: 'Tiered',
     size: 'Size',
     modified: 'Modified',
     etag: 'ETag',

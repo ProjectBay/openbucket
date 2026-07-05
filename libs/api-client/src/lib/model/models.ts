@@ -1,4 +1,5 @@
 export * from './bucket-policy-dto';
+export * from './bucket-replication-status-dto';
 export * from './bucket-summary-dto';
 export * from './bulk-delete-deleted-item';
 export * from './bulk-delete-dto';
@@ -32,6 +33,10 @@ export * from './object-version-dto';
 export * from './object-versions-response-dto';
 export * from './presign-request-dto';
 export * from './presigned-url-dto';
+export * from './reconcile-job-dto';
+export * from './reconcile-request-dto';
+export * from './replication-last-error-dto';
+export * from './replication-status-dto';
 export * from './retention-dto';
 export * from './tagging-dto';
 export * from './update-key-dto';

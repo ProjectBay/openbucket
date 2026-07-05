@@ -10,6 +10,7 @@ import {
   lucideDatabase,
   lucideKey,
   lucideLayoutDashboard,
+  lucideRefreshCw,
   lucideSettings,
 } from '@ng-icons/lucide';
 import { HlmCollapsibleImports } from '@openbucket/spartan-ui/collapsible';
@@ -42,6 +43,7 @@ import { SidebarConfig } from '../types';
       lucideDatabase,
       lucideKey,
       lucideLayoutDashboard,
+      lucideRefreshCw,
       lucideSettings,
     }),
   ],
