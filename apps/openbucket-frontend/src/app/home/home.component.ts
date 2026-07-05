@@ -150,7 +150,8 @@ const POLL_MS = 30_000;
               <a
                 hlmBtn
                 variant="outline"
-                routerLink="/keys"
+                routerLink="/settings"
+                [queryParams]="{ tab: 'keys' }"
               >
                 <ng-icon
                   name="lucideKey"

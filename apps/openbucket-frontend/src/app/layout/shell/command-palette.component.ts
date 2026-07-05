@@ -67,11 +67,11 @@ import { CommandPaletteService } from './command-palette.service';
 
             <hlm-command-group>
               <span hlmCommandGroupLabel>{{ 'command.goTo' | translate }}</span>
-              @for (n of nav; track n.url) {
+              @for (n of nav; track n.label) {
                 <button
                   hlmCommandItem
                   [value]="n.label | translate"
-                  (selected)="go(n.url)"
+                  (selected)="go(n.url, n.queryParams)"
                 >
                   <ng-icon [name]="n.icon" />
                   {{ n.label | translate }}
@@ -108,7 +108,7 @@ import { CommandPaletteService } from './command-palette.service';
               <button
                 hlmCommandItem
                 [value]="'dashboard.createKey' | translate"
-                (selected)="go('/keys')"
+                (selected)="go('/settings', { tab: 'keys' })"
               >
                 <ng-icon name="lucideKey" />
                 {{ 'dashboard.createKey' | translate }}
@@ -154,12 +154,22 @@ export class CommandPaletteComponent {
   private gTimer: ReturnType<typeof setTimeout> | undefined;
 
   protected readonly buckets = computed(() => this.store.items());
-  protected readonly nav = [
+  protected readonly nav: {
+    label: string;
+    icon: string;
+    url: string;
+    queryParams?: Record<string, string>;
+  }[] = [
     { label: 'sidebar.storage.dashboard', icon: 'lucideLayoutDashboard', url: '/' },
     { label: 'sidebar.storage.buckets', icon: 'lucideDatabase', url: '/buckets' },
-    { label: 'sidebar.storage.keys', icon: 'lucideKey', url: '/keys' },
+    { label: 'sidebar.storage.keys', icon: 'lucideKey', url: '/settings', queryParams: { tab: 'keys' } },
     { label: 'sidebar.storage.settings', icon: 'lucideSettings', url: '/settings' },
-    { label: 'sidebar.admin.backupRestore', icon: 'lucideArchive', url: '/backup-restore' },
+    {
+      label: 'sidebar.admin.backupRestore',
+      icon: 'lucideArchive',
+      url: '/settings',
+      queryParams: { tab: 'backup-restore' },
+    },
   ];
 
   constructor() {
@@ -198,7 +208,7 @@ export class CommandPaletteComponent {
         void this.router.navigate(['/buckets']);
       } else if (e.key === 'k') {
         e.preventDefault();
-        void this.router.navigate(['/keys']);
+        void this.router.navigate(['/settings'], { queryParams: { tab: 'keys' } });
       }
     }
   }
@@ -208,9 +218,9 @@ export class CommandPaletteComponent {
     this.dialog().open();
   }
 
-  protected go(url: string): void {
+  protected go(url: string, queryParams?: Record<string, string>): void {
     this.dialog().close();
-    void this.router.navigate([url]);
+    void this.router.navigate([url], queryParams ? { queryParams } : undefined);
   }
 
   protected toggleTheme(): void {

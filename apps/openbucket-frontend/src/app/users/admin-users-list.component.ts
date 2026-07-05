@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  OnDestroy,
   OnInit,
   computed,
   inject,
@@ -22,7 +21,6 @@ import { ConfirmDialogComponent } from '../shared/ui/confirm-dialog.component';
 import { ListStateComponent } from '../shared/ui/list-state.component';
 import { SortHeaderComponent, type SortDir } from '../shared/ui/sort-header.component';
 import { notify } from '../shared/ui/notify';
-import { PageHeaderService } from '../layout/shell/services';
 import { AuthService } from '../auth/auth.service';
 import { AdminUsersSignalStore } from './admin-users.signal-store';
 import { AdminUserCreateDialogComponent } from './admin-user-create-dialog.component';
@@ -56,6 +54,14 @@ import { AdminUserEditDialogComponent } from './admin-user-edit-dialog.component
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="p-6">
+      <div class="mb-4 flex justify-end">
+        <button
+          hlmBtn
+          (click)="createDialog().open()"
+        >
+          {{ 'users.create' | translate }}
+        </button>
+      </div>
       <ob-list-state
         [loading]="store.loading()"
         [error]="store.error()"
@@ -183,9 +189,8 @@ import { AdminUserEditDialogComponent } from './admin-user-edit-dialog.component
     />
   `,
 })
-export class AdminUsersListComponent implements OnInit, OnDestroy {
+export class AdminUsersListComponent implements OnInit {
   protected readonly store = inject(AdminUsersSignalStore);
-  private readonly pageHeader = inject(PageHeaderService);
   private readonly auth = inject(AuthService);
   private readonly i18n = inject(TranslateService);
 
@@ -209,17 +214,8 @@ export class AdminUsersListComponent implements OnInit, OnDestroy {
     );
   });
 
-  constructor() {
-    this.pageHeader.setPageHeader('users.title', 'users.subtitle');
-    this.pageHeader.setActionButton('users.create', () => this.createDialog().open());
-  }
-
   ngOnInit(): void {
     void this.store.refresh();
-  }
-
-  ngOnDestroy(): void {
-    this.pageHeader.hideActionButton();
   }
 
   protected toggleSort(key: 'username'): void {

@@ -17,7 +17,6 @@ import { BrnSelectImports } from '@spartan-ng/brain/select';
 import { RelativeTimePipe } from '../shared/ui/relative-time.pipe';
 import { CopyButtonComponent } from '../shared/ui/copy-button.component';
 import { ListStateComponent } from '../shared/ui/list-state.component';
-import { PageHeaderService } from '../layout/shell/services';
 import { AuditSignalStore } from './audit.signal-store';
 
 /** ISO 8601 → the value a `datetime-local` input expects (`YYYY-MM-DDTHH:mm`,
@@ -224,7 +223,6 @@ function localInputToIso(local: string): string | undefined {
 })
 export class AuditLogComponent implements OnInit {
   protected readonly store = inject(AuditSignalStore);
-  private readonly pageHeader = inject(PageHeaderService);
 
   protected readonly event = signal('');
   protected readonly subject = signal('');
@@ -233,7 +231,6 @@ export class AuditLogComponent implements OnInit {
   protected readonly to = signal('');
 
   constructor() {
-    this.pageHeader.setPageHeader('audit.title', 'audit.subtitle');
     // Hydrate the local controls from any preserved store filters (route re-entry).
     const f = this.store.filters();
     this.event.set(f.event ?? '');

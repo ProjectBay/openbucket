@@ -25,44 +25,13 @@ export const sidebarConfig: SidebarConfig = {
           icon: 'lucideSearch',
           url: '/search',
         }),
-        createSidebarConfig.item({
-          id: 'keys',
-          title: 'sidebar.storage.keys',
-          icon: 'lucideKey',
-          url: '/keys',
-        }),
-        createSidebarConfig.item({
-          id: 'users',
-          title: 'sidebar.admin.users',
-          icon: 'lucideUsers',
-          url: '/users',
-          // EPIC-11: full-admin only. Hidden from read-only admins (fullAdminGuard
-          // also redirects a deep-link); the server RolesGuard is authoritative.
-          requiresFullAdmin: true,
-        }),
+        // Access Keys, Admin Users, Backup & Restore, Replication and Audit Log
+        // now live as tabs inside /settings.
         createSidebarConfig.item({
           id: 'settings',
           title: 'sidebar.storage.settings',
           icon: 'lucideSettings',
           url: '/settings',
-        }),
-        createSidebarConfig.item({
-          id: 'backup-restore',
-          title: 'sidebar.admin.backupRestore',
-          icon: 'lucideArchive',
-          url: '/backup-restore',
-        }),
-        createSidebarConfig.item({
-          id: 'replication',
-          title: 'sidebar.admin.replication',
-          icon: 'lucideRefreshCw',
-          url: '/replication',
-        }),
-        createSidebarConfig.item({
-          id: 'audit',
-          title: 'sidebar.admin.audit',
-          icon: 'lucideScrollText',
-          url: '/audit',
         }),
       ],
     }),

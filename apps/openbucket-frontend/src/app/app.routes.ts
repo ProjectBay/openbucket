@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 
-import { authGuard, fullAdminGuard, mustNotRotateGuard, unauthGuard } from './auth/auth.guard';
+import { authGuard, mustNotRotateGuard, unauthGuard } from './auth/auth.guard';
 
 /**
  * SPA routes (§5.11). `/login` and `/force-rotate` sit outside the shell;
@@ -72,40 +72,11 @@ export const appRoutes: Routes = [
           import('./objects/object-search.component').then((m) => m.ObjectSearchComponent),
       },
       {
-        path: 'keys',
-        loadComponent: () => import('./keys/keys-list.component').then((m) => m.KeysListComponent),
-      },
-      {
-        path: 'users',
-        // Full-admin only (EPIC-11): the fullAdminGuard redirects a read-only
-        // admin to `/`. The server-side RolesGuard remains authoritative.
-        canActivate: [fullAdminGuard],
-        data: { breadcrumb: 'sidebar.admin.users' },
-        loadComponent: () =>
-          import('./users/admin-users-list.component').then((m) => m.AdminUsersListComponent),
-      },
-      {
+        // Access Keys, Admin Users, Backup & Restore, Replication and Audit Log
+        // are now tabs inside Settings (selected via the `?tab=` query param).
         path: 'settings',
         loadComponent: () =>
           import('./settings/settings.component').then((m) => m.SettingsComponent),
-      },
-      {
-        path: 'backup-restore',
-        data: { breadcrumb: 'sidebar.admin.backupRestore' },
-        loadComponent: () =>
-          import('./backup-restore/backup-restore.component').then((m) => m.BackupRestoreComponent),
-      },
-      {
-        path: 'replication',
-        data: { breadcrumb: 'sidebar.admin.replication' },
-        loadComponent: () =>
-          import('./replication/replication.component').then((m) => m.ReplicationComponent),
-      },
-      {
-        path: 'audit',
-        data: { breadcrumb: 'sidebar.admin.audit' },
-        loadComponent: () =>
-          import('./audit/audit-log.component').then((m) => m.AuditLogComponent),
       },
       {
         path: 'about',
