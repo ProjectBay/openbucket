@@ -9,6 +9,28 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.14] — 2026-07-05
+
+Feature release — adoption & observability (EPIC-13).
+
+### Added
+
+- **Multer storage engine** — `multer({ storage: openBucketStorage(ob, { bucket, key }) })`
+  lets any Express/NestJS `FileInterceptor` app write uploads straight into OpenBucket
+  (streamed, no temp files), plus an `@UploadedToBucket()` decorator. Exposed as the
+  `@openbucket/nestjs/multer` subpath; `multer` is an optional peer dependency.
+- **`openbucket` CLI** — bucket / access-key / backup / replication admin operations
+  over the admin API (no extra runtime dependency; credential-safe).
+- **Prometheus `/metrics` + optional OpenTelemetry.** A guarded (`off` / `public` /
+  `token`) scrape endpoint at `<mountPath>/metrics` exporting HTTP request/latency,
+  S3-operation, storage/object-count, and replication-lag metrics with bounded label
+  cardinality. OpenTelemetry tracing activates only if `@opentelemetry/api` is present.
+- **Scheduled backups & retention** — cron/interval snapshots with retention pruning
+  and an optional push to the replication target; status + "Run now" in the console.
+- **Integrity scrubbing** — a throttled background scrubber verifies stored objects
+  against their `sha256` to detect on-disk bit-rot and repairs a corrupt object from
+  the replication target when one is configured; surfaced in the admin API + console.
+
 ## [0.1.0-alpha.13] — 2026-07-05
 
 ### Changed
