@@ -2,10 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/libsql';
 import { InjectEntityManager } from '@mikro-orm/nestjs';
 
-import { Bucket, BucketRepository, LifecycleState } from '../../persistence/index';
+import { Bucket, BucketRepository, LifecycleState, StorageClass, TieringState } from '../../persistence/index';
 import { OPEN_BUCKET_ORM_CONTEXT } from '../../persistence/orm-context';
 
 import type { ExpirationRule } from '../../common/background/lifecycle-sweep.runner';
+import type { TransitionRule } from '../../common/background/tiering-sweep.runner';
 
 /**
  * Lifecycle domain seam (EPIC-03) consumed by the LifecycleSweepRunner (§4.10).
@@ -46,6 +47,31 @@ export class LifecycleService {
     return out;
   }
 
+  /**
+   * Every Enabled, day-based *transition* rule across all buckets (STORY-0901).
+   * Mirrors {@link activeExpirationRules} but keys on `transitionDays` and carries
+   * the target `StorageClass` the cold object is tiered to.
+   */
+  async activeTransitionRules(): Promise<TransitionRule[]> {
+    const buckets = await this.buckets.listAll();
+    const out: TransitionRule[] = [];
+    for (const b of buckets) {
+      (b.lifecycle ?? []).forEach((r, i) => {
+        if (r.status !== 'Enabled') return;
+        if (r.transitionDays == null) return;
+        const rawId = r.id && r.id.length > 0 ? r.id : `rule-${i}`;
+        out.push({
+          ruleId: `${b.name}/${rawId}`,
+          bucket: b.name,
+          prefix: r.prefix ?? '',
+          days: r.transitionDays,
+          storageClass: (r.transitionStorageClass as StorageClass) ?? StorageClass.StandardIA,
+        });
+      });
+    }
+    return out;
+  }
+
   /** Resume cursor for a rule, or `null` when none is stored / sweep is complete. */
   async loadCursor(ruleId: string): Promise<string | null> {
     const { bucket, rule } = splitRuleId(ruleId);
@@ -64,6 +90,31 @@ export class LifecycleService {
       const bucketRow = await em.findOne(Bucket, { name: bucket });
       if (!bucketRow) return; // bucket removed between scan and save — nothing to track
       row = em.create(LifecycleState, { bucket: bucketRow, ruleId: rule });
+    }
+    row.lastKeyProcessed = cursor ?? undefined;
+    row.lastSweepAt = new Date();
+    await em.persistAndFlush(row);
+  }
+
+  /** Tiering-sweep resume cursor (STORY-0901) — same protocol as {@link loadCursor}
+   *  but against the independent `tiering_state` table. */
+  async loadTieringCursor(ruleId: string): Promise<string | null> {
+    const { bucket, rule } = splitRuleId(ruleId);
+    const row = await this.em
+      .fork()
+      .findOne(TieringState, { bucket: { name: bucket }, ruleId: rule });
+    return row?.lastKeyProcessed ?? null;
+  }
+
+  /** Persist (or clear, when `cursor` is `null`) a tiering rule's resume cursor. */
+  async saveTieringCursor(ruleId: string, cursor: string | null): Promise<void> {
+    const { bucket, rule } = splitRuleId(ruleId);
+    const em = this.em.fork();
+    let row = await em.findOne(TieringState, { bucket: { name: bucket }, ruleId: rule });
+    if (!row) {
+      const bucketRow = await em.findOne(Bucket, { name: bucket });
+      if (!bucketRow) return; // bucket removed between scan and save — nothing to track
+      row = em.create(TieringState, { bucket: bucketRow, ruleId: rule });
     }
     row.lastKeyProcessed = cursor ?? undefined;
     row.lastSweepAt = new Date();

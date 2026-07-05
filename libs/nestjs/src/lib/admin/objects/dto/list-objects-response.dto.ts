@@ -11,6 +11,8 @@ export const ObjectListItemSchema = z
     etag: z.string(),
     lastModified: z.string().datetime(),
     storageClass: z.string(),
+    // Tiering location badge (STORY-0901): `local` vs `remote`/`rehydrating`.
+    location: z.string(),
   })
   .meta({ id: 'ObjectListItem' });
 

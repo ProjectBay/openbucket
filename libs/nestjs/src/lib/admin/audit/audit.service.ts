@@ -46,6 +46,11 @@ export interface AuditEvent {
  * | `key.updated`               | access key edited         | `subject`, `keyId`              |
  * | `key.deleted`               | access key removed        | `subject`, `keyId`              |
  * | `settings.changed`          | settings update           | `subject`, `field`              |
+ * | `replication.reconcile.started`   | reconcile job accepted | `subject`, `jobId`, `bucket?` |
+ * | `replication.reconcile.completed` | reconcile job finished | `subject`, `jobId`, `localScanned`, `remoteScanned`, `missingRequeued` |
+ *
+ * NOTE: the replication reconcile events NEVER carry the remote target's
+ * endpoint, bucket, or credentials — only the local job id/counts/subject.
  */
 @Injectable()
 export class AuditService {

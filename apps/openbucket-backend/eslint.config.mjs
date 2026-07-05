@@ -26,6 +26,7 @@ export default [
           ignoredDependencies: [
             '@aws-sdk/client-s3',
             '@aws-sdk/lib-storage',
+            '@aws-sdk/s3-request-presigner',
             '@mikro-orm/libsql',
             '@mikro-orm/migrations',
             '@mikro-orm/nestjs',

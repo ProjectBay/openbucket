@@ -2,11 +2,14 @@ import { Module } from '@nestjs/common';
 
 import { DomainModule } from '../../domain/domain.module';
 import { StorageModule } from '../../storage/storage.module';
+import { AuditService } from '../../admin/audit/audit.service';
 import { BackgroundService, SCHEDULED_TASKS, ScheduledTask } from './background.service';
 import { DerivativeCacheGcRunner } from './derivative-cache-gc.runner';
 import { LifecycleSweepRunner } from './lifecycle-sweep.runner';
 import { MultipartCleanupRunner } from './multipart-cleanup.runner';
+import { ReconcileRunner } from './reconcile.runner';
 import { ReplicationWorkerRunner } from './replication.runner';
+import { TieringSweepRunner } from './tiering-sweep.runner';
 import { TrashPurgeRunner } from './trash-purge.runner';
 import { WebhookDeliveryRunner } from '../../events/webhook-delivery.runner';
 
@@ -25,12 +28,15 @@ import { WebhookDeliveryRunner } from '../../events/webhook-delivery.runner';
   imports: [StorageModule, DomainModule],
   providers: [
     BackgroundService,
+    AuditService,
     MultipartCleanupRunner,
     LifecycleSweepRunner,
     TrashPurgeRunner,
     DerivativeCacheGcRunner,
     WebhookDeliveryRunner,
     ReplicationWorkerRunner,
+    ReconcileRunner,
+    TieringSweepRunner,
     {
       provide: SCHEDULED_TASKS,
       useFactory: (...tasks: ScheduledTask[]) => tasks,
@@ -41,6 +47,8 @@ import { WebhookDeliveryRunner } from '../../events/webhook-delivery.runner';
         DerivativeCacheGcRunner,
         WebhookDeliveryRunner,
         ReplicationWorkerRunner,
+        ReconcileRunner,
+        TieringSweepRunner,
       ],
     },
   ],

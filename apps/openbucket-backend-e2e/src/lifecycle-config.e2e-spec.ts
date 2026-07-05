@@ -97,7 +97,7 @@ describe('Bucket lifecycle configuration (e2e, TEST-0125)', () => {
     expect(get.body).toContain('<Days>30</Days>');
   });
 
-  it('PUT two rules with a <Transition> → 200; GET returns both, Transition ignored', async () => {
+  it('PUT two rules with a <Transition> → 200; GET round-trips the transition (tiering)', async () => {
     const put = await signed('PUT', `/${BUCKET}?lifecycle`, TWO_RULES);
     expect(put.status).toBeLessThan(300);
 
@@ -108,9 +108,11 @@ describe('Bucket lifecycle configuration (e2e, TEST-0125)', () => {
     expect(get.body).toContain('<Status>Disabled</Status>');
     expect(get.body).toContain('<Prefix>logs/</Prefix>');
     expect(get.body).toContain('<Days>90</Days>');
-    // The single storage tier means transitions are dropped on the way through.
-    expect(get.body).not.toContain('<Transition>');
-    expect(get.body).not.toContain('GLACIER');
+    // Cold-object tiering (EPIC-10 / STORY-0901) honors lifecycle transitions, so
+    // the <Transition> rule is now preserved and round-tripped (previously dropped
+    // when a single storage tier meant transitions were ignored).
+    expect(get.body).toContain('<Transition>');
+    expect(get.body).toContain('GLACIER');
   });
 
   it('DELETE clears the config → 204, then GET → 404', async () => {

@@ -20,6 +20,7 @@ import {
 } from '../persistence/index';
 
 import { Migration20260520000001_initial } from '../migrations/Migration20260520000001_initial';
+import { Migration20260711000001_object_tiering } from '../migrations/Migration20260711000001_object_tiering';
 import { BlobStore } from './blob-store';
 import { PathResolver } from './paths';
 import { RecoveryService } from './recovery.service';
@@ -66,7 +67,10 @@ describe('RecoveryService (TEST-0210)', () => {
       forceUtcTimezone: true,
       extensions: [Migrator],
       migrations: {
-        migrationsList: [{ name: 'Migration20260520000001_initial', class: Migration20260520000001_initial }],
+        migrationsList: [
+          { name: 'Migration20260520000001_initial', class: Migration20260520000001_initial },
+          { name: 'Migration20260711000001_object_tiering', class: Migration20260711000001_object_tiering },
+        ],
       },
       pool: {
         afterCreate: (conn: any, done: (err?: Error) => void) => {

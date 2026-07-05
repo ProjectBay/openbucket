@@ -12,7 +12,10 @@ import {
   AdminUser,
   RefreshToken,
   LifecycleState,
+  TieringState,
   EventDeliveryEntity,
+  ReplicationOutbox,
+  ReconcileJob,
 } from './persistence/index';
 
 /**
@@ -45,7 +48,10 @@ export default defineConfig({
     AdminUser,
     RefreshToken,
     LifecycleState,
+    TieringState,
     EventDeliveryEntity,
+    ReplicationOutbox,
+    ReconcileJob,
   ],
 
   // ReflectMetadataProvider (not TsMorph): every entity property declares its

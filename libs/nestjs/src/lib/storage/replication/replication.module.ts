@@ -4,6 +4,7 @@ import { AppConfigService } from '../../common/config/app-config.service';
 import { REPLICATION_CONFIG, resolveReplicationConfig } from './replication-config';
 import { ReplicationOutboxService } from './replication-outbox.service';
 import { ReplicationTargetService } from './replication-target.service';
+import { REMOTE_OBJECT_STORE } from './remote-object-store';
 
 /**
  * Async replication to an external S3-compatible target (STORY-0900). `@Global`
@@ -27,7 +28,15 @@ import { ReplicationTargetService } from './replication-target.service';
     },
     ReplicationOutboxService,
     ReplicationTargetService,
+    // Cold-object tiering (STORY-0901) consumes the same remote via this seam;
+    // `useExisting` reuses the one ReplicationTargetService (and its S3Client).
+    { provide: REMOTE_OBJECT_STORE, useExisting: ReplicationTargetService },
   ],
-  exports: [REPLICATION_CONFIG, ReplicationOutboxService, ReplicationTargetService],
+  exports: [
+    REPLICATION_CONFIG,
+    ReplicationOutboxService,
+    ReplicationTargetService,
+    REMOTE_OBJECT_STORE,
+  ],
 })
 export class ReplicationModule {}

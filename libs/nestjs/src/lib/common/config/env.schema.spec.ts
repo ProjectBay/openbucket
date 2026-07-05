@@ -294,6 +294,35 @@ describe('loadEnv', () => {
     ).toThrow('Refusing to boot: invalid environment.');
     expect(errSpy.mock.calls[0][0]).toContain('OB_REPLICATION_ENDPOINT');
   });
+
+  it('case 27: cold-object tiering knobs apply their documented defaults (STORY-0901)', () => {
+    const env = loadEnv({ ...baseEnv });
+    expect(env.OPENBUCKET_TIER_ENABLED).toBe(false);
+    expect(env.OPENBUCKET_TIER_INLINE_MAX_BYTES).toBe(256 * 1024 * 1024);
+    expect(env.OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS).toBe(30_000);
+    expect(env.OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE).toBe(8);
+    expect(env.OPENBUCKET_TIER_PRESIGN_TTL_SECONDS).toBe(300);
+  });
+
+  it('case 28: OPENBUCKET_TIER_ENABLED=false coerces to boolean false (STORY-0901)', () => {
+    // envBoolean, not z.coerce.boolean(), so the string "false" disables it.
+    expect(loadEnv({ ...baseEnv, OPENBUCKET_TIER_ENABLED: 'false' }).OPENBUCKET_TIER_ENABLED).toBe(
+      false,
+    );
+    expect(loadEnv({ ...baseEnv, OPENBUCKET_TIER_ENABLED: 'true' }).OPENBUCKET_TIER_ENABLED).toBe(
+      true,
+    );
+  });
+
+  it('case 29: out-of-range tiering knobs are rejected at boot (STORY-0901)', () => {
+    // presign TTL is bounded [30, 3600]; a negative concurrency cap is rejected.
+    expect(() => loadEnv({ ...baseEnv, OPENBUCKET_TIER_PRESIGN_TTL_SECONDS: '5' })).toThrow(
+      'Refusing to boot: invalid environment.',
+    );
+    expect(() => loadEnv({ ...baseEnv, OPENBUCKET_TIER_PRESIGN_TTL_SECONDS: '99999' })).toThrow();
+    expect(() => loadEnv({ ...baseEnv, OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE: '-1' })).toThrow();
+    expect(() => loadEnv({ ...baseEnv, OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS: '0' })).toThrow();
+  });
 });
 
 describe('AppConfigService', () => {

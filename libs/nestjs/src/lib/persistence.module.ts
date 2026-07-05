@@ -15,6 +15,8 @@ import { Migration20260625000001_object_encryption } from './migrations/Migratio
 import { Migration20260701000001_object_content_sha256 } from './migrations/Migration20260701000001_object_content_sha256';
 import { Migration20260702000001_event_deliveries } from './migrations/Migration20260702000001_event_deliveries';
 import { Migration20260710000001_replication_outbox } from './migrations/Migration20260710000001_replication_outbox';
+import { Migration20260711000001_object_tiering } from './migrations/Migration20260711000001_object_tiering';
+import { Migration20260712000001_reconcile_job } from './migrations/Migration20260712000001_reconcile_job';
 import {
   Bucket,
   ObjectEntity,
@@ -25,8 +27,10 @@ import {
   AdminUser,
   RefreshToken,
   LifecycleState,
+  TieringState,
   EventDeliveryEntity,
   ReplicationOutbox,
+  ReconcileJob,
   BucketRepository,
   ObjectRepository,
   AdminUserRepository,
@@ -46,8 +50,10 @@ const ENTITIES = [
   AdminUser,
   RefreshToken,
   LifecycleState,
+  TieringState,
   EventDeliveryEntity,
   ReplicationOutbox,
+  ReconcileJob,
 ];
 
 /**
@@ -136,6 +142,14 @@ const ENTITIES = [
             {
               name: 'Migration20260710000001_replication_outbox',
               class: Migration20260710000001_replication_outbox,
+            },
+            {
+              name: 'Migration20260711000001_object_tiering',
+              class: Migration20260711000001_object_tiering,
+            },
+            {
+              name: 'Migration20260712000001_reconcile_job',
+              class: Migration20260712000001_reconcile_job,
             },
           ],
           transactional: true,

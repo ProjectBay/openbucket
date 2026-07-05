@@ -2,7 +2,13 @@ import { Entity, Index, ManyToOne, PrimaryKey, Property, Unique } from '@mikro-o
 
 import { Bucket } from './bucket.entity';
 import { ObjectRepository } from '../repositories/object.repository';
-import { ObjectEncryptionState, ObjectLockObjectState, StorageClass, TagSet } from './types';
+import {
+  ObjectEncryptionState,
+  ObjectLocation,
+  ObjectLockObjectState,
+  StorageClass,
+  TagSet,
+} from './types';
 
 // Lazy `repository: () => …` — see bucket.entity.ts for the rationale.
 @Entity({ tableName: 'objects', repository: () => ObjectRepository })
@@ -59,6 +65,24 @@ export class ObjectEntity {
 
   @Property({ type: 'string', default: StorageClass.Standard })
   storageClass: StorageClass = StorageClass.Standard;
+
+  // -------- cold-object tiering (STORY-0901) --------------------------------
+  // Where the object's bytes physically live. Defaults to `local` so every
+  // pre-tiering row is served exactly as today; only a transition sweep flips it.
+  @Property({ type: 'string', default: ObjectLocation.Local })
+  location: ObjectLocation = ObjectLocation.Local;
+
+  /** Remote object key when tiered (key-codec encoded, bucket-scoped). Null when LOCAL. */
+  @Property({ type: 'text', nullable: true })
+  remoteKey?: string;
+
+  @Property({ type: 'datetime', nullable: true })
+  tieredAt?: Date;
+
+  /** Read/HEAD access clock for cold selection; nullable ⇒ fall back to modifiedAt. */
+  @Index({ name: 'ix_objects_lastaccessed' })
+  @Property({ type: 'datetime', nullable: true })
+  lastAccessedAt?: Date;
 
   @Property({ type: 'boolean', default: false })
   softDeleted = false;

@@ -20,5 +20,6 @@ export interface ObjectMetaDto {
     tagging?: { [key: string]: string; };
     versionId?: string;
     storageClass: string;
+    location: string;
 }
 

@@ -84,5 +84,12 @@ export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
     OB_REPLICATION_BATCH_KEYS: opts.replication?.batchKeys ?? 50,
     OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES:
       opts.replication?.largeObjectThresholdBytes ?? 64 * 1024 * 1024,
+    // Cold-object tiering (STORY-0901). Off by default; a library host enables it
+    // via the env-driven standalone path. Defaults mirror the env schema.
+    OPENBUCKET_TIER_ENABLED: false,
+    OPENBUCKET_TIER_INLINE_MAX_BYTES: 256 * 1024 * 1024,
+    OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS: 30_000,
+    OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE: 8,
+    OPENBUCKET_TIER_PRESIGN_TTL_SECONDS: 300,
   };
 }

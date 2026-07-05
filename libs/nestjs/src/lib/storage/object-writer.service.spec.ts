@@ -31,6 +31,7 @@ import { Migration20260520000001_initial } from '../migrations/Migration20260520
 import { Migration20260625000001_object_encryption } from '../migrations/Migration20260625000001_object_encryption';
 import { Migration20260701000001_object_content_sha256 } from '../migrations/Migration20260701000001_object_content_sha256';
 import { Migration20260702000001_event_deliveries } from '../migrations/Migration20260702000001_event_deliveries';
+import { Migration20260711000001_object_tiering } from '../migrations/Migration20260711000001_object_tiering';
 
 const ENTITIES = [
   Bucket,
@@ -76,6 +77,7 @@ describe('ObjectWriterService (TEST-0209)', () => {
           { name: 'Migration20260625000001_object_encryption', class: Migration20260625000001_object_encryption },
           { name: 'Migration20260701000001_object_content_sha256', class: Migration20260701000001_object_content_sha256 },
           { name: 'Migration20260702000001_event_deliveries', class: Migration20260702000001_event_deliveries },
+          { name: 'Migration20260711000001_object_tiering', class: Migration20260711000001_object_tiering },
         ],
       },
       pool: {

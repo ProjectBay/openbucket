@@ -1,7 +1,7 @@
 import { Entity, Index, ManyToOne, PrimaryKey, Property } from '@mikro-orm/core';
 
 import { Bucket } from './bucket.entity';
-import { ObjectEncryptionState } from './types';
+import { ObjectEncryptionState, ObjectLocation } from './types';
 
 @Entity({ tableName: 'object_versions' })
 @Index({ name: 'ix_versions_bucket_key_version', properties: ['bucket', 'key', 'versionId'] })
@@ -38,6 +38,22 @@ export class ObjectVersion {
 
   @Property({ type: 'boolean', default: false })
   isDeleteMarker = false;
+
+  // -------- cold-object tiering (STORY-0901) --------------------------------
+  // Mirror the object-row location columns so a tiered noncurrent version is
+  // tracked too. Defaults to `local` (back-compat).
+  @Property({ type: 'string', default: ObjectLocation.Local })
+  location: ObjectLocation = ObjectLocation.Local;
+
+  /** Remote object key when this version is tiered (key-codec encoded). Null when LOCAL. */
+  @Property({ type: 'text', nullable: true })
+  remoteKey?: string;
+
+  @Property({ type: 'datetime', nullable: true })
+  tieredAt?: Date;
+
+  @Property({ type: 'datetime', nullable: true })
+  lastAccessedAt?: Date;
 
   @Property({ type: 'datetime' })
   createdAt: Date = new Date();

@@ -10,6 +10,42 @@ export default {
     help: 'Hilfe',
     admin: {
       backupRestore: 'Sicherung & Wiederherstellung',
+      replication: 'Replikation',
+    },
+  },
+  replication: {
+    title: 'Replikation',
+    subtitle:
+      'Zustand der asynchronen Replikation zum externen Ziel und eine Abgleich-Aktion, um remote Fehlendes nachzuladen.',
+    disabled: {
+      title: 'Replikation nicht konfiguriert',
+      description:
+        'Konfigurieren Sie ein Replikationsziel, um asynchrone Replikation und Abgleich zu aktivieren.',
+    },
+    stats: {
+      pending: 'Ausstehend',
+      lag: 'Replikationsverzögerung',
+      failed: 'Fehlgeschlagen',
+    },
+    reconcile: {
+      title: 'Abgleich',
+      description:
+        'Lokale Objekte scannen und alles erneut einreihen, was auf dem Replikationsziel fehlt.',
+      all: 'Alle abgleichen',
+      progress: 'Erneut eingereiht / gescannt',
+      confirmLabel: 'Abgleichen',
+    },
+    perBucket: {
+      title: 'Status je Bucket',
+      bucket: 'Bucket',
+      pending: 'Ausstehend',
+      inflight: 'In Bearbeitung',
+      failed: 'Fehlgeschlagen',
+      lag: 'Verzögerung',
+      actions: 'Aktionen',
+      reconcile: 'Abgleichen',
+      empty: 'Nichts zu replizieren',
+      emptyHint: 'Keine ausstehende oder fehlgeschlagene Replikation für einen Bucket.',
     },
   },
   backupRestore: {
@@ -199,6 +235,7 @@ export default {
     selectAll: 'Alle Objekte auswählen',
     name: 'Name',
     storage: 'Speicher',
+    tiered: 'Ausgelagert',
     size: 'Größe',
     modified: 'Geändert',
     etag: 'ETag',

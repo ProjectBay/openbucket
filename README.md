@@ -54,7 +54,10 @@ metadata).
 S3-compatible target (AWS S3 / Cloudflare R2 / Backblaze B2 / MinIO) via a durable
 **transactional outbox**: every committed PUT/DELETE is mirrored with per-key
 ordering, last-writer-wins coalescing, exponential-backoff retry, and a dead-letter
-cap; the drain worker resumes on boot and survives remote outages. Plus **backup &
+cap; the drain worker resumes on boot and survives remote outages. **Cold-object
+tiering** offloads rarely-accessed objects to that same remote (via lifecycle
+`<Transition>` rules) and **rehydrates them transparently on read** (single-flight,
+integrity-verified, with a presigned redirect for large objects). Plus **backup &
 restore** (per-bucket + whole-instance `.zip` snapshots).
 
 **Operations** — refuse-to-boot env validation, forward-only DB migrations on
@@ -285,6 +288,32 @@ required together (a partial config refuses to boot).
 | `OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES` |      | `67108864`    | Stream via multipart above this (64 MiB).                 |
 
 \* Required only when `OB_REPLICATION_ENABLED=true`.
+
+The admin console's **Replication** page (and the `/api/admin/replication` API)
+shows replication health — pending/failed depth and lag — and offers a
+**Reconcile** action that scans local objects, diffs them against the target, and
+re-enqueues anything missing (a single-flight, bounded backfill). No remote
+endpoint or credential is ever surfaced in the status, job errors, or audit log.
+
+### Cold-object tiering (read-through)
+
+Offload **cold objects** to the replication target and **rehydrate them
+transparently on read**. Add a `<Transition>` (Days since last access + a
+`StorageClass` of `STANDARD_IA`/`GLACIER`/`DEEP_ARCHIVE`) to a bucket's lifecycle
+rule; a background sweep tiers matching objects to the remote (after confirming
+durability) and a `GET` fetches them back, integrity-verifies, and serves them
+identically. Large objects are answered with a short-lived presigned redirect
+instead of being proxied. Off by default and a no-op unless a replication target
+is also configured — see the
+[library README](./libs/nestjs/README.md#cold-object-tiering-read-through).
+
+| Variable | Req | Default | Purpose |
+| --------------------------------------------- | :-: | ------------- | ------------------------------------------------------------- |
+| `OPENBUCKET_TIER_ENABLED`                     |     | `false`       | Master switch. No-op unless a replication target is configured. |
+| `OPENBUCKET_TIER_INLINE_MAX_BYTES`            |     | `268435456`   | Proxy read-through at/under this size; larger ⇒ presigned redirect (256 MiB). |
+| `OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS`      |     | `30000`       | Latency bound on a proxied fetch before `503 SlowDown`.       |
+| `OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE`    |     | `8`           | Global concurrent-rehydration cap (`0` = unlimited).          |
+| `OPENBUCKET_TIER_PRESIGN_TTL_SECONDS`         |     | `300`         | TTL for presigned redirect URLs (30–3600).                    |
 
 ---
 

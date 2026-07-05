@@ -144,6 +144,24 @@ export function parseLifecycleConfig(xmlBody: unknown): LifecycleRule[] {
       if (exp.ExpiredObjectDeleteMarker !== undefined)
         rule.expiredObjectDeleteMarker = exp.ExpiredObjectDeleteMarker === true;
     }
+    // Cold-object tiering transition (STORY-0901). `<Transition>` is array-hinted
+    // by the parser; the first Days+StorageClass drives the tiering sweep. Only the
+    // classes the sweep understands are retained (others are ignored, not dropped
+    // from expiration). Independent of Expiration — a rule may carry both.
+    const transRaw = r.Transition;
+    const trans = (Array.isArray(transRaw) ? transRaw[0] : transRaw) as
+      | Record<string, unknown>
+      | undefined;
+    if (trans) {
+      const tDays = toInt(trans.Days);
+      if (tDays !== undefined) rule.transitionDays = tDays;
+      const sc = trans.StorageClass === undefined || trans.StorageClass === null
+        ? undefined
+        : String(trans.StorageClass);
+      if (sc === 'STANDARD_IA' || sc === 'GLACIER' || sc === 'DEEP_ARCHIVE') {
+        rule.transitionStorageClass = sc;
+      }
+    }
     const ncDays = toInt(
       (r.NoncurrentVersionExpiration as Record<string, unknown> | undefined)?.NoncurrentDays,
     );
@@ -176,6 +194,12 @@ export function lifecycleConfigDoc(rules: LifecycleRule[]): unknown {
       if (r.expiredObjectDeleteMarker !== undefined)
         expiration.ExpiredObjectDeleteMarker = r.expiredObjectDeleteMarker;
       if (Object.keys(expiration).length > 0) rule.Expiration = expiration;
+      if (r.transitionDays !== undefined) {
+        const transition: Record<string, unknown> = { Days: r.transitionDays };
+        if (r.transitionStorageClass !== undefined)
+          transition.StorageClass = r.transitionStorageClass;
+        rule.Transition = transition;
+      }
       if (r.noncurrentVersionExpirationDays !== undefined)
         rule.NoncurrentVersionExpiration = { NoncurrentDays: r.noncurrentVersionExpirationDays };
       if (r.abortIncompleteMultipartUploadDays !== undefined)

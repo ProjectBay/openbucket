@@ -83,6 +83,7 @@ export class ObjectsAdminController {
         etag: o.etag,
         lastModified: o.lastModified.toISOString(),
         storageClass: o.storageClass,
+        location: o.location,
       })),
       commonPrefixes: page.commonPrefixes,
     };
@@ -322,6 +323,7 @@ export class ObjectsAdminController {
       tagging: obj.tagging,
       versionId: obj.versionId,
       storageClass: obj.storageClass,
+      location: obj.location,
     };
     res.json(meta);
   }

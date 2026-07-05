@@ -24,6 +24,7 @@ import { BlobStore } from '../storage/blob-store';
 import { ObjectWriterService } from '../storage/object-writer.service';
 import { Migration20260520000001_initial } from '../migrations/Migration20260520000001_initial';
 import { Migration20260701000001_object_content_sha256 } from '../migrations/Migration20260701000001_object_content_sha256';
+import { Migration20260711000001_object_tiering } from '../migrations/Migration20260711000001_object_tiering';
 
 const ENTITIES = [
   Bucket,
@@ -67,6 +68,7 @@ describe('concurrency invariants (TEST-0317)', () => {
         migrationsList: [
           { name: 'Migration20260520000001_initial', class: Migration20260520000001_initial },
           { name: 'Migration20260701000001_object_content_sha256', class: Migration20260701000001_object_content_sha256 },
+          { name: 'Migration20260711000001_object_tiering', class: Migration20260711000001_object_tiering },
         ],
       },
       pool: {

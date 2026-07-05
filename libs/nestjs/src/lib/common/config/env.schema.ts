@@ -258,6 +258,22 @@ export const EnvSchema = z
       .positive()
       .default(64 * 1024 * 1024),
 
+    // --- cold-object tiering (STORY-0901) ---
+    // Master switch; still a no-op unless a STORY-0900 remote target is configured.
+    OPENBUCKET_TIER_ENABLED: envBoolean(false),
+    // Read-through: objects at/under this size are proxied; larger ⇒ presigned redirect.
+    OPENBUCKET_TIER_INLINE_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .nonnegative()
+      .default(256 * 1024 * 1024), // 256 MiB
+    // Hard latency bound on a proxied remote fetch before returning 503 SlowDown.
+    OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+    // Global cap on concurrent rehydrations (disk + egress amplifier). 0 = unlimited.
+    OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE: z.coerce.number().int().nonnegative().default(8),
+    // TTL for presigned redirect URLs.
+    OPENBUCKET_TIER_PRESIGN_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+
     // --- shutdown ---
     SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
   })

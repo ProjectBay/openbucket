@@ -17,6 +17,9 @@ export const ObjectMetaSchema = z.object({
   tagging: z.record(z.string(), z.string()).optional(),
   versionId: z.string().optional(),
   storageClass: z.string(),
+  // Physical location for the tiering badge (STORY-0901): `local` vs
+  // `remote`/`rehydrating`. The remote key/endpoint is never surfaced.
+  location: z.string(),
 });
 
 export class ObjectMetaDto extends createZodDto(ObjectMetaSchema) {}

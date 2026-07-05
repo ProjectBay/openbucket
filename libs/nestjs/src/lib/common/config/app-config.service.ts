@@ -75,4 +75,11 @@ export class AppConfigService {
   get replicationDrainIntervalMs(): number { return this.raw.get('OB_REPLICATION_DRAIN_INTERVAL_MS', { infer: true }); }
   get replicationBatchKeys(): number { return this.raw.get('OB_REPLICATION_BATCH_KEYS', { infer: true }); }
   get replicationLargeObjectThresholdBytes(): number { return this.raw.get('OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES', { infer: true }); }
+
+  // --- cold-object tiering (STORY-0901) ---
+  get tierEnabled(): boolean { return this.raw.get('OPENBUCKET_TIER_ENABLED', { infer: true }); }
+  get tierInlineMaxBytes(): number { return this.raw.get('OPENBUCKET_TIER_INLINE_MAX_BYTES', { infer: true }); }
+  get tierReadThroughTimeoutMs(): number { return this.raw.get('OPENBUCKET_TIER_READTHROUGH_TIMEOUT_MS', { infer: true }); }
+  get tierMaxConcurrentRehydrate(): number { return this.raw.get('OPENBUCKET_TIER_MAX_CONCURRENT_REHYDRATE', { infer: true }); }
+  get tierPresignTtlSeconds(): number { return this.raw.get('OPENBUCKET_TIER_PRESIGN_TTL_SECONDS', { infer: true }); }
 }
