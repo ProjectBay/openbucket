@@ -1,0 +1,16 @@
+name: OpenBucket CodeQL config
+
+# Scope the JS/TS analysis to hand-written, shipped source.
+#
+# paths-ignore removes findings that are either not maintainable by us or never
+# reach a production runtime:
+#   - libs/api-client/**  — openapi-generator output (`nx run api-client:generate`),
+#     regenerated wholesale from the exported OpenAPI doc. Never hand-edited, so
+#     its js/unused-local-variable "note" alerts are noise (47 of them).
+#   - **/admin/_test/**   — TestController and its module are mounted ONLY when
+#     OPENBUCKET_TEST_MODE=1 (see open-bucket-core.module.ts) and are never present
+#     in a production/standalone container, so the js/resource-exhaustion finding on
+#     the deliberately test-only /slow endpoint (already clamped to 60s) is inert.
+paths-ignore:
+  - libs/api-client/**
+  - '**/admin/_test/**'

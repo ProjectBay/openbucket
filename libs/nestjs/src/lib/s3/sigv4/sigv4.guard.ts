@@ -150,10 +150,15 @@ export class SigV4Guard implements CanActivate {
     //                          SignedHeaders=host;x-amz-content-sha256;x-amz-date,
     //                          Signature=hex…
     const body = authz.slice('AWS4-HMAC-SHA256 '.length);
-    const parts: Record<string, string> = {};
+    // Null-prototype map keyed by an allowlist of the only three directives we
+    // consume. Both guards defuse js/remote-property-injection: the header name
+    // `k` is attacker-controlled, so restricting writes to known keys (and using
+    // a prototype-less object) prevents it from reaching `__proto__`/prototype.
+    const ALLOWED_DIRECTIVES = new Set(['Credential', 'SignedHeaders', 'Signature']);
+    const parts: Record<string, string> = Object.create(null);
     for (const seg of body.split(',')) {
       const [k, v] = seg.trim().split('=');
-      if (k && v) parts[k] = v;
+      if (k && v && ALLOWED_DIRECTIVES.has(k)) parts[k] = v;
     }
     const cred = parts['Credential'];
     if (!cred) throw new AccessDeniedError('missing Credential');

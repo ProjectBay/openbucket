@@ -20,7 +20,10 @@ name: release-nestjs
 
 on:
   push:
-    tags: ['nestjs-v*']
+    # A plain `v*` tag ships BOTH the npm package (this workflow) and the Docker
+    # image (release-docker.yml) from one tag. `nestjs-v*` is kept for npm-only
+    # releases. The version-verify step below strips either prefix.
+    tags: ['v*', 'nestjs-v*']
   workflow_dispatch:
 
 concurrency:
@@ -60,6 +63,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           tag_version="${GITHUB_REF_NAME#nestjs-v}"
+          tag_version="${tag_version#v}"
           pkg_version="$(node -p "require('./libs/nestjs/package.json').version")"
           if [ "$tag_version" != "$pkg_version" ]; then
             echo "::error::Tag $GITHUB_REF_NAME ($tag_version) != libs/nestjs/package.json version $pkg_version"

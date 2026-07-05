@@ -15,6 +15,15 @@ import { Sigv4Verifier } from './sigv4.verifier';
 export const MAX_EXPIRES = 7 * 24 * 60 * 60; // AWS: max 7 days.
 const MAX_SKEW_MS = 15 * 60 * 1000;
 
+/** Strip leading and trailing '/' in a single linear pass (ReDoS-free). */
+function trimSlashes(s: string): string {
+  let start = 0;
+  let end = s.length;
+  while (start < end && s.charCodeAt(start) === 0x2f) start++;
+  while (end > start && s.charCodeAt(end - 1) === 0x2f) end--;
+  return s.slice(start, end);
+}
+
 /**
  * Verify a presigned-URL request (WHITEPAPER §2.5). Differs from header-based
  * SigV4 in three ways: the signature is the `X-Amz-Signature` query param
@@ -146,9 +155,10 @@ export function buildPresignedUrl(p: PresignInput): string {
     .map((s) => awsUriEncode(s, false))
     .join('/');
   // Normalise the mount prefix: leading slash, no trailing slash, `''` for root.
-  const prefix = p.basePath
-    ? `/${p.basePath.replace(/^\/+/, '').replace(/\/+$/, '')}`.replace(/^\/$/, '')
-    : '';
+  // trimSlashes is a linear scan — `/\/+$/` is an unanchored one-or-more
+  // quantifier that backtracks O(n²) on a long slash run (js/polynomial-redos).
+  const trimmed = trimSlashes(p.basePath ?? '');
+  const prefix = trimmed ? `/${trimmed}` : '';
   const pathname = `${prefix}/${awsUriEncode(p.bucket, false)}/${encodedKey}`;
 
   const params = new URLSearchParams();

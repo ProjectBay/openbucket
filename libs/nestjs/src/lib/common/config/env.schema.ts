@@ -127,7 +127,12 @@ export function normalizeMount(p: string): string {
   let m = p.trim();
   if (m === '/' || m === '') return '';
   if (!m.startsWith('/')) m = `/${m}`;
-  return m.replace(/\/+$/, '');
+  // Strip trailing '/' with a linear scan rather than a regex: `/\/+$/` is an
+  // unanchored one-or-more quantifier that backtracks O(n²) on a long run of
+  // slashes that doesn't reach the end (js/polynomial-redos). Same result.
+  let end = m.length;
+  while (end > 0 && m.charCodeAt(end - 1) === 0x2f /* '/' */) end--;
+  return m.slice(0, end);
 }
 
 export const validateReplicationEndpoint = (

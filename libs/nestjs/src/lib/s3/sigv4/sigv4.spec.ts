@@ -241,6 +241,29 @@ describe('SigV4 (TEST-0104)', () => {
     expect(parsed.signature).toBe('deadbeef');
   });
 
+  it('case 10b: parseAuthorization ignores unknown/__proto__ directives (js/remote-property-injection)', () => {
+    const guard = mkGuard(ROOT_CREDS) as unknown as {
+      parseAuthorization(a: string): {
+        accessKeyId: string;
+        signedHeaders: string[];
+        signature: string;
+      };
+    };
+    const before = Object.prototype as unknown as Record<string, unknown>;
+    const parsed = guard.parseAuthorization(
+      'AWS4-HMAC-SHA256 __proto__=polluted, constructor=x, ' +
+        'Credential=AKID/20260520/us-east-1/s3/aws4_request, ' +
+        'SignedHeaders=host, Signature=deadbeef',
+    );
+    // Real directives still parse; the injected ones are dropped, not stored.
+    expect(parsed.accessKeyId).toBe('AKID');
+    expect(parsed.signature).toBe('deadbeef');
+    expect(parsed.signedHeaders).toEqual(['host']);
+    // Object.prototype is untouched.
+    expect(before['polluted']).toBeUndefined();
+    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+  });
+
   it('happy path: a valid aws4-signed header request authenticates and stamps accessKeyId', async () => {
     const { req } = signedReq({ host: 'my-bucket.localhost', path: '/some/key.txt' });
     const guard = mkGuard(ROOT_CREDS);

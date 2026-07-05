@@ -34,6 +34,15 @@ const UNRESERVED = new Set<number>();
 
 const HEX = '0123456789ABCDEF';
 
+/**
+ * Per-segment byte cap. The encoded output can only grow (each byte maps to 1
+ * or 3 output chars), so a raw segment longer than this can never encode to
+ * <= 255 bytes and is rejected up front — this both preserves the existing
+ * length semantics and gives the encode loop a provably-constant upper bound
+ * (CWE-834, js/loop-bound-injection).
+ */
+const MAX_SEGMENT_BYTES = 255;
+
 // Placeholder for an EMPTY key segment (from a trailing slash — an S3 "folder
 // marker" like `photos/` — or a `//` in the key). Left as '' it would produce a
 // path ending in (or containing a doubled) '/', which can't be a filename
@@ -49,6 +58,13 @@ function encodeByte(b: number): string {
 function encodeSegment(segment: string): string {
   if (segment.length === 0) return EMPTY_SEGMENT; // trailing/double slash → safe placeholder
   const bytes = Buffer.from(segment, 'utf8');
+  // Bound the loop before entering it (js/loop-bound-injection): the encoded
+  // form is never shorter than the raw bytes, so anything past this cap would
+  // fail the post-encode 255-byte check anyway — reject it here so the loop
+  // bound is a constant.
+  if (bytes.length > MAX_SEGMENT_BYTES) {
+    throw new KeyTooLongError(segment);
+  }
   let out = '';
   for (let i = 0; i < bytes.length; i++) {
     const b = bytes[i];
@@ -74,7 +90,7 @@ function encodeSegment(segment: string): string {
     out = out.slice(0, -1) + '%20';
   }
 
-  if (Buffer.byteLength(out, 'utf8') > 255) {
+  if (Buffer.byteLength(out, 'utf8') > MAX_SEGMENT_BYTES) {
     throw new KeyTooLongError(segment);
   }
   return out;
