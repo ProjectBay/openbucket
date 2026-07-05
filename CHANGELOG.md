@@ -9,6 +9,22 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.16] — 2026-07-06
+
+### Security
+
+- **Hardening from a CodeQL sweep.** Fixed a ReDoS-prone regex in the mount-path
+  normalizer, the presigned-URL path trimmer, and the form URL validator (all now
+  linear); bounded the key-codec encode loop; hardened the SigV4 authorization
+  parser against prototype-property injection (null-prototype object + directive
+  allowlist); and added a defense-in-depth path-containment barrier at the storage
+  path choke-point (`resolve` + base-prefix assertion) so any segment that ever
+  bypassed the key-codec fails closed instead of escaping the data directory. CI
+  workflows gained least-privilege permissions and SHA-pinned actions.
+
+_This release is the first shipped via a single `v*` tag (npm **and** Docker image
+together)._
+
 ## [0.1.0-alpha.15] — 2026-07-05
 
 ### Added
