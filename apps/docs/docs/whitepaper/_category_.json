@@ -1,9 +1,1 @@
-{
-  "label": "Whitepaper",
-  "position": 7,
-  "link": {
-    "type": "generated-index",
-    "title": "Implementation whitepaper",
-    "description": "OpenBucket's design in depth: backend architecture & bootstrap, the S3 wire protocol & SigV4, the persistence/storage layer, streaming I/O & concurrency, and the admin API / frontend / auth flow."
-  }
-}
+{ "label": "Deep dive (whitepaper)", "position": 7, "collapsible": true, "collapsed": true, "link": { "type": "generated-index", "title": "Deep dive — the OpenBucket whitepaper", "description": "The full technical design: backend architecture, S3 protocol & SigV4, persistence & storage, streaming & concurrency, and the admin/auth/delivery layer." } }

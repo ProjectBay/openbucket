@@ -1,0 +1,1 @@
+{ "label": "Reference", "position": 4, "collapsible": true, "collapsed": true, "link": { "type": "generated-index", "slug": "/reference", "title": "Reference", "description": "Configuration, the OpenBucketService API, S3 compatibility, the admin API, the CLI, and the NestJS module." } }

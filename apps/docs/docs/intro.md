@@ -2,6 +2,7 @@
 sidebar_position: 1
 title: Introduction
 slug: /intro
+description: OpenBucket is a self-hosted, S3-compatible object store you can run as a container — or embed directly into a NestJS app.
 ---
 
 # OpenBucket
@@ -9,50 +10,62 @@ slug: /intro
 **A self-hosted, S3-compatible object store you can run as a container — or embed directly into a NestJS app.**
 
 OpenBucket speaks the **Amazon S3 wire protocol** (SigV4 auth, presigned URLs,
-XML error envelopes, multipart uploads, versioning, object lock, lifecycle,
-CORS, tagging, bucket policies) from a single Node.js process backed by SQLite
-and the local filesystem. It ships with a JSON **admin API** and a polished
-**Angular admin console**.
+multipart uploads, versioning, object lock, lifecycle, CORS, tagging, bucket
+policies) from a **single Node.js process** backed by SQLite and the local
+filesystem. It ships with a JSON **admin API** and a polished **Angular admin
+console** — no MinIO cluster, no AWS bill, no second service to babysit.
 
 It comes in two shapes from one codebase:
 
 - 🐳 **Standalone** — a small Docker image / Node app. Point any S3 SDK at it.
+  → [**Run it with Docker**](./getting-started/quickstart-docker.md)
 - 📦 **Embeddable library** — [`@openbucket/nestjs`](https://www.npmjs.com/package/@openbucket/nestjs).
   Call `OpenBucketModule.forRoot({ … })` and mount a complete object store
-  (S3 + admin API + admin SPA) under a path prefix inside your own NestJS app.
+  (S3 + admin API + admin console) **inside your own NestJS app**.
+  → [**Embed it in NestJS**](./getting-started/quickstart-embed.md)
 
-:::note Status
-Pre-1.0 and under active development. The S3 surface and admin console are
-feature-complete and tested; APIs may still change before 1.0.
+:::tip New here? Store your first file in 5 minutes.
+The [**first upload**](./getting-started/first-upload.md) tutorial takes you from
+zero to "an uploaded file with a shareable URL" — the thing most apps actually need.
 :::
 
-## Features
+## Why OpenBucket
 
-**S3 protocol** — path-style addressing, AWS Signature V4 (header + presigned
-query), streaming PUT/GET, multipart uploads, object & bucket tagging, bucket
-versioning, **object lock** (governance/compliance retention + legal hold),
-**SSE-S3 at-rest encryption** (AES-256), lifecycle expiration, CORS, bucket
-policies, and S3-style XML error responses.
+The pitch is simple: **it's the file backend for your app.** Because it can run
+*inside your process*, it does things a remote S3 can't.
 
-**Admin** — a JSON admin API (`/api/admin/*`) secured with argon2id passwords +
-rotating JWTs, plus an **Angular admin console**: bucket & object browser,
-upload/download, presigned share links, access-key management, per-bucket
-versioning / encryption / object-lock / lifecycle / CORS / policy editors,
-i18n (en/de), and light/dark themes.
+- **Uploads, handled.** A one-line [multer engine](./guides/file-uploads.md),
+  `uploadFrom()` helpers, and [presigned POST](./guides/file-uploads.md) for direct
+  browser uploads.
+- **Serve smart.** [On-the-fly image transforms](./guides/image-transforms.md)
+  (`?w=&h=&format=webp`) with a cached derivative store.
+- **React to changes.** In-process `@OnObjectCreated()`
+  [events + signed webhooks](./guides/events-and-webhooks.md).
+- **Multi-tenant ready.** [Scoped access keys](./guides/multi-tenancy.md) restricted
+  to a bucket/prefix, plus admin roles.
+- **Durable.** [Async replication](./guides/replication-and-tiering.md) to real
+  S3 / R2 / B2, cold-object tiering, [scheduled backups](./guides/backup-and-restore.md),
+  and background integrity scrubbing.
+- **Production-ready.** [Prometheus `/metrics`](./guides/observability.md), an
+  [audit log](./guides/admin-console.md), a [CLI](./guides/cli.md), and a
+  [security posture](./guides/securing-openbucket.md) that's been through an audit.
 
-**Operations** — refuse-to-boot env validation, forward-only DB migrations on
-startup, graceful drain on `SIGTERM`, structured (pino) JSON logs, health &
-readiness probes, and request IDs.
+## Where to go next
 
-**Embeddable** — runs its ORM under an isolated MikroORM context so it won't
-collide with a host app's database, mounts everything under a configurable
-`mountPath`, and serves the bundled SPA from the package.
+| If you want to… | Start here |
+| --- | --- |
+| Get it running fast | [Quick start (Docker)](./getting-started/quickstart-docker.md) · [Quick start (NestJS)](./getting-started/quickstart-embed.md) |
+| Understand the pieces | [Core concepts](./getting-started/core-concepts.md) |
+| Do a specific thing | [Guides](./guides/file-uploads.md) — uploads, transforms, events, sharing, multi-tenancy, backups, replication, observability, CLI |
+| Look something up | [Reference](./reference/configuration.md) — config, the `OpenBucketService` API, S3 compatibility, CLI, admin API |
+| Learn how it works | [Concepts](./concepts/architecture.md) & the [whitepaper](./whitepaper/00-front-matter.md) |
+| Run it in production | [Operations](./operations/deployment.md) — deploy, monitor, upgrade |
 
-## Where to next
-
-- [Getting started](./getting-started.md) — run it with Docker in three commands.
-- [Embedding in NestJS](./embedding.md) — add an object store to your own app.
-- [Architecture](./architecture.md) — how it's built, and the whitepaper.
+:::note Status
+OpenBucket is **pre-1.0** and under active development. The S3 surface and admin
+console are feature-complete and tested; APIs may still change before 1.0. The
+library publishes to the npm **`next`** dist-tag — `npm install @openbucket/nestjs@next`.
+:::
 
 :::info Trademark
 OpenBucket is an independent project and is not affiliated with or endorsed by

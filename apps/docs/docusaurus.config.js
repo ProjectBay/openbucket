@@ -85,6 +85,16 @@ const config = {
             label: 'Docs',
           },
           {
+            to: '/docs/getting-started/quickstart-docker',
+            position: 'left',
+            label: 'Quick start',
+          },
+          {
+            to: '/docs/guides',
+            position: 'left',
+            label: 'Guides',
+          },
+          {
             href: 'https://github.com/ProjectBay/openbucket',
             label: 'GitHub',
             position: 'right',
@@ -103,9 +113,9 @@ const config = {
             title: 'Docs',
             items: [
               {label: 'Introduction', to: '/docs/intro'},
-              {label: 'Getting started', to: '/docs/getting-started'},
-              {label: 'Embedding in NestJS', to: '/docs/embedding'},
-              {label: 'Architecture', to: '/docs/architecture'},
+              {label: 'Quick start', to: '/docs/getting-started/quickstart-docker'},
+              {label: 'Guides', to: '/docs/guides'},
+              {label: 'Reference', to: '/docs/reference/configuration'},
             ],
           },
           {
