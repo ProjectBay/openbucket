@@ -31,6 +31,18 @@ export class AppModule {}
 Point any S3 client at `http://your-host/storage` (path-style) with the root
 credentials. The admin console is at `http://your-host/storage/admin`.
 
+## The admin console
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ProjectBay/openbucket/main/apps/docs/static/img/admin_dashboard.png" alt="OpenBucket admin console — dashboard" width="49%" />
+  &nbsp;
+  <img src="https://raw.githubusercontent.com/ProjectBay/openbucket/main/apps/docs/static/img/admin_settings.png" alt="OpenBucket admin console — settings" width="49%" />
+</p>
+
+The bundled Angular console mounts at `<mountPath>/admin` — a dashboard (buckets,
+usage, health) and a consolidated Settings area (access keys, admin users, backup &
+restore, replication, audit log), plus a full bucket & object browser.
+
 ## Enabling / disabling the admin surface
 
 The `admin` block is **opt-in** and controls a real wiring switch — not just a flag:

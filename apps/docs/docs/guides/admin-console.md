@@ -8,6 +8,10 @@ sidebar_position: 11
 
 A tour of the bundled Angular console: sign in, watch the dashboard, browse and edit buckets, search across everything, and manage keys, users, backups, replication, integrity, and the audit log.
 
+![The OpenBucket admin dashboard — buckets, usage, and health at a glance](/img/admin_dashboard.png)
+
+![The Settings area — access keys, admin users, backup & restore, replication, and the audit log, consolidated into tabs](/img/admin_settings.png)
+
 ## Open it
 
 The console is served from the object store itself, under your mount path:
