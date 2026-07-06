@@ -224,58 +224,59 @@ import { fileIcon } from './object-icon';
           }
         </div>
 
-        <nav hlmPagination>
-          <ul hlmPaginationContent>
-            <li hlmPaginationItem>
-              <button
-                hlmBtn
-                variant="ghost"
-                size="sm"
-                class="gap-1 pl-2.5"
-                [disabled]="stack.length <= 1"
-                (click)="back()"
-              >
-                <ng-icon
-                  name="lucideChevronLeft"
-                  class="text-base"
-                />
-                <span class="hidden sm:block">{{ 'objects.previous' | translate }}</span>
-              </button>
-            </li>
-            <li hlmPaginationItem>
-              <button
-                hlmBtn
-                variant="ghost"
-                size="sm"
-                class="gap-1 pr-2.5"
-                [disabled]="!nextMarker()"
-                (click)="nextPage()"
-              >
-                <span class="hidden sm:block">{{ 'objects.next' | translate }}</span>
-                <ng-icon
-                  name="lucideChevronRight"
-                  class="text-base"
-                />
-              </button>
-            </li>
-          </ul>
-        </nav>
+        <div class="flex items-center gap-2">
+          <nav hlmPagination>
+            <ul hlmPaginationContent>
+              <li hlmPaginationItem>
+                <button
+                  hlmBtn
+                  variant="ghost"
+                  size="sm"
+                  class="gap-1 pl-2.5"
+                  [disabled]="stack.length <= 1"
+                  (click)="back()"
+                >
+                  <ng-icon
+                    name="lucideChevronLeft"
+                    class="text-base"
+                  />
+                  <span class="hidden sm:block">{{ 'objects.previous' | translate }}</span>
+                </button>
+              </li>
+              <li hlmPaginationItem>
+                <button
+                  hlmBtn
+                  variant="ghost"
+                  size="sm"
+                  class="gap-1 pr-2.5"
+                  [disabled]="!nextMarker()"
+                  (click)="nextPage()"
+                >
+                  <span class="hidden sm:block">{{ 'objects.next' | translate }}</span>
+                  <ng-icon
+                    name="lucideChevronRight"
+                    class="text-base"
+                  />
+                </button>
+              </li>
+            </ul>
+          </nav>
 
-        <brn-select
-          hlm
-          class="ml-auto"
-          [ngModel]="pageSize()"
-          (ngModelChange)="onPageSize($event)"
-        >
-          <hlm-select-trigger class="w-fit">
-            <hlm-select-value />
-          </hlm-select-trigger>
-          <hlm-select-content>
-            @for (n of pageSizes; track n) {
-              <hlm-option [value]="n">{{ n }} {{ 'objects.perPage' | translate }}</hlm-option>
-            }
-          </hlm-select-content>
-        </brn-select>
+          <brn-select
+            hlm
+            [ngModel]="pageSize()"
+            (ngModelChange)="onPageSize($event)"
+          >
+            <hlm-select-trigger class="w-fit">
+              <hlm-select-value />
+            </hlm-select-trigger>
+            <hlm-select-content>
+              @for (n of pageSizes; track n) {
+                <hlm-option [value]="n">{{ n }} {{ 'objects.perPage' | translate }}</hlm-option>
+              }
+            </hlm-select-content>
+          </brn-select>
+        </div>
       </div>
 
       @if (error()) {
