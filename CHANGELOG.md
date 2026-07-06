@@ -9,6 +9,21 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.17] — 2026-07-06
+
+### Fixed
+
+- **Admin console:** the bucket object-browser pagination footer no longer stacks
+  the item count, the Prev/Next pager, and the per-page selector onto three separate
+  rows at constrained widths — the pager and selector are grouped so the footer stays
+  count-left / controls-right and wraps as a unit.
+
+### Changed
+
+- **Release:** the `latest` npm dist-tag now tracks the newest published version
+  until a stable (non-pre-release) ships, so `npm install @openbucket/nestjs` and the
+  version shown on npmjs.com reflect the current build instead of an old alpha.
+
 ## [0.1.0-alpha.16] — 2026-07-06
 
 ### Security

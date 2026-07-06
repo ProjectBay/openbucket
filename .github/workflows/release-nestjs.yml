@@ -84,13 +84,26 @@ jobs:
 
       - name: Publish to npm
         # Pre-release versions (those with a `-`, e.g. 0.1.0-alpha.1) publish to
-        # the `next` dist-tag so `npm install @openbucket/nestjs` keeps resolving
-        # to the latest STABLE release; stable versions go to `latest`.
+        # the `next` dist-tag; stable versions go to `latest`.
+        #
+        # `latest` is what a bare `npm install @openbucket/nestjs` resolves to and
+        # what npmjs.com shows as the current version. Until a stable (non-pre-
+        # release) has ever shipped, we also point `latest` at each new pre-release
+        # so it doesn't stay orphaned on an ancient alpha. Once a real stable exists
+        # on `latest`, pre-releases stop moving it (they only update `next`).
         run: |
           version="$(node -p "require('./dist/libs/nestjs/package.json').version")"
           if [[ "$version" == *-* ]]; then dist_tag=next; else dist_tag=latest; fi
           echo "Publishing @openbucket/nestjs@$version to dist-tag '$dist_tag'"
           npm publish ./dist/libs/nestjs --access public --tag "$dist_tag"
+
+          if [[ "$version" == *-* ]]; then
+            current_latest="$(npm view @openbucket/nestjs dist-tags.latest 2>/dev/null || echo '')"
+            if [[ -z "$current_latest" || "$current_latest" == *-* ]]; then
+              echo "No stable release yet — pointing 'latest' at $version too."
+              npm dist-tag add "@openbucket/nestjs@$version" latest
+            fi
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
