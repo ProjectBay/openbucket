@@ -29,6 +29,21 @@ It comes in two shapes from one codebase:
 
 ---
 
+## The admin console
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ProjectBay/openbucket/main/apps/docs/static/img/admin_dashboard.png" alt="OpenBucket admin console — dashboard" width="49%" />
+  &nbsp;
+  <img src="https://raw.githubusercontent.com/ProjectBay/openbucket/main/apps/docs/static/img/admin_settings.png" alt="OpenBucket admin console — settings" width="49%" />
+</p>
+
+A polished Angular console ships in the box — a **dashboard** (buckets, usage, health
+at a glance) and a consolidated **Settings** area (access keys, admin users, backup &
+restore, replication, and the audit log), plus a full bucket & object browser with
+per-bucket versioning / lifecycle / CORS / policy editors.
+
+---
+
 ## Features
 
 **S3 protocol** — path-style addressing, AWS Signature V4 (header + presigned

@@ -5,7 +5,7 @@ import styles from './styles.module.css';
 const FeatureList = [
   {
     title: 'S3 wire-compatible',
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
+    Svg: require('@site/static/img/undraw_device-sync_d9ei.svg').default,
     description: (
       <>
         SigV4 auth, presigned URLs, multipart uploads, versioning, object lock,
@@ -16,7 +16,7 @@ const FeatureList = [
   },
   {
     title: 'Batteries-included admin',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    Svg: require('@site/static/img/undraw_electricity_iu6d.svg').default,
     description: (
       <>
         A JSON admin API secured with argon2id + rotating JWTs, plus an Angular
@@ -27,7 +27,7 @@ const FeatureList = [
   },
   {
     title: 'Container or library',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    Svg: require('@site/static/img/undraw_choice_dzxz.svg').default,
     description: (
       <>
         Run the small Docker image standalone, or <code>npm install</code>{' '}

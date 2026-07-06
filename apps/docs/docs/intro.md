@@ -29,6 +29,8 @@ The [**first upload**](./getting-started/first-upload.md) tutorial takes you fro
 zero to "an uploaded file with a shareable URL" — the thing most apps actually need.
 :::
 
+![The OpenBucket admin console — the dashboard, with buckets, usage, and health at a glance](/img/admin_dashboard.png)
+
 ## Why OpenBucket
 
 The pitch is simple: **it's the file backend for your app.** Because it can run
