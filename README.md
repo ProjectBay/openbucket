@@ -119,15 +119,32 @@ collide with a host app's database, mounts everything under a configurable
 
 ### Run with Docker
 
+**Prebuilt images** (multi-arch `linux/amd64` + `linux/arm64`) are published to the
+GitHub Container Registry on every release:
+
+- **Image:** `ghcr.io/projectbay/openbucket`
+- **Tags:** `X.Y.Z` — one immutable tag per release (e.g. `0.1.0-alpha.17`) ·
+  `sha-<commit>` — an exact build · `latest` — stable (non-prerelease) releases
+  only, so none yet while pre-1.0 · `edge` — manual builds
+- **📦 Browse all published versions →**
+  [github.com/ProjectBay/openbucket/pkgs/container/openbucket](https://github.com/ProjectBay/openbucket/pkgs/container/openbucket)
+
 ```bash
-# 1. Generate an argon2id hash for your admin password
+# 1. Generate an argon2id hash for your admin password → ADMIN_PASSWORD_HASH
 node scripts/hash-password.mjs 'choose-a-strong-password'
 
 # 2. Copy the env template and fill in the secrets (incl. the hash above)
 cp .env.example .env
 
-# 3. Build the image and start it
-docker compose up --build
+# 3. Run a published image (pick a tag from the versions page above)
+docker run --rm -p 9000:9000 --env-file .env -v openbucket-data:/data \
+  ghcr.io/projectbay/openbucket:0.1.0-alpha.17
+```
+
+Prefer to **build from source**? The bundled compose file does that instead:
+
+```bash
+docker compose up --build   # builds the image locally, then starts it
 ```
 
 OpenBucket is now listening on **http://localhost:9000**:
