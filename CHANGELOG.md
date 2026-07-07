@@ -9,6 +9,34 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.18] — 2026-07-08
+
+### Added
+
+- **`openbucket hash` CLI command** — generate an argon2id `ADMIN_PASSWORD_HASH`
+  offline (no admin API, no login), so `npx @openbucket/nestjs hash` works with no
+  repository checkout. The password comes from a positional argument,
+  `$OPENBUCKET_PASSWORD`, or a non-echoing prompt; only the hash is printed.
+- **`OpenBucketFileInterceptor`** (`@openbucket/nestjs/multer`) — a one-line,
+  DI-friendly upload interceptor that streams a multipart part straight into the
+  store and hands your handler the committed object via `@UploadedToBucket()`.
+  Previously the docs asked you to hand-roll this mixin; it now ships in the
+  package. The lower-level `openBucketStorage(ob, opts)` engine remains exported
+  for custom wiring.
+
+### Changed
+
+- npm publishes now attach **build provenance** (a verified "Published via GitHub
+  Actions" badge on npmjs.com); the package `keywords` and `description` were
+  broadened for discoverability.
+- The Docker image now ships an **SBOM + SLSA build-provenance attestation** and a
+  descriptive OCI image label.
+
+### Security
+
+- `.env.example` placeholder secrets are now intentionally invalid, so a copied
+  `.env` refuses to boot rather than starting with insecure default credentials.
+
 ## [0.1.0-alpha.17] — 2026-07-06
 
 ### Fixed
