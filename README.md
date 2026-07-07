@@ -7,7 +7,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![CI](https://github.com/ProjectBay/openbucket/actions/workflows/ci.yml/badge.svg)](https://github.com/ProjectBay/openbucket/actions/workflows/ci.yml)
 [![npm: @openbucket/nestjs](https://img.shields.io/npm/v/@openbucket/nestjs.svg)](https://www.npmjs.com/package/@openbucket/nestjs)
+[![Docs](https://img.shields.io/badge/docs-projectbay.github.io-2a7ae2.svg)](https://projectbay.github.io/openbucket/)
 [![Built with Nx](https://img.shields.io/badge/built%20with-Nx-143055.svg)](https://nx.dev)
+
+📚 **[Read the documentation →](https://projectbay.github.io/openbucket/)** — getting started, guides, reference, concepts & operations.
 
 </div>
 

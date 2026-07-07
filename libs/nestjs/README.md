@@ -3,6 +3,8 @@
 Embed an **S3-compatible object store** — wire protocol, admin JSON API, and admin
 console SPA — directly inside your own NestJS application, configured in code.
 
+> 📚 **[Read the full documentation →](https://projectbay.github.io/openbucket/)** — getting started, guides, API reference, concepts & operations.
+
 ```ts
 import { Module } from '@nestjs/common';
 import { OpenBucketModule } from '@openbucket/nestjs';
