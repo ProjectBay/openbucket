@@ -17,6 +17,17 @@ const config = {
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
   ],
 
+  // Privacy-friendly, cookieless analytics via our self-hosted Plausible
+  // instance (https://analytics.projectbay.dev). `data-domain` is the site
+  // name registered in Plausible; it matches this docs site's public URL.
+  scripts: [
+    {
+      src: 'https://analytics.projectbay.dev/js/script.js',
+      defer: true,
+      'data-domain': 'projectbay.github.io/openbucket',
+    },
+  ],
+
   future: {
     v4: true, // forward-compat with Docusaurus v4
   },
