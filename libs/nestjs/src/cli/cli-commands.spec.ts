@@ -136,4 +136,32 @@ describe('runCli commands', () => {
     expect(code).toBe(0);
     expect(out.join('')).toMatch(/enabled\s+no/);
   });
+
+  it('hash: prints an argon2id hash that verifies, with no admin request', async () => {
+    const code = await runCli(['hash', 'hunter2']);
+    expect(code).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled(); // offline — never contacts the admin API
+    const printed = out.join('').trim();
+    expect(printed).toMatch(/^\$argon2id\$/);
+    const argon2 = await import('argon2');
+    expect(await argon2.verify(printed, 'hunter2')).toBe(true);
+  });
+
+  it('hash: reads the password from $OPENBUCKET_PASSWORD when no positional is given', async () => {
+    process.env.OPENBUCKET_PASSWORD = 'from-env-pw';
+    try {
+      const code = await runCli(['hash']);
+      expect(code).toBe(0);
+      const argon2 = await import('argon2');
+      expect(await argon2.verify(out.join('').trim(), 'from-env-pw')).toBe(true);
+    } finally {
+      delete process.env.OPENBUCKET_PASSWORD;
+    }
+  });
+
+  it('hash: with no password and no TTY, fails with a usage exit (2)', async () => {
+    const code = await runCli(['hash']);
+    expect(code).toBe(2);
+    expect(err.join('')).toMatch(/OPENBUCKET_PASSWORD/);
+  });
 });
