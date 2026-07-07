@@ -55,6 +55,11 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE }}
+          # Keyword-rich OCI labels so the GHCR (and any future Docker Hub) card
+          # shows a real description instead of a blank summary.
+          labels: |
+            org.opencontainers.image.title=OpenBucket
+            org.opencontainers.image.description=Self-hosted, S3-compatible object store with a built-in admin console. Run it standalone or embed it in a NestJS app. A lightweight MinIO alternative.
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -71,5 +76,10 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Attach an SBOM + SLSA build-provenance attestation to the image so
+          # `docker scout` / the registry "attestations" tab can verify what's
+          # inside and where it was built — a trust signal for a data-holding image.
+          sbom: true
+          provenance: mode=max
           cache-from: type=gha
           cache-to: type=gha,mode=max
