@@ -1,0 +1,7 @@
+# Blog authors. Reference in a post's front matter as `authors: [openbucket]`.
+openbucket:
+  name: The OpenBucket team
+  title: Maintainers of OpenBucket
+  url: https://github.com/ProjectBay/openbucket
+  image_url: https://github.com/ProjectBay.png
+  page: false

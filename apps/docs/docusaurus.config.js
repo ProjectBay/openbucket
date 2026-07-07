@@ -67,7 +67,23 @@ const config = {
           editUrl:
             'https://github.com/ProjectBay/openbucket/tree/main/apps/docs/',
         },
-        blog: false, // docs-only site
+        blog: {
+          showReadingTime: true,
+          blogTitle: 'OpenBucket blog',
+          blogDescription:
+            'Tutorials, recipes, and updates from the OpenBucket project.',
+          postsPerPage: 10,
+          blogSidebarTitle: 'Recent posts',
+          blogSidebarCount: 'ALL',
+          // RSS/Atom feeds power dev.to/Hashnode syndication and Google Discover.
+          feedOptions: {
+            type: ['rss', 'atom'],
+            title: 'OpenBucket blog',
+            description:
+              'Tutorials, recipes, and updates from the OpenBucket project.',
+            copyright: `Copyright © ${new Date().getFullYear()} OpenBucket contributors.`,
+          },
+        },
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -147,6 +163,11 @@ const config = {
             to: '/docs/guides',
             position: 'left',
             label: 'Guides',
+          },
+          {
+            to: '/blog',
+            position: 'left',
+            label: 'Blog',
           },
           {
             href: 'https://github.com/ProjectBay/openbucket',
