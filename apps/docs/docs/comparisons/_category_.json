@@ -1,0 +1,12 @@
+{
+  "label": "Comparisons",
+  "position": 4.5,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "slug": "/comparisons",
+    "title": "Comparisons",
+    "description": "How OpenBucket compares to other S3-compatible object stores — so you can pick the right tool for the job."
+  }
+}
