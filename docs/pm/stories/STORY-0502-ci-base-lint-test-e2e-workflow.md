@@ -2,7 +2,7 @@
 id: STORY-0502
 title: CI base lint, unit, and e2e workflow
 epic: EPIC-06
-status: review
+status: done
 size: M
 risk: medium
 ---
@@ -49,3 +49,9 @@ Residual — needs a real GitHub Actions runner, cannot verify here:
 - AC "CI status green on main" (no local runner).
 - **TASK-1523** (verify `nrwl/nx-set-shas` affected base on PRs) remains **blocked**.
 - Minor AC/impl drift: the `e2e` job in `ci.yml` does not set `DATA_DIR`/`JWT_SECRET` (the AC lists them) because `spawn-app.ts` supplies per-spawn env itself.
+
+## Verification (2026-07-07)
+Residual cleared — `ci.yml` has now run on real GitHub Actions runners and is green:
+- Jobs `lint-and-test` (displayed `lint + unit`) and `e2e` (`backend e2e (real sqlite)`) **pass** on PRs (e.g. PR #35, all checks green) and on `main` pushes (CI runs for #36 / #37 / #38 succeeded).
+- **TASK-1523 resolved** (see the Task): `ci.yml` invokes `nrwl/nx-set-shas@v5.0.1` with `fetch-depth: 0` and it runs cleanly in real CI. Per the spike's own analysis the affected base is **non-fatal** — the jobs use `nx run-many --all`, not `nx affected`, and no downstream Story switched to affected runs — so there is no §5.19 drift. The step is retained for future affected-CI.
+- The documented `e2e` env deviation stands (intentional: `spawn-app.ts` supplies per-spawn env). Acceptance criteria are substantively met; Story closed.

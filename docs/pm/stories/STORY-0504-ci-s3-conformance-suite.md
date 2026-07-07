@@ -2,7 +2,7 @@
 id: STORY-0504
 title: CI S3 conformance suite (aws-cli, mc, s3cmd, AWS SDK)
 epic: EPIC-06
-status: review
+status: done
 size: L
 risk: high
 ---
@@ -55,3 +55,6 @@ The mc row is now formally tracked as [STORY-0119] (M7, chunked-upload signing);
 
 ## Update (2026-06-24) — mc unblocked
 [STORY-0119] (chunked-upload signing) is implemented and done; the `mc` row is un-skipped and **passes**. The full conformance matrix is green locally (aws-cli / s3cmd / SDK / mc, 4/4). The only remaining gap for STORY-0504 is executing the `conformance` CI job on a real GitHub Actions runner (same runner dependency as STORY-0502).
+
+## Verification (2026-07-07)
+Residual cleared — the `conformance` job (`s3 conformance suite`) now runs on real GitHub Actions runners and is **green** (PR #35's "s3 conformance suite" check passes; the job is PR/tag-gated as specified). It installs aws-cli/s3cmd/mc, loads the `docker-image` artifact, and runs `conformance:e2e` with `OPENBUCKET_IMAGE` against the built image (full aws-cli / s3cmd / SDK / mc matrix). **Deviation:** `actions/download-artifact` is pinned to `@v8` (AC said `@v4`) — a version bump. Story closed.

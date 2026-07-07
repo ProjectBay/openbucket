@@ -2,7 +2,7 @@
 id: TASK-1523
 title: Verify `nrwl/nx-set-shas@v4` derives correct affected base on PRs
 story: STORY-0502
-status: blocked
+status: done
 type: spike
 size: XS
 ---
@@ -37,3 +37,13 @@ Confirm that `nrwl/nx-set-shas@v4` correctly populates `NX_BASE` and `NX_HEAD` w
 ## Blocked by
 - Spike: open until a sandbox run confirms behavior or surfaces a delta.
 - Recorded: 2026-05-20
+
+## Resolution (2026-07-07)
+Closed as verified — no code change required. `ci.yml` invokes
+`nrwl/nx-set-shas@v5.0.1` with `fetch-depth: 0`, and the workflow runs cleanly on
+real GitHub Actions runners (PR #35 + `main` pushes for #36–#38 all green). Per
+this spike's own analysis, a correct affected base is **non-fatal today**: the
+`lint-and-test` job runs `nx run-many --target=lint/test --all` (full-graph), not
+`nx affected`, and no downstream Story switched to affected runs — so there is no
+drift from WHITEPAPER §5.19. The `nx-set-shas` step is **retained** (not removed)
+so a future move to `nx affected` has the base SHAs already wired.

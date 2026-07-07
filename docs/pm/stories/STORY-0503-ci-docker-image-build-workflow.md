@@ -2,7 +2,7 @@
 id: STORY-0503
 title: CI Docker image build workflow
 epic: EPIC-06
-status: review
+status: done
 size: S
 risk: medium
 ---
@@ -37,3 +37,6 @@ _The Story acceptance criteria are CI-green on a PR; the artifact's existence is
 - `docs/WHITEPAPER.md` §5.19 (lines 8657–8698)
 - Interfaces produced: GHA job `build-image`, artifact `docker-image`, output `image-tag`
 - Interfaces consumed: `Dockerfile` from [STORY-0501]
+
+## Verification (2026-07-07)
+Verified against the live `ci.yml` `build-image` job, green on real GitHub Actions runs (PR #35 "build docker image" check + `main` pushes for #36–#38 all pass). Acceptance criteria met: `needs: lint-and-test`, `permissions: { contents: read, packages: write }`, `meta` step emits `pr-<n>-<sha7>` / `<tag>` / `main-<sha7>`, `build-push-action` runs `push: false` `load: true` `tags: openbucket:<tag>` with GHA cache both directions, `docker save` → `/tmp/openbucket.tar` uploaded as `docker-image` (retention 7d), and `outputs.image-tag` is wired. **Deviation:** `docker/build-push-action` is pinned to `@v7` (AC said `@v6`) — a version bump, behaviour-equivalent. Story closed.
