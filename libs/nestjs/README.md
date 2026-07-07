@@ -1082,6 +1082,20 @@ openbucket backup restore -f snapshot.zip --yes           # RESETS the target �
 openbucket replication status
 ```
 
+One command is **offline** — `openbucket hash` mints the argon2id hash for
+`admin.passwordHash` (`ADMIN_PASSWORD_HASH` standalone). It contacts no server and
+needs no endpoint, login, or credentials, so it works straight from `npx` with no
+repository checkout — the on-ramp for embedding, where you must supply the hash the
+module validates at boot:
+
+```bash
+npx @openbucket/nestjs hash 'choose-a-strong-password'   # no repo checkout needed
+openbucket hash            # omit the arg to be prompted (no echo)
+```
+
+The password comes from the positional arg, `$OPENBUCKET_PASSWORD`, or a
+non-echoing prompt — never a flag — and only the hash is printed.
+
 **Security posture** (mirrors the server's): the password is read only from
 `$OPENBUCKET_PASSWORD` or an interactive non-echoing prompt — **never** from a
 flag (so it can't land on `argv`/`ps`); the bearer token lives in memory for the

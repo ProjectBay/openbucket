@@ -40,8 +40,9 @@ volumes:
 Generate the secrets, then start it:
 
 ```bash
-# 1. argon2id hash for the admin password
-node scripts/hash-password.mjs 'choose-a-strong-password'
+# 1. argon2id hash for the admin password — no repo checkout needed
+npx @openbucket/nestjs hash 'choose-a-strong-password'
+#    …or, from a repo clone: node scripts/hash-password.mjs 'choose-a-strong-password'
 
 # 2. fill in .env (see the required vars below), then:
 docker compose up -d
@@ -71,7 +72,7 @@ is missing or weak. The five required variables:
 | --- | --- |
 | `DATA_DIR` | Absolute path to the data volume (no trailing slash). Holds the SQLite DB, blobs, and `sse.key`. |
 | `JWT_SECRET` | ≥ 32 chars, high-entropy. Signs admin JWTs. `openssl rand -base64 48`. |
-| `ADMIN_PASSWORD_HASH` | argon2id hash — `node scripts/hash-password.mjs '<password>'`. |
+| `ADMIN_PASSWORD_HASH` | argon2id hash — `npx @openbucket/nestjs hash '<password>'` (no repo checkout needed), or `node scripts/hash-password.mjs '<password>'` from a repo clone. |
 | `ROOT_ACCESS_KEY_ID` | 16–32 uppercase alphanumerics. |
 | `ROOT_SECRET_ACCESS_KEY` | ≥ 32 chars, high-entropy. |
 

@@ -46,7 +46,7 @@ export class AppModule {}
 Start your app and point any S3 client at `http://your-host:3000/storage` (path-style, root credentials). The admin console is at `http://your-host:3000/storage/admin`.
 
 :::tip[Generating the argon2id hash]
-`admin.passwordHash` is an argon2id hash, never a plaintext password. Generate one with the repo helper: `node scripts/hash-password.mjs 'your-admin-password'`. `jwtSecret` and `rootCredentials.secretAccessKey` must each be at least 32 chars, and `passwordHash` must be a real argon2id string — the module validates all of this at boot and throws if it's wrong.
+`admin.passwordHash` is an argon2id hash, never a plaintext password. Generate one with the CLI that ships in the package — no repo checkout needed: `npx @openbucket/nestjs hash 'your-admin-password'` (or `openbucket hash 'your-admin-password'` once the package is installed). From a repo clone you can also run `node scripts/hash-password.mjs 'your-admin-password'`. `jwtSecret` and `rootCredentials.secretAccessKey` must each be at least 32 chars, and `passwordHash` must be a real argon2id string — the module validates all of this at boot and throws if it's wrong.
 :::
 
 ## What mounts where

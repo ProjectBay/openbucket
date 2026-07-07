@@ -47,9 +47,12 @@ encrypted sub-key secrets.
 ## 2. argon2id admin hash
 
 The admin password is stored only as an **argon2id** hash — never plaintext.
-Generate the hash and pass it as `ADMIN_PASSWORD_HASH`:
+Generate the hash and pass it as `ADMIN_PASSWORD_HASH`. The `hash` command ships
+in the package, so it works with no repo checkout:
 
 ```bash
+npx @openbucket/nestjs hash 'choose-a-strong-password'
+# …or, from a repo clone:
 node scripts/hash-password.mjs 'choose-a-strong-password'
 ```
 
@@ -158,7 +161,9 @@ list, and a manual "scrub now" trigger, with a corrupt-count badge in the sideba
 
 This checklist reflects OpenBucket's durability-and-hardening work (the EPIC-08
 posture): refuse-to-boot env validation, explicit-deny bucket policies, at-rest
-encryption of secrets, a restrictive CSP, and fail-closed authorization. It is a
+encryption of secrets, a restrictive CSP, and fail-closed authorization. For the
+findings and remediations behind it, see the
+[2026 security audit](../concepts/security-audit-2026.md). It is a
 solid baseline for a self-hosted store — not a substitute for your own threat
 model, network segmentation, and OS-level hardening of the data volume.
 

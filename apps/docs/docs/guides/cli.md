@@ -110,6 +110,24 @@ openbucket replication status
 
 Shows enabled/disabled, the outbox depth (`pending` / `inflight` / `failed`), the oldest pending age, the last error message, and a per-bucket breakdown. It **always succeeds** — an unconfigured replication is `disabled`, not an error. No remote endpoint or credential is ever surfaced.
 
+## Hash an admin password (offline)
+
+Every command above talks to a running instance — except one. `openbucket hash`
+is a **local, offline helper** that mints the argon2id hash for
+`ADMIN_PASSWORD_HASH` (standalone) or `admin.passwordHash` (embedded). It needs
+**zero config**: no endpoint, no login, no credentials.
+
+```bash
+npx @openbucket/nestjs hash 'choose-a-strong-password'   # no repo checkout needed
+openbucket hash            # omit the arg to be prompted (no echo)
+```
+
+The password comes from the positional arg, `$OPENBUCKET_PASSWORD`, or a
+non-echoing prompt — never a flag — and only the hash is printed, so it drops
+straight into an env file: `ADMIN_PASSWORD_HASH="$(openbucket hash '<password>')"`.
+It's the on-ramp for embed users with no repository checkout; from a repo clone,
+`node scripts/hash-password.mjs '<password>'` does the same thing.
+
 ## Exit codes
 
 Scriptable and stable:

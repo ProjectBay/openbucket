@@ -13,8 +13,9 @@ You'll boot a self-hosted, S3-compatible object store in a container, then put y
 Run these three commands from the repository root:
 
 ```bash
-# 1. Hash your admin password (argon2id). Copy the printed line.
-node scripts/hash-password.mjs 'choose-a-strong-password'
+# 1. Hash your admin password (argon2id) — no repo checkout needed. Copy the printed line.
+npx @openbucket/nestjs hash 'choose-a-strong-password'
+#    …or, from a repo clone: node scripts/hash-password.mjs 'choose-a-strong-password'
 
 # 2. Create your .env from the template, then paste the hash + fill the secrets.
 cp .env.example .env
@@ -26,7 +27,7 @@ docker compose up --build
 When the logs settle, OpenBucket is listening on **http://localhost:9000**. Open the admin console at **http://localhost:9000/admin** and sign in with `admin` and the password you just hashed.
 
 :::tip[What each command did]
-`hash-password.mjs` prints an argon2id hash to stdout — the app stores only the hash, never your plaintext password. `docker compose up` builds the image from the repo `Dockerfile` and mounts a named volume (`openbucket-data`) at `/data`, so your buckets and objects survive a restart.
+`openbucket hash` prints an argon2id hash to stdout — the app stores only the hash, never your plaintext password. `docker compose up` builds the image from the repo `Dockerfile` and mounts a named volume (`openbucket-data`) at `/data`, so your buckets and objects survive a restart.
 :::
 
 ## Fill in your .env
