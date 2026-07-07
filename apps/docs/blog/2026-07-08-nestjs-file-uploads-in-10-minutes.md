@@ -127,8 +127,8 @@ Add `BucketBootstrap` to your module's `providers`.
 
 ## Step 5 — The upload endpoint
 
-Here's the whole thing. `openBucketStorage` is a drop-in multer storage engine, so
-`FileInterceptor` streams the part **straight into the store** — no temp file. The
+Here's the whole thing. `OpenBucketFileInterceptor` streams the multipart part
+**straight into the store** — no temp file, no `file.buffer`. The
 `@UploadedToBucket()` decorator hands you the committed object, and
 `UploadValidationExceptionFilter` turns a rejected upload into a clean `HTTP 400`.
 
@@ -139,9 +139,8 @@ import {
   UseFilters,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import {
-  openBucketStorage,
+  OpenBucketFileInterceptor,
   UploadedToBucket,
   UploadValidationExceptionFilter,
   type UploadedFileInfo,
@@ -152,15 +151,13 @@ export class FilesController {
   @Post()
   @UseFilters(UploadValidationExceptionFilter) // rejected upload → HTTP 400
   @UseInterceptors(
-    FileInterceptor('file', {
-      storage: openBucketStorage({
-        bucket: 'uploads',
-        key: 'uuid', // generate a safe, unique key
-        validate: {
-          maxBytes: 10 * 1024 * 1024, // 10 MiB
-          allowedContentTypes: ['image/*'], // sniffed, not trusted from the client
-        },
-      }),
+    OpenBucketFileInterceptor('file', {
+      bucket: 'uploads',
+      key: 'uuid', // generate a safe, unique key
+      validate: {
+        maxBytes: 10 * 1024 * 1024, // 10 MiB
+        allowedContentTypes: ['image/*'], // sniffed, not trusted from the client
+      },
     }),
   )
   upload(@UploadedToBucket() file: UploadedFileInfo) {
