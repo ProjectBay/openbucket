@@ -24,7 +24,8 @@ await s3.send(new PutObjectCommand({ Bucket: 'my-bucket', Key: 'a.jpg', Body: bu
 ```
 
 The wire surface is exercised by the [conformance suite](https://github.com/ProjectBay/openbucket/tree/main/apps/conformance)
-against the real `aws` CLI, MinIO's `mc`, and `s3cmd`.
+against the real `aws` CLI, MinIO's `mc`, and `s3cmd`. See how OpenBucket
+[compares to MinIO](../comparisons/vs-minio.md) if you're choosing between them.
 
 ## Supported operations
 

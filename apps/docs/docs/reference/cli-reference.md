@@ -9,7 +9,8 @@ sidebar_position: 4
 `openbucket` is a dependency-free command-line client over the admin JSON API:
 bucket and key management, backup/restore, and replication status. It ships in
 the `@openbucket/nestjs` package, credentials never touch `argv`, and every error
-path is redacted before it reaches stderr — safe to script.
+path is redacted before it reaches stderr — safe to script. The one exception is
+[`hash`](#hash), a purely **offline** helper that talks to no server at all.
 
 ```bash
 # List buckets on a running instance (log in with a prompted password):
@@ -101,6 +102,33 @@ issues **no request at all** — not even a login — unless you pass `--yes`.
 ```bash
 openbucket replication status --quiet   # prints "enabled" or "disabled"
 ```
+
+### `hash`
+
+| Command | Arguments | Description |
+| --- | --- | --- |
+| `hash` | `[password]` | Print an argon2id hash for `ADMIN_PASSWORD_HASH` / `admin.passwordHash`. **Offline** — issues no request. |
+
+```bash
+# No repo checkout needed — the command ships in @openbucket/nestjs:
+npx @openbucket/nestjs hash 'choose-a-strong-password'
+
+ADMIN_PASSWORD_HASH="$(openbucket hash 'choose-a-strong-password')"
+openbucket hash            # omit the arg to be prompted (no echo)
+```
+
+The password is read from the positional argument, else `$OPENBUCKET_PASSWORD`,
+else an interactive non-echoing prompt — **never** a flag, so it can't land on
+`argv`. Only the resulting hash is written to stdout.
+
+:::note[This command is offline — unlike every other one]
+`hash` needs **no `--endpoint`, no login, and no credentials**. It never contacts
+the admin API — it just computes a hash locally and prints it. That makes it the
+on-ramp for embed users who have no repository checkout: `npx @openbucket/nestjs
+hash '<password>'` mints the hash the module requires at boot, with nothing else
+installed. (From a repo clone, `node scripts/hash-password.mjs '<password>'` does
+the same thing.)
+:::
 
 ## Exit codes
 

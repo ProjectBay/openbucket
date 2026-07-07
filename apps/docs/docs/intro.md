@@ -27,6 +27,8 @@ It comes in two shapes from one codebase:
 :::tip[New here? Store your first file in 5 minutes.]
 The [**first upload**](./getting-started/first-upload.md) tutorial takes you from
 zero to "an uploaded file with a shareable URL" — the thing most apps actually need.
+Weighing it up first? [**Is OpenBucket for you?**](./is-openbucket-for-you.md) lays
+out where it fits and where it doesn't.
 :::
 
 ![The OpenBucket admin console — the dashboard, with buckets, usage, and health at a glance](/img/admin_dashboard.png)

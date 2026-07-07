@@ -17,7 +17,8 @@ Grab the essentials and go:
 # The five required standalone settings:
 DATA_DIR=/data
 JWT_SECRET=$(openssl rand -base64 48)
-ADMIN_PASSWORD_HASH=$(node scripts/hash-password.mjs 'your-admin-password')
+ADMIN_PASSWORD_HASH=$(npx @openbucket/nestjs hash 'your-admin-password')  # no repo checkout needed
+# …or, from a repo clone: $(node scripts/hash-password.mjs 'your-admin-password')
 ROOT_ACCESS_KEY_ID=AKIAEXAMPLE000000000
 ROOT_SECRET_ACCESS_KEY=$(openssl rand -base64 48)
 ```
@@ -44,7 +45,7 @@ anything required is missing or malformed. Unknown variables are ignored.
 | --- | :-: | --- | --- |
 | `DATA_DIR` | ✅ | — | Directory for the SQLite metadata DB, blob payloads, and the generated `sse.key`. No trailing slash. |
 | `JWT_SECRET` | ✅ | — | Strong secret (≥ 32 chars). Signs admin JWTs. |
-| `ADMIN_PASSWORD_HASH` | ✅ | — | argon2id hash — generate with `node scripts/hash-password.mjs '<password>'`. |
+| `ADMIN_PASSWORD_HASH` | ✅ | — | argon2id hash — generate with `npx @openbucket/nestjs hash '<password>'` (no repo checkout needed), or `node scripts/hash-password.mjs '<password>'` from a repo clone. See the [`hash` command](./cli-reference.md#hash). |
 | `ROOT_ACCESS_KEY_ID` | ✅ | — | 16–32 uppercase alphanumerics (`^[A-Z0-9]{16,32}$`). |
 | `ROOT_SECRET_ACCESS_KEY` | ✅ | — | Strong secret (≥ 32 chars). The root SigV4 credential. |
 

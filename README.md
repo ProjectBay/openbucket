@@ -131,7 +131,9 @@ GitHub Container Registry on every release:
 
 ```bash
 # 1. Generate an argon2id hash for your admin password → ADMIN_PASSWORD_HASH
-node scripts/hash-password.mjs 'choose-a-strong-password'
+#    (no repo checkout needed)
+npx @openbucket/nestjs hash 'choose-a-strong-password'
+# …or, from a repo clone: node scripts/hash-password.mjs 'choose-a-strong-password'
 
 # 2. Copy the env template and fill in the secrets (incl. the hash above)
 cp .env.example .env
@@ -342,7 +344,7 @@ commented list. The essentials:
 | ------------------------ | -------- | ------------ | ------------------------------------------------------------ |
 | `DATA_DIR`               | ✅       | —            | Directory for the SQLite DB + blob payloads + `sse.key`.     |
 | `JWT_SECRET`             | ✅       | —            | ≥ 32 chars; signs admin JWTs.                                |
-| `ADMIN_PASSWORD_HASH`    | ✅       | —            | argon2id hash (`node scripts/hash-password.mjs <pw>`).       |
+| `ADMIN_PASSWORD_HASH`    | ✅       | —            | argon2id hash (`npx @openbucket/nestjs hash <pw>`).          |
 | `ROOT_ACCESS_KEY_ID`     | ✅       | —            | 16–32 uppercase alphanumerics.                               |
 | `ROOT_SECRET_ACCESS_KEY` | ✅       | —            | ≥ 32 chars.                                                  |
 | `PORT`                   |          | `9000`       | HTTP listen port.                                            |
