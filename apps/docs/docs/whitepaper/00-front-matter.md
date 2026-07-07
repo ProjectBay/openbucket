@@ -1,3 +1,7 @@
+---
+description: OpenBucket implementation white paper — how the single-container, single-process, S3-compatible object store is built, section by section.
+---
+
 # OpenBucket — Implementation White Paper
 
 > **Status:** implementation plan (v1). This document specifies *how* OpenBucket is built, in enough detail that a senior engineer can implement directly from it. It is the operational sibling of `ARCHITECTURE.md` (the *what*) and supersedes `BACKEND-DESIGN.md` (the summary-level *how*) at the level of code.

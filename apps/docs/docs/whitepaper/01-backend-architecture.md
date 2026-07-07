@@ -1,3 +1,7 @@
+---
+description: OpenBucket backend architecture — how a single NestJS process boots and multiplexes S3, admin API, and SPA traffic onto one port.
+---
+
 # 1. Backend Architecture & Bootstrap
 
 This section specifies the structural backbone of the OpenBucket backend: how the single Node process boots, how one Nest application multiplexes three traffic types onto port 9000, and which scaffolding pieces every downstream subsystem can assume is already in place. Subsystem internals — S3 wire handling [see §3], persistence and the blob store [see §2], streaming and background ticks [see §4], the frontend [see §5] — are deliberately out of scope here. What is in scope is everything they hang off.

@@ -1,3 +1,7 @@
+---
+description: OpenBucket's admin JSON API, Angular admin console, JWT auth flow, and the build pipeline that ships both in a single Docker image.
+---
+
 # 5. Admin API, Frontend, Auth Flow & Delivery
 
 This section specifies the JSON admin API that lives at `/api/admin/*`, the Angular SPA that lives at `/admin/*`, the authentication flow that ties them together, and the build pipeline that produces the single Docker image carrying both. The S3 wire protocol (everything else on port 9000) is owned by the S3 agent and only referenced where its boundary touches admin code.

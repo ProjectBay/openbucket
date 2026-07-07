@@ -1,0 +1,10 @@
+# OpenBucket documentation — https://projectbay.github.io/openbucket/
+# Allow all crawlers; point them at the sitemap.
+#
+# NOTE: On a GitHub Pages *project* site this file is served at
+# /openbucket/robots.txt, which crawlers only partially honor (the effective
+# robots.txt is the host root). It takes full effect under a custom domain.
+User-agent: *
+Allow: /
+
+Sitemap: https://projectbay.github.io/openbucket/sitemap.xml

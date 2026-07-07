@@ -1,3 +1,7 @@
+---
+description: OpenBucket's persistence layer — a SQLite metadata store and a path-mirrored filesystem blob store kept consistent with atomic, crash-safe writes.
+---
+
 # 3. Persistence & Storage Layer
 
 This section specifies the durable substrate beneath OpenBucket: the SQLite-backed metadata store, the path-mirrored blob store, and the discipline that keeps the two consistent across crashes. Everything here is single-process, single-host, single-volume. There is no distributed locking, no replication, no quorum — just one Node process, one event loop, one filesystem, one SQLite file, and a small set of rules that make atomic writes possible.
