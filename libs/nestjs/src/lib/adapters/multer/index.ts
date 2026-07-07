@@ -15,6 +15,8 @@ export {
   type PerRequestKeyFn,
 } from './open-bucket-storage';
 
+export { OpenBucketFileInterceptor } from './open-bucket-file.interceptor';
+
 export {
   UploadedToBucket,
   uploadedToBucketFactory,

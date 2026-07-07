@@ -19,11 +19,11 @@ These three symbols ship behind the dedicated **`@openbucket/nestjs/multer`** su
 ```ts
 import { Controller, Post, UseFilters, UseInterceptors } from '@nestjs/common';
 import {
+  OpenBucketFileInterceptor,
   UploadedToBucket,
   UploadValidationExceptionFilter,
   type UploadedFileInfo,
 } from '@openbucket/nestjs/multer';
-import { OpenBucketFileInterceptor } from './open-bucket-file.interceptor'; // ← defined below
 
 @Controller('files')
 @UseFilters(UploadValidationExceptionFilter) // a rejected upload → HTTP 400
@@ -49,36 +49,14 @@ That's the whole upload path. Post a `multipart/form-data` request with a `file`
 The engine sniffs the type from the body's magic bytes and the **sniffed type wins** over whatever the client declared — so a "PNG" that's really HTML is caught and rejected, not stored. `file.contentType` is the resolved, verified type.
 :::
 
-### Wire up the DI-friendly interceptor
-
-The storage engine needs the `OpenBucketService` **instance**, but inside a class-property `@UseInterceptors(...)` decorator `this` isn't available yet. The fix is a tiny `mixin` interceptor that receives `ob` from the container and builds the engine at construction. Define it once and reuse it everywhere:
-
-```ts
-// open-bucket-file.interceptor.ts
-import { Injectable, mixin, type NestInterceptor, type Type } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { OpenBucketService } from '@openbucket/nestjs';
-import { openBucketStorage, type OpenBucketStorageOptions } from '@openbucket/nestjs/multer';
-
-/** A `FileInterceptor` whose storage is a DI-resolved OpenBucket engine. */
-export function OpenBucketFileInterceptor(
-  field: string,
-  opts: OpenBucketStorageOptions,
-): Type<NestInterceptor> {
-  @Injectable()
-  class OpenBucketInterceptor implements NestInterceptor {
-    private readonly delegate: NestInterceptor;
-    constructor(ob: OpenBucketService) {
-      const Base = FileInterceptor(field, { storage: openBucketStorage(ob, opts) });
-      this.delegate = new Base();
-    }
-    intercept(...args: Parameters<NestInterceptor['intercept']>) {
-      return this.delegate.intercept(...args);
-    }
-  }
-  return mixin(OpenBucketInterceptor);
-}
-```
+:::note[`OpenBucketFileInterceptor` is provided for you]
+Under the hood, the storage engine needs the `OpenBucketService` instance — which
+isn't available inside a class-property `@UseInterceptors(...)` decorator.
+`OpenBucketFileInterceptor` is the DI-friendly wrapper that resolves the service
+from the container for you, so you just import it from `@openbucket/nestjs/multer`
+— no boilerplate to copy. (Prefer to wire the raw engine yourself? Use
+`openBucketStorage(ob, opts)` with a `FileInterceptor` inside a custom mixin.)
+:::
 
 ## Make sure the bucket exists
 

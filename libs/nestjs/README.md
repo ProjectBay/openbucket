@@ -668,11 +668,11 @@ that never import this subpath never pull it in):
 ```ts
 import { Controller, Post, UseFilters, UseInterceptors } from '@nestjs/common';
 import {
+  OpenBucketFileInterceptor,
   UploadedToBucket,
   UploadValidationExceptionFilter,
   type UploadedFileInfo,
 } from '@openbucket/nestjs/multer';
-import { OpenBucketFileInterceptor } from './open-bucket-file.interceptor'; // ← below
 
 @Controller('files')
 @UseFilters(UploadValidationExceptionFilter) // maps a rejected upload → HTTP 400
@@ -692,43 +692,14 @@ export class FilesController {
 }
 ```
 
-**The `this.ob` caveat.** `openBucketStorage` needs the `OpenBucketService`
-_instance_, but inside a class-property `@UseInterceptors(...)` decorator `this`
-is not available at decoration time. The DI-friendly fix is a tiny `mixin`
-interceptor that receives `ob` from the container and builds the storage engine at
-construction — define it once and reuse it everywhere:
-
-```ts
-// open-bucket-file.interceptor.ts
-import {
-  Injectable,
-  mixin,
-  type NestInterceptor,
-  type Type,
-} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { OpenBucketService } from '@openbucket/nestjs';
-import { openBucketStorage, type OpenBucketStorageOptions } from '@openbucket/nestjs/multer';
-
-/** A `FileInterceptor` whose storage is a DI-resolved OpenBucket engine. */
-export function OpenBucketFileInterceptor(
-  field: string,
-  opts: OpenBucketStorageOptions,
-): Type<NestInterceptor> {
-  @Injectable()
-  class OpenBucketInterceptor implements NestInterceptor {
-    private readonly delegate: NestInterceptor;
-    constructor(ob: OpenBucketService) {
-      const Base = FileInterceptor(field, { storage: openBucketStorage(ob, opts) });
-      this.delegate = new Base();
-    }
-    intercept(...args: Parameters<NestInterceptor['intercept']>) {
-      return this.delegate.intercept(...args);
-    }
-  }
-  return mixin(OpenBucketInterceptor);
-}
-```
+**How `OpenBucketFileInterceptor` resolves the service.** `openBucketStorage`
+needs the `OpenBucketService` _instance_, but inside a class-property
+`@UseInterceptors(...)` decorator `this` is not available at decoration time.
+`OpenBucketFileInterceptor` handles that for you: it's a `mixin` interceptor whose
+constructor receives `OpenBucketService` from the container and builds the storage
+engine — so you just import it, no boilerplate. If you'd rather compose it
+yourself, `openBucketStorage(ob, opts)` is exported too for use inside your own
+`FileInterceptor` mixin.
 
 Notes:
 

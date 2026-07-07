@@ -147,8 +147,8 @@ import {
   UploadedToBucket,
   UploadValidationExceptionFilter,
   type UploadedFileInfo,
+  OpenBucketFileInterceptor,
 } from '@openbucket/nestjs/multer';
-import { OpenBucketFileInterceptor } from './open-bucket-file.interceptor'; // see below
 
 @Controller('files')
 @UseFilters(UploadValidationExceptionFilter) // maps a rejected upload → HTTP 400
@@ -171,34 +171,20 @@ export class FilesController {
 
 `UploadValidationExceptionFilter` renders a rejected upload as a stable `{ statusCode: 400, error: 'Bad Request', code, message }` body instead of an opaque 500. It is scoped by `@Catch(UploadValidationError)`, so an S3 error like `NoSuchBucketError` is **not** swallowed — make sure the bucket exists first.
 
-### The `this.ob` wiring helper
+### How `OpenBucketFileInterceptor` works (and the lower-level engine)
 
-`openBucketStorage` needs the `OpenBucketService` instance, but inside a class-property `@UseInterceptors(...)` decorator `this` is not available. The DI-friendly fix is a one-time mixin interceptor that receives `ob` from the container:
+`OpenBucketFileInterceptor` exists because `openBucketStorage` needs the
+`OpenBucketService` instance, which isn't available inside a class-property
+`@UseInterceptors(...)` decorator. It's a `mixin` interceptor whose constructor
+receives `OpenBucketService` from the container and builds the storage engine — so
+you import it and move on, no boilerplate.
+
+If you'd rather assemble it yourself (e.g. to add multer `limits`), the raw engine
+is exported too — wire `openBucketStorage(ob, opts)` into your own `FileInterceptor`
+mixin:
 
 ```ts
-// open-bucket-file.interceptor.ts
-import { Injectable, mixin, type NestInterceptor, type Type } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { OpenBucketService } from '@openbucket/nestjs';
-import { openBucketStorage, type OpenBucketStorageOptions } from '@openbucket/nestjs/multer';
-
-export function OpenBucketFileInterceptor(
-  field: string,
-  opts: OpenBucketStorageOptions,
-): Type<NestInterceptor> {
-  @Injectable()
-  class OpenBucketInterceptor implements NestInterceptor {
-    private readonly delegate: NestInterceptor;
-    constructor(ob: OpenBucketService) {
-      const Base = FileInterceptor(field, { storage: openBucketStorage(ob, opts) });
-      this.delegate = new Base();
-    }
-    intercept(...args: Parameters<NestInterceptor['intercept']>) {
-      return this.delegate.intercept(...args);
-    }
-  }
-  return mixin(OpenBucketInterceptor);
-}
+const Base = FileInterceptor(field, { storage: openBucketStorage(ob, opts) });
 ```
 
 The engine's `bucket`, `key`, and `validate` options can each be a static value or a `(req, file) => …` function, so you can derive the bucket or key per request. If a later part of the request fails, multer calls the engine's rollback, which deletes the already-committed object.
