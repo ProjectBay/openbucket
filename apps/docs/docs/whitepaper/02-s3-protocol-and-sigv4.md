@@ -1,3 +1,7 @@
+---
+description: How OpenBucket implements the Amazon S3 wire protocol and AWS Signature V4 auth — request routing, XML parsing, error envelopes, and every S3 operation.
+---
+
 # 2. S3 Wire Protocol & SigV4 Authentication
 
 This section specifies the S3 surface of OpenBucket end-to-end: how requests are

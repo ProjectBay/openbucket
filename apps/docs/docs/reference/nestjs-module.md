@@ -1,6 +1,7 @@
 ---
 sidebar_position: 6
 title: NestJS module reference
+description: Full API reference for @openbucket/nestjs — embed an S3-compatible object store (wire protocol, admin API, admin console SPA) inside your NestJS app.
 ---
 
 # NestJS module reference

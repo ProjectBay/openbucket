@@ -1,6 +1,7 @@
 ---
 sidebar_position: 6
 title: Contributing
+description: How to contribute to OpenBucket — local dev setup, the Node 22 toolchain, the Nx monorepo workflow, tests, and the pull-request process.
 ---
 
 # Contributing to OpenBucket

@@ -1,3 +1,7 @@
+---
+description: OpenBucket streaming I/O and concurrency — the byte plumbing for S3 PUT/GET/Range/multipart plus the in-process scheduler for background work.
+---
+
 # 4. Streaming I/O, Concurrency & Background Work
 
 This section is the implementation layer between the HTTP server (handled by the *backend-architect agent*) and the persistence layer (handled by the *persistence agent*). It owns the **byte plumbing** for the S3 object hot path — PUT, GET, Range, multipart — plus the **in-process scheduler** that drives lifecycle, multipart cleanup, trash purge, and orphan scans.

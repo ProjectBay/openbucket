@@ -71,14 +71,57 @@ const config = {
         theme: {
           customCss: './src/css/custom.css',
         },
+        sitemap: {
+          lastmod: 'date',
+          changefreq: 'weekly',
+          priority: 0.5,
+          filename: 'sitemap.xml',
+        },
       }),
     ],
+  ],
+
+  // Structured data (JSON-LD) — describes the project to search engines as a
+  // SoftwareApplication so it can qualify for richer results.
+  headTags: [
+    {
+      tagName: 'script',
+      attributes: {type: 'application/ld+json'},
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        name: 'OpenBucket',
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'Linux, macOS, Windows, Docker',
+        description:
+          'A self-hosted, S3-compatible object store you can run as a container — or embed in a NestJS app. Speaks the Amazon S3 wire protocol (SigV4, presigned URLs, multipart, versioning, object lock) from a single Node.js process.',
+        url: 'https://projectbay.github.io/openbucket/',
+        license: 'https://opensource.org/licenses/MIT',
+        codeRepository: 'https://github.com/ProjectBay/openbucket',
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'USD',
+        },
+      }),
+    },
   ],
 
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      image: 'img/docusaurus-social-card.jpg',
+      // Default Open Graph / Twitter share image (branded 1200×630 card).
+      image: 'img/openbucket-social-card.png',
+      // Global <meta> tags. Docusaurus already emits og:* and twitter:card
+      // (summary_large_image, from `image` above); this adds keywords + author.
+      metadata: [
+        {
+          name: 'keywords',
+          content:
+            'S3-compatible, object store, self-hosted, NestJS, S3 API, SigV4, presigned URLs, MinIO alternative, self-hosted S3, Docker, Node.js, TypeScript',
+        },
+        {name: 'author', content: 'OpenBucket contributors'},
+      ],
       colorMode: {
         respectPrefersColorScheme: true,
       },
