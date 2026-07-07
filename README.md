@@ -2,7 +2,7 @@
 
 # OpenBucket
 
-**A self-hosted, S3-compatible object store you can run as a container — or embed directly into a NestJS app.**
+**A self-hosted, S3-compatible object store you can embed directly into your NestJS app — or run standalone as a container.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![CI](https://github.com/ProjectBay/openbucket/actions/workflows/ci.yml/badge.svg)](https://github.com/ProjectBay/openbucket/actions/workflows/ci.yml)
@@ -30,6 +30,8 @@ It comes in two shapes from one codebase:
 > **Status:** pre-1.0 and under active development. The S3 surface and admin
 > console are feature-complete and tested; APIs may still change before 1.0.
 
+**New here?** → [Is OpenBucket for you?](https://projectbay.github.io/openbucket/docs/is-openbucket-for-you) · [OpenBucket vs MinIO](https://projectbay.github.io/openbucket/docs/comparisons/vs-minio) · [Quick start ↓](#quick-start)
+
 ---
 
 ## The admin console
@@ -48,6 +50,16 @@ per-bucket versioning / lifecycle / CORS / policy editors.
 ---
 
 ## Features
+
+OpenBucket is batteries-included: the full S3 wire protocol, a polished admin
+console, an app-layer **file pipeline** (uploads, presigned URLs, image transforms,
+object events), and **durability** tooling (replication, cold tiering, backup,
+integrity scrubbing).
+
+<details>
+<summary><b>The complete feature list</b> (click to expand)</summary>
+
+<br />
 
 **S3 protocol** — path-style addressing, AWS Signature V4 (header + presigned
 query), streaming PUT/GET, multipart uploads, object & bucket tagging, bucket
@@ -112,6 +124,8 @@ scriptable output (`--json`, non-echoing password prompt, redacted errors).
 **Embeddable** — runs its ORM under an isolated MikroORM context so it won't
 collide with a host app's database, mounts everything under a configurable
 `mountPath`, and serves the bundled SPA from the package.
+
+</details>
 
 ---
 
