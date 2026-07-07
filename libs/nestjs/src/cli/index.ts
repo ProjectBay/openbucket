@@ -16,6 +16,7 @@ import { OPENBUCKET_VERSION } from '../lib/version';
 import { parseCli, type ParsedFlags } from './args';
 import { runBackup } from './commands/backup';
 import { runBuckets } from './commands/buckets';
+import { runHash } from './commands/hash';
 import { runKeys } from './commands/keys';
 import { runReplication } from './commands/replication';
 import { resolveConfig } from './config';
@@ -37,6 +38,7 @@ Commands:
   backup create [--bucket <b>] [-o <file.zip>] [--force]
   backup restore -f <file.zip> [--bucket <b>] --yes
   replication status                      show replication status
+  hash [password]                         print an argon2id ADMIN_PASSWORD_HASH (offline; no login)
 
 Global options:
   --endpoint <url>   admin endpoint (env OPENBUCKET_ENDPOINT; default http://127.0.0.1:3900)
@@ -83,6 +85,19 @@ export async function runCli(argv: string[]): Promise<number> {
   if (flags.help || !command) {
     printLine(USAGE);
     return EXIT.SUCCESS;
+  }
+
+  // `hash` is a local, offline utility — no admin endpoint, no login. Handle it
+  // before resolveConfig (which resolves admin credentials) so it works with no
+  // configuration at all, e.g. `npx @openbucket/nestjs hash`.
+  if (command === 'hash') {
+    try {
+      return await runHash(positionals.slice(1), process.env);
+    } catch (err) {
+      const e = toCliError(err);
+      printNotice(e.toStderr());
+      return e.exitCode;
+    }
   }
 
   try {
