@@ -1,0 +1,41 @@
+# .github/workflows/scorecard.yml
+# OpenSSF Scorecard — automated supply-chain security posture check. Publishes
+# results to the repo's Security → Code scanning tab and (with publish_results)
+# to the public OpenSSF registry, which powers a "Scorecard" badge adopters can
+# check. Runs weekly and on pushes to the default branch.
+name: scorecard
+
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: '31 4 * * 1' # Mondays 04:31 UTC
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-22.04
+    permissions:
+      security-events: write # upload the SARIF result to code scanning
+      id-token: write # publish results to the OpenSSF registry
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload result to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif

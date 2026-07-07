@@ -47,6 +47,7 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write # create the GitHub Release for this tag
+      id-token: write # mint the OIDC token npm uses to attach build provenance
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
@@ -95,7 +96,10 @@ jobs:
           version="$(node -p "require('./dist/libs/nestjs/package.json').version")"
           if [[ "$version" == *-* ]]; then dist_tag=next; else dist_tag=latest; fi
           echo "Publishing @openbucket/nestjs@$version to dist-tag '$dist_tag'"
-          npm publish ./dist/libs/nestjs --access public --tag "$dist_tag"
+          # --provenance: attach a signed SLSA build-provenance attestation (needs
+          # id-token: write above) so npmjs.com shows a verified "Published via
+          # GitHub Actions" badge — a supply-chain trust signal for adopters.
+          npm publish ./dist/libs/nestjs --access public --tag "$dist_tag" --provenance
 
           if [[ "$version" == *-* ]]; then
             current_latest="$(npm view @openbucket/nestjs dist-tags.latest 2>/dev/null || echo '')"

@@ -1,7 +1,7 @@
 {
   "name": "@openbucket/nestjs",
   "version": "0.1.0-alpha.17",
-  "description": "Embeddable S3-compatible object store + admin console for NestJS applications.",
+  "description": "Self-hosted, S3-compatible object store for NestJS: S3 API, presigned file uploads & an admin console you embed in your app or run standalone — a lightweight MinIO alternative.",
   "license": "MIT",
   "engines": {
     "node": ">=20.19.0"
@@ -79,7 +79,23 @@
     "yauzl": "^3.2.0",
     "zod": "^4.3.6"
   },
-  "keywords": ["nestjs", "s3", "object-storage", "minio", "aws-s3"],
+  "keywords": [
+    "s3",
+    "s3-compatible",
+    "s3-server",
+    "object-storage",
+    "object-store",
+    "self-hosted",
+    "minio",
+    "minio-alternative",
+    "aws-s3",
+    "file-upload",
+    "presigned-url",
+    "storage",
+    "bucket",
+    "nestjs",
+    "nestjs-module"
+  ],
   "author": "OpenBucket contributors",
   "homepage": "https://github.com/ProjectBay/openbucket/tree/main/libs/nestjs#readme",
   "repository": {

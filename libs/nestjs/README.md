@@ -1,5 +1,11 @@
 # @openbucket/nestjs
 
+[![npm version](https://img.shields.io/npm/v/@openbucket/nestjs.svg)](https://www.npmjs.com/package/@openbucket/nestjs)
+[![npm downloads](https://img.shields.io/npm/dm/@openbucket/nestjs.svg)](https://www.npmjs.com/package/@openbucket/nestjs)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/ProjectBay/openbucket/blob/main/LICENSE)
+[![Node](https://img.shields.io/node/v/@openbucket/nestjs.svg)](https://www.npmjs.com/package/@openbucket/nestjs)
+[![Docs](https://img.shields.io/badge/docs-openbucket-2563eb.svg)](https://projectbay.github.io/openbucket/)
+
 Embed an **S3-compatible object store** — wire protocol, admin JSON API, and admin
 console SPA — directly inside your own NestJS application, configured in code.
 
