@@ -118,7 +118,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Strip either tag prefix (`nestjs-v*` or the dual-release `v*`) so the
+          # title reads `v0.1.0-…` (not `vv0.1.0-…`) and the CHANGELOG lookup below
+          # matches `## [0.1.0-…]`. Mirrors the version-verify step above.
           version="${GITHUB_REF_NAME#nestjs-v}"
+          version="${version#v}"
           notes="$(awk -v v="$version" '
             $0 ~ "^## \\[" v "\\]" { grab=1; next }
             grab && /^## \[/ { exit }
