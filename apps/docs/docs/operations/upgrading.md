@@ -111,7 +111,7 @@ npm install @openbucket/nestjs
 npm install @openbucket/nestjs@next
 
 # A specific version (recommended for reproducible deploys):
-npm install @openbucket/nestjs@0.1.0-alpha.14
+npm install @openbucket/nestjs@0.1.0-alpha.18
 ```
 
 Migrations still run automatically when your host app boots (`OpenBucketModule`
