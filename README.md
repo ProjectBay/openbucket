@@ -137,7 +137,7 @@ collide with a host app's database, mounts everything under a configurable
 GitHub Container Registry on every release:
 
 - **Image:** `ghcr.io/projectbay/openbucket`
-- **Tags:** `X.Y.Z` — one immutable tag per release (e.g. `0.1.0-alpha.17`) ·
+- **Tags:** `X.Y.Z` — one immutable tag per release (e.g. `0.1.0-alpha.18`) ·
   `sha-<commit>` — an exact build · `latest` — stable (non-prerelease) releases
   only, so none yet while pre-1.0 · `edge` — manual builds
 - **📦 Browse all published versions →**
@@ -154,7 +154,7 @@ cp .env.example .env
 
 # 3. Run a published image (pick a tag from the versions page above)
 docker run --rm -p 9000:9000 --env-file .env -v openbucket-data:/data \
-  ghcr.io/projectbay/openbucket:0.1.0-alpha.17
+  ghcr.io/projectbay/openbucket:0.1.0-alpha.18
 ```
 
 Prefer to **build from source**? The bundled compose file does that instead:
