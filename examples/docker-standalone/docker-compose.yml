@@ -1,0 +1,31 @@
+# OpenBucket — standalone deployment using the PUBLISHED image.
+#
+#   1. cp .env.example .env
+#   2. npx @openbucket/nestjs hash 'your-admin-password'   # → ADMIN_PASSWORD_HASH
+#   3. docker compose up -d
+#
+# S3 API + admin console are then served on http://localhost:9000
+# (admin console at /admin).
+
+services:
+  openbucket:
+    image: ghcr.io/projectbay/openbucket:0.1.0-alpha.18
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    env_file:
+      - .env
+    environment:
+      # The image's data volume; overrides any DATA_DIR from .env.
+      DATA_DIR: /data
+    volumes:
+      - openbucket-data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9000/api/admin/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  openbucket-data:
