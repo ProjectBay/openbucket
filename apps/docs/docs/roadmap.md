@@ -43,12 +43,23 @@ edges:
 
 ## The 1.0 bar
 
-We consider OpenBucket 1.0 when:
+1.0 is a promise: **the API is stable to build on, and your data is safe.** We tag
+it when:
 
-- The public library + admin API surfaces are frozen under semver.
-- The S3 compatibility matrix is backed by a machine-generated, dated conformance
-  report.
-- A stable release sits on the npm `latest` tag (not a pre-release).
+- **Stability** — the public library surface (`OpenBucketService`, module options,
+  the multer adapter) and the admin API are reviewed and **frozen under a written
+  semver / deprecation policy** — after real-world usage has had a chance to shake
+  out the rough edges.
+- **Correctness** — the release gate runs the **full** test suite (no skipped
+  specs), and the S3 compatibility matrix is backed by a **machine-generated, dated
+  conformance report** (client × operation), not a hand-kept table.
+- **Data safety** — a tested **backup → upgrade → restore** path, a stable on-disk
+  format, and a disaster-recovery runbook.
+- **Trust** — a security re-pass of everything added since the
+  [2026 audit](./concepts/security-audit-2026.md) (replication, tiering, scoped
+  keys), a published threat model, and honest single-node benchmarks.
+- **Release** — a stable (non-prerelease) version on the npm `latest` tag and the
+  `:latest` image.
 
 ## What OpenBucket is deliberately _not_ doing
 
