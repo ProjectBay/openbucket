@@ -1,6 +1,6 @@
 # .github/workflows/release-docker.yml
-# Publish the OpenBucket standalone server image to GHCR (GitHub Container
-# Registry).
+# Publish the OpenBucket standalone server image to GHCR (canonical) and,
+# optionally, mirror it to Docker Hub.
 #
 # Trigger: push a tag `v<version>` (e.g. v0.1.0 or v0.1.0-alpha.1), or run
 # manually via workflow_dispatch (builds the selected ref and tags it `:edge`).
@@ -9,6 +9,11 @@
 # (no extra secret needed — the job has `packages: write`). AFTER the first push,
 # set the GHCR package visibility to Public (repo → Packages → openbucket →
 # Package settings → Change visibility) so `docker pull` works unauthenticated.
+#
+# Docker Hub mirror (optional, for its search/SEO): create a Docker Hub access
+# token, add repo secrets DOCKERHUB_USERNAME + DOCKERHUB_TOKEN, and this workflow
+# also pushes docker.io/<DOCKERHUB_USERNAME>/openbucket. Without them it is a
+# no-op — GHCR-only.
 #
 # Multi-arch: linux/amd64 + linux/arm64 (buildx + QEMU). libsql (N-API) and
 # argon2 ship prebuilt binaries for both, so `npm ci` fetches them rather than
@@ -29,6 +34,11 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/openbucket
+  # Optional Docker Hub mirror (GHCR stays canonical). Set the repo secrets
+  # DOCKERHUB_USERNAME + DOCKERHUB_TOKEN to ALSO publish to
+  # docker.io/<DOCKERHUB_USERNAME>/openbucket — Docker Hub has search/SEO that
+  # GHCR lacks. Unset ⇒ the Docker Hub steps below no-op and only GHCR is pushed.
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
 jobs:
   publish:
@@ -50,11 +60,32 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Docker Hub (optional mirror)
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Compute image list (GHCR + optional Docker Hub)
+        id: images
+        run: |
+          images="${IMAGE}"
+          if [ -n "${DOCKERHUB_USERNAME}" ]; then
+            images="${images}"$'\n'"docker.io/${DOCKERHUB_USERNAME}/openbucket"
+          fi
+          {
+            echo 'images<<EOF'
+            printf '%s\n' "${images}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Image metadata (tags + labels)
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ env.IMAGE }}
+          # GHCR, plus docker.io/<user>/openbucket when the Docker Hub secrets are set.
+          images: ${{ steps.images.outputs.images }}
           # Keyword-rich OCI labels so the GHCR (and any future Docker Hub) card
           # shows a real description instead of a blank summary.
           labels: |
