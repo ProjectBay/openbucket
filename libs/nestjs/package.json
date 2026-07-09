@@ -1,6 +1,6 @@
 {
   "name": "@openbucket/nestjs",
-  "version": "0.1.0-alpha.18",
+  "version": "0.1.0-alpha.19",
   "description": "Self-hosted, S3-compatible object store for NestJS: S3 API, presigned file uploads & an admin console you embed in your app or run standalone — a lightweight MinIO alternative.",
   "license": "MIT",
   "engines": {

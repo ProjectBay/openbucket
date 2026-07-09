@@ -9,8 +9,50 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.19] — 2026-07-09
+
+### Added
+
+- **Plaintext admin password.** Set `ADMIN_PASSWORD` (standalone) or
+  `admin.password` (embedded, `OpenBucketModule.forRoot`) instead of a
+  pre-computed argon2id hash — OpenBucket hashes it on first boot (seed-once) and
+  never logs it. Makes one-click deploys work without generating a hash.
+  `ADMIN_PASSWORD_HASH` / `admin.passwordHash` still takes precedence.
+- **Writable object user-metadata** — `putObject` / `uploadFrom` accept a
+  `userMetadata` map, round-tripped via `headObject().userMetadata`.
+- **`forRootAsync` supports `useClass` / `useExisting`** (via an
+  `OpenBucketOptionsFactory`), alongside `useFactory`.
+- **`@openbucket/nestjs/standalone` subpath** (see the breaking note below).
+- **One-click deploy templates** (CapRover, Coolify, Render, Fly) under `deploy/`
+  and runnable `examples/` (embed-in-NestJS + standalone Docker).
+- **Optional Docker Hub image mirror** — set the `DOCKERHUB_USERNAME` /
+  `DOCKERHUB_TOKEN` repo secrets to also publish `docker.io/<user>/openbucket`
+  (GHCR stays canonical).
+
+### Fixed
+
+- **`admin.password`-only config threw at boot in library mode** — a second
+  validator still required `admin.passwordHash`. The documented `admin.password`
+  alternative now works, and it enforces a minimum length (8) to match the env
+  schema's `ADMIN_PASSWORD`.
+
 ### Changed
 
+- **BREAKING (pre-1.0): composition-root internals moved to
+  `@openbucket/nestjs/standalone`.** `OpenBucketCoreModule`,
+  `OpenBucketStandaloneModule`, `AppConfigService`, `AdminModule`, `HealthModule`,
+  `normalizeMount`, and `rewriteBaseHref` are no longer exported from the package
+  root — import them from `@openbucket/nestjs/standalone`. The host-facing surface
+  (`OpenBucketModule`, `OpenBucketService`, the option/upload types, the `/multer`
+  adapter, the object-events surface) is unchanged on the main entry.
+- **Library `maxObjectSizeMb` default lowered 5 TiB → 5 GiB**, matching the
+  standalone `MAX_OBJECT_SIZE_MB` default (5 TiB was an unbounded-allocation
+  footgun; raise it explicitly if you need larger objects).
+- The three identical upload-result types (`UploadResult`, `OpenBucketMulterInfo`,
+  `UploadedFileInfo`) are unified onto one shape — names preserved as aliases.
+- Internal: de-flaked the quarantined concurrency / request-id / scheduled-backup
+  specs (the npm release gate now runs the full unit suite); the S3 conformance
+  suite emits a machine-generated, dated report.
 - **BREAKING (pre-1.0): standalone env-var prefix unified onto `OPENBUCKET_`.**
   The replication, scheduled-backup, and integrity-scrub feature blocks used an
   `OB_` prefix while every other feature block (tiering, endpoint, region, SSE)

@@ -11,7 +11,7 @@ app = "openbucket"
 primary_region = "iad"
 
 [build]
-  image = "ghcr.io/projectbay/openbucket:0.1.0-alpha.18"
+  image = "ghcr.io/projectbay/openbucket:0.1.0-alpha.19"
 
 [env]
   DATA_DIR = "/data"

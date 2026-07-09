@@ -2,3 +2,6 @@ node_modules/
 dist/
 .env
 .openbucket-data/
+
+# lockfile regenerated on install (avoids pinning an unpublished version)
+package-lock.json

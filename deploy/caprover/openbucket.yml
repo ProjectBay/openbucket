@@ -32,7 +32,7 @@ caproverOneClickApp:
   variables:
     - id: $$cap_openbucket_version
       label: OpenBucket image tag
-      defaultValue: '0.1.0-alpha.18'
+      defaultValue: '0.1.0-alpha.19'
       description: 'Image tag to deploy. See published tags: https://github.com/ProjectBay/openbucket/pkgs/container/openbucket'
       validRegex: /^([^\s^\/])+$/
 

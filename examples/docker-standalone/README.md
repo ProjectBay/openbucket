@@ -7,7 +7,7 @@ no build step. Point any S3 client (AWS CLI, SDKs) at `http://localhost:9000`.
 ## What it shows
 
 - A `docker-compose.yml` using the published image
-  `ghcr.io/projectbay/openbucket:0.1.0-alpha.18` with a named data volume and a healthcheck.
+  `ghcr.io/projectbay/openbucket:0.1.0-alpha.19` with a named data volume and a healthcheck.
 - Generating the required secrets and passing them via `env_file`.
 - Creating a bucket and uploading a file with the AWS CLI (path-style).
 
