@@ -184,9 +184,20 @@ export const EnvSchema = z
       .max(2_592_000)
       .default(604_800), // 7d
     ADMIN_USERNAME: z.string().min(1).default('admin'),
+    // Provide EITHER an argon2id hash (preferred for production) OR the plaintext
+    // ADMIN_PASSWORD below — the superRefine requires at least one.
     ADMIN_PASSWORD_HASH: z
       .string()
-      .regex(/^\$argon2id\$/, 'ADMIN_PASSWORD_HASH must be an argon2id hash'),
+      .regex(/^\$argon2id\$/, 'ADMIN_PASSWORD_HASH must be an argon2id hash')
+      .optional(),
+    // Plaintext admin password — the friendly alternative to ADMIN_PASSWORD_HASH
+    // for one-click deploys. Seed-once: argon2id-hashed on first boot (see
+    // AdminBootstrapService), and NEVER logged. It lives in the environment
+    // (recoverable), so prefer the hash for production. Ignored when a hash is set.
+    ADMIN_PASSWORD: z
+      .string()
+      .min(8, 'ADMIN_PASSWORD must be at least 8 characters')
+      .optional(),
 
     // --- s3 protocol ---
     ROOT_ACCESS_KEY_ID: z
@@ -416,6 +427,18 @@ export const EnvSchema = z
     SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
   })
   .superRefine((env, ctx) => {
+    // Cross-field: the admin credential must come from EITHER ADMIN_PASSWORD_HASH
+    // (argon2id) OR ADMIN_PASSWORD (plaintext, hashed at boot). Refuse to boot
+    // with neither, preserving the "no unprotected admin" guarantee.
+    if (!env.ADMIN_PASSWORD_HASH && !env.ADMIN_PASSWORD) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ADMIN_PASSWORD_HASH'],
+        message:
+          'Set ADMIN_PASSWORD_HASH (argon2id) or ADMIN_PASSWORD (plaintext, hashed at boot).',
+      });
+    }
+
     // Cross-field: `token` mode must carry a strong bearer token (fail-closed —
     // never expose /metrics behind a weak/empty token, CWE-521). Mirrors the
     // webhook url/secret pairing.

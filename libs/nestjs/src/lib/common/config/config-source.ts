@@ -40,6 +40,9 @@ export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
     JWT_REFRESH_TTL_SECONDS: opts.admin?.jwtRefreshTtl ?? 604_800,
     ADMIN_USERNAME: opts.admin?.username ?? 'admin',
     ADMIN_PASSWORD_HASH: opts.admin?.passwordHash ?? '',
+    // Plaintext admin password (hashed at boot by AdminBootstrapService) — the
+    // embedded mirror of the standalone ADMIN_PASSWORD env var.
+    ADMIN_PASSWORD: opts.admin?.password,
     ROOT_ACCESS_KEY_ID: opts.rootCredentials.accessKeyId,
     ROOT_SECRET_ACCESS_KEY: opts.rootCredentials.secretAccessKey,
     OPENBUCKET_ENDPOINT: opts.endpoint,

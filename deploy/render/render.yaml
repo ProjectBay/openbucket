@@ -1,8 +1,8 @@
 # OpenBucket — Render blueprint. https://render.com/docs/blueprint-spec
 #
-# Render generates JWT_SECRET and ROOT_SECRET_ACCESS_KEY for you. Set
-# ADMIN_PASSWORD_HASH in the dashboard (argon2id) — generate it with:
-#     npx @openbucket/nestjs hash 'your-admin-password'
+# Render generates the admin password, JWT secret, and S3 root secret for you.
+# Copy the generated ADMIN_PASSWORD from the dashboard to log in (or replace its
+# value with one of your own).
 services:
   - type: web
     name: openbucket
@@ -16,8 +16,8 @@ services:
         value: "9000"
       - key: ADMIN_USERNAME
         value: admin
-      - key: ADMIN_PASSWORD_HASH
-        sync: false # set in the Render dashboard (argon2id hash)
+      - key: ADMIN_PASSWORD
+        generateValue: true # random admin password — copy it from the dashboard to log in
       - key: JWT_SECRET
         generateValue: true # random value (verify it is >= 32 chars)
       - key: ROOT_ACCESS_KEY_ID

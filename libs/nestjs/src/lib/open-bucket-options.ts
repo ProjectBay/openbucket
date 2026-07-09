@@ -55,8 +55,17 @@ export interface OpenBucketModuleOptions {
   /** Admin console (JSON API + bundled SPA). Omit to disable the admin surface entirely. */
   admin?: {
     username: string;
-    /** argon2id hash of the admin password. */
-    passwordHash: string;
+    /**
+     * argon2id hash of the admin password. Provide this OR `password` (one of the
+     * two is required when `admin` is present).
+     */
+    passwordHash?: string;
+    /**
+     * Plaintext admin password — the convenience alternative to `passwordHash`.
+     * OpenBucket argon2id-hashes it on first boot (seed-once) and never logs it.
+     * Prefer `passwordHash` for production. Ignored when `passwordHash` is set.
+     */
+    password?: string;
     /** Secret for signing admin JWTs. */
     jwtSecret: string;
     /** Serve the bundled Angular SPA at `<mountPath>/admin`. Default `true`. */
@@ -215,7 +224,8 @@ export interface ResolvedOpenBucketOptions {
   rootCredentials: { accessKeyId: string; secretAccessKey: string };
   admin?: {
     username: string;
-    passwordHash: string;
+    passwordHash?: string;
+    password?: string;
     jwtSecret: string;
     serveUi: boolean;
     jwtAccessTtl: number;
@@ -273,12 +283,17 @@ export function resolveOptions(o: OpenBucketModuleOptions): ResolvedOpenBucketOp
     throw new Error('OpenBucketModule: `rootCredentials` is required');
   }
   // A present-but-partial `admin` block is a footgun: an empty `jwtSecret` would
-  // sign admin JWTs with no secret. Require all three fields, or omit `admin`
-  // entirely to disable the admin surface.
-  if (o.admin && (!o.admin.username || !o.admin.passwordHash || !o.admin.jwtSecret)) {
+  // sign admin JWTs with no secret. Require `username`, `jwtSecret`, and a
+  // credential (`passwordHash` OR `password`) — or omit `admin` to disable the
+  // admin surface.
+  if (
+    o.admin &&
+    (!o.admin.username || (!o.admin.passwordHash && !o.admin.password) || !o.admin.jwtSecret)
+  ) {
     throw new Error(
-      'OpenBucketModule: `admin` requires non-empty `username`, `passwordHash`, and ' +
-        '`jwtSecret`. Omit `admin` entirely to disable the admin surface.',
+      'OpenBucketModule: `admin` requires non-empty `username`, `jwtSecret`, and either ' +
+        '`passwordHash` (argon2id) or `password` (plaintext, hashed at boot). Omit `admin` ' +
+        'entirely to disable the admin surface.',
     );
   }
   return {
@@ -292,6 +307,7 @@ export function resolveOptions(o: OpenBucketModuleOptions): ResolvedOpenBucketOp
       ? {
           username: o.admin.username,
           passwordHash: o.admin.passwordHash,
+          password: o.admin.password,
           jwtSecret: o.admin.jwtSecret,
           serveUi: o.admin.serveUi ?? true,
           jwtAccessTtl: o.admin.jwtAccessTtl ?? 900,
