@@ -3,6 +3,7 @@ export {
   OPEN_BUCKET_OPTIONS,
   type OpenBucketModuleOptions,
   type OpenBucketModuleAsyncOptions,
+  type OpenBucketOptionsFactory,
   type ResolvedOpenBucketOptions,
 } from './lib/open-bucket-options';
 
@@ -15,15 +16,19 @@ export {
   type ObjectListResult,
   type ObjectInfo,
   type BucketInfo,
+  type CreateBucketOptions,
+  type PutObjectOptions,
+  type ListObjectsOptions,
   type PresignOptions,
   type PresignPostOptions,
   type PresignedPost,
   type MulterFileLike,
   type UploadSource,
   type UploadOptions,
+  type UploadedObject,
   type UploadResult,
+  type PostPolicyCondition,
 } from './lib/open-bucket.service';
-export { type PostPolicyCondition } from './lib/s3/sigv4/presigned-post';
 
 // Upload DX helpers (STORY-0803): validation model + sanitized key strategies +
 // the typed validation error hosts map to a 400.
@@ -38,23 +43,12 @@ export {
 } from './lib/open-bucket-upload';
 export { type ImageInfo } from './lib/storage/image-info';
 
-// The composition root (env-driven in phase 0b; phase 1 wires it to options).
-// Exported so the thin standalone app + the openapi-export tooling can bootstrap it.
-export { OpenBucketCoreModule } from './lib/open-bucket-core.module';
-export { AdminModule } from './lib/admin/admin.module';
-export { HealthModule } from './lib/admin/health/health.module';
-
-// Standalone `MOUNT_PATH` support: the wrapper root module that mounts the whole
-// tree under a subpath, plus the two pure helpers `main.ts` needs to be
-// mount-aware without duplicating logic — `normalizeMount` (the same
-// normalization the env schema + `forRoot` apply) and `rewriteBaseHref` (the SPA
-// `<base href>` rewrite the embedded SpaController uses).
-export { OpenBucketStandaloneModule } from './lib/open-bucket-standalone.module';
-export { normalizeMount } from './lib/open-bucket-options';
-export { rewriteBaseHref } from './lib/spa/spa-utils';
-
-// Config service consumed by the standalone app's main.ts (phase 0b).
-export { AppConfigService } from './lib/common/config/app-config.service';
+// NOTE: the composition-root internals the first-party standalone backend needs
+// to bootstrap OpenBucket from the published package — `OpenBucketCoreModule`,
+// `OpenBucketStandaloneModule`, `AdminModule`, `HealthModule`, `AppConfigService`,
+// `normalizeMount`, `rewriteBaseHref`, and `OPEN_BUCKET_ORM_CONTEXT` — are NOT
+// host-app API and are intentionally NOT exported here. Import them from the
+// `@openbucket/nestjs/standalone` SUBPATH instead (see `standalone.ts`).
 
 // Prometheus metrics (STORY-1202). Exported so a host app can scrape the shared
 // `prom-client` registry directly (e.g. bolt it onto its own `/metrics` route)
@@ -78,11 +72,6 @@ export {
   OnMultipartCompleted,
 } from './lib/events/on-object-event.decorators';
 export { ObjectEventsService } from './lib/events/object-events.service';
-
-// The MikroORM contextName the lib registers under (phase 5 isolation). The
-// standalone app needs it to resolve the named ORM token in main.ts; a host
-// must not register its own MikroORM context with this name.
-export { OPEN_BUCKET_ORM_CONTEXT } from './lib/persistence/orm-context';
 
 // The multer storage engine + `@UploadedToBucket()` decorator + upload-validation
 // filter live behind the `@openbucket/nestjs/multer` SUBPATH export (STORY-1200).

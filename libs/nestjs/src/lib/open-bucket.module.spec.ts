@@ -1,10 +1,11 @@
-import { Controller, Get, type INestApplication, Module } from '@nestjs/common';
+import { Controller, Get, Injectable, type INestApplication, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import request from 'supertest';
 
 import { OpenBucketModule } from './open-bucket.module';
+import type { OpenBucketModuleOptions, OpenBucketOptionsFactory } from './open-bucket-options';
 
 /**
  * Host-app embedding harness — boots a NestJS app that imports
@@ -146,5 +147,52 @@ describe('OpenBucketModule.forRoot — admin disabled (headless S3-only)', () =>
       .post('/storage/api/admin/auth/login')
       .send({ username: 'admin', password: 'whatever' });
     expect(res.status).toBe(404);
+  });
+});
+
+const DATA_DIR_ASYNC = join(process.cwd(), 'tmp', `ob-async-useclass-${process.pid}`);
+
+// SF-2: `forRootAsync` supports `useClass`/`useExisting` via an
+// `OpenBucketOptionsFactory` (createOpenBucketOptions), not just `useFactory`.
+@Injectable()
+class TestOptionsFactory implements OpenBucketOptionsFactory {
+  createOpenBucketOptions(): OpenBucketModuleOptions {
+    // No `admin` block — the async `admin: false` runs this headless (S3-only).
+    return {
+      dataDir: DATA_DIR_ASYNC,
+      rootCredentials: {
+        accessKeyId: 'AKIAEXAMPLE000000000',
+        secretAccessKey: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
+      },
+    };
+  }
+}
+
+describe('OpenBucketModule.forRootAsync — useClass options factory', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    rmSync(DATA_DIR_ASYNC, { recursive: true, force: true });
+    mkdirSync(DATA_DIR_ASYNC, { recursive: true });
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        OpenBucketModule.forRootAsync({ admin: false, useClass: TestOptionsFactory }),
+      ],
+    }).compile();
+
+    app = moduleRef.createNestApplication();
+    await app.init();
+  }, 60_000);
+
+  afterAll(async () => {
+    await app?.close();
+    rmSync(DATA_DIR_ASYNC, { recursive: true, force: true });
+  });
+
+  it('boots and serves S3 from options built by the injected factory (unsigned → 403)', async () => {
+    const res = await request(app.getHttpServer()).get('/storage/');
+    expect(res.status).toBe(403);
+    expect(res.headers['content-type']).toContain('xml');
   });
 });

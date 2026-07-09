@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AdminModule, HealthModule, OpenBucketCoreModule } from '@openbucket/nestjs';
+import { AdminModule, HealthModule, OpenBucketCoreModule } from '@openbucket/nestjs/standalone';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

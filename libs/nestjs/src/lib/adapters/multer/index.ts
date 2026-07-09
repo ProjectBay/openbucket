@@ -19,7 +19,6 @@ export { OpenBucketFileInterceptor } from './open-bucket-file.interceptor';
 
 export {
   UploadedToBucket,
-  uploadedToBucketFactory,
   type UploadedFileInfo,
 } from './uploaded-to-bucket.decorator';
 

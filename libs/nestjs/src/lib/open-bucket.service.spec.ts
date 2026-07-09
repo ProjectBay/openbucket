@@ -83,6 +83,26 @@ describe('OpenBucketService — in-process facade', () => {
     expect(folders.commonPrefixes.sort()).toEqual(['docs/', 'images/']);
   });
 
+  it('putObject persists userMetadata that headObject reads back (SF-4)', async () => {
+    await svc.putObject(BUCKET, 'docs/meta-put.txt', 'x', {
+      contentType: 'text/plain',
+      userMetadata: { owner: 'alice', tier: 'gold' },
+    });
+    const meta = await svc.headObject(BUCKET, 'docs/meta-put.txt');
+    expect(meta!.userMetadata).toEqual({ owner: 'alice', tier: 'gold' });
+  });
+
+  it('uploadFrom persists userMetadata that headObject reads back (SF-4)', async () => {
+    const res = await svc.uploadFrom(Buffer.from('hello'), {
+      bucket: BUCKET,
+      key: 'docs/meta-upload.txt',
+      contentType: 'text/plain',
+      userMetadata: { source: 'unit-test' },
+    });
+    const meta = await svc.headObject(BUCKET, res.key);
+    expect(meta!.userMetadata).toEqual({ source: 'unit-test' });
+  });
+
   it('deletes an object (idempotently)', async () => {
     await svc.putObject(BUCKET, 'tmp/x', 'x');
     await svc.deleteObject(BUCKET, 'tmp/x');
