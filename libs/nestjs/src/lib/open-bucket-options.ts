@@ -315,7 +315,10 @@ export function resolveOptions(o: OpenBucketModuleOptions): ResolvedOpenBucketOp
         }
       : undefined,
     limits: {
-      maxObjectSizeMb: o.limits?.maxObjectSizeMb ?? 5_120_000,
+      // Default 5 GiB — matches the standalone env default (MAX_OBJECT_SIZE_MB).
+      // The former 5 TiB default was an unbounded-allocation footgun (CWE-770);
+      // an embedder raises it explicitly if they really need larger objects.
+      maxObjectSizeMb: o.limits?.maxObjectSizeMb ?? 5_120,
       maxMultipartParts: o.limits?.maxMultipartParts ?? 10_000,
       multipartTtlHours: o.limits?.multipartTtlHours ?? 24,
     },
@@ -387,9 +390,22 @@ export function validateSecurityCriticalOptions(o: ResolvedOpenBucketOptions): v
     admin: z
       .object({
         jwtSecret: strongSecret('admin.jwtSecret'),
+        // Either an argon2id hash OR a plaintext password (hashed at boot) — the
+        // refine below requires at least one, mirroring resolveOptions + the env
+        // schema. Without making `passwordHash` optional here, a `password`-only
+        // admin block (a supported config) would throw at boot.
         passwordHash: z
           .string()
-          .regex(/^\$argon2id\$/, 'admin.passwordHash must be an argon2id hash'),
+          .regex(/^\$argon2id\$/, 'admin.passwordHash must be an argon2id hash')
+          .optional(),
+        password: z
+          .string()
+          .min(8, 'admin.password must be at least 8 characters')
+          .optional(),
+      })
+      .refine((a) => !!a.passwordHash || !!a.password, {
+        message: 'admin requires either `passwordHash` (argon2id) or `password` (>= 8 chars)',
+        path: ['passwordHash'],
       })
       .optional(),
     // When a webhook URL is configured, the HMAC secret must be strong and the
