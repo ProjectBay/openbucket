@@ -217,8 +217,13 @@ describe('ScheduledBackupService', () => {
     const second = svc.runNowOrJoin();
     expect(first).toEqual({ started: true });
     expect(second).toEqual({ started: false });
-    // let the in-flight cycle settle
-    await new Promise((r) => setTimeout(r, 50));
+    // Deterministically JOIN the same in-flight cycle rather than sleeping a
+    // fixed wall-clock 50ms: runSnapshotCycle returns the live `inFlight` promise
+    // (never starts a second), so awaiting it waits for the fire-and-forget cycle
+    // to fully finish writing. The old setTimeout(50) let the cycle outlive the
+    // wait under CPU load, so afterEach's `fs.rm(dir)` raced the still-writing
+    // cycle and intermittently threw ENOTEMPTY (rmdir on a non-empty dir).
+    await svc.runSnapshotCycle('manual');
     expect((backup.writeSnapshot as jest.Mock).mock.calls.length).toBe(1);
   });
 

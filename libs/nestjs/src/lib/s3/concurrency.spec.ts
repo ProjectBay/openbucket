@@ -93,20 +93,23 @@ describe('concurrency invariants (TEST-0317)', () => {
     await fs.rm(dataDir, { recursive: true, force: true });
   });
 
-  // QUARANTINED (flaky) — these two cases assert concurrency invariants the write
-  // path does not yet guarantee for writers racing on the SAME target, so they
-  // fail intermittently / platform-dependently and destabilise CI:
-  //   • same-partNumber UploadPart: both writers rename(2) onto the same `<n>.part`.
-  //     POSIX overwrites atomically (last-wins), but Windows rejects rename-over-
-  //     existing, so the call rejects on a dev box.
-  //   • concurrent first-time same-key PUT: the writer renames the blob BEFORE it
-  //     commits the row; if the losing writer's row commit conflicts, its rollback
-  //     unlinks the shared final blob and tears the winner's result.
-  // Re-enable after hardening concurrent same-target writes (e.g. per-(bucket,key)
-  // serialization in ObjectWriterService + rename-over-existing tolerance in
-  // BlobStore.atomicRename). The deterministic sequential case below stays active.
-  // Follow-up: harden concurrent same-target writes (see s3/CONCURRENCY.md §4.8).
-  it.skip('same-partNumber concurrent UploadPart does not throw EEXIST; the part is one whole writer', async () => {
+  // These two cases assert concurrency invariants for writers racing on the SAME
+  // target. Both were quarantined (it.skip) while the write path could tear under
+  // that race; the hardening they waited on has since landed, so they are now
+  // active and deterministic:
+  //   • same-partNumber UploadPart: each writer stages to a randomUUID-suffixed
+  //     tmp file (no O_EXCL collision) and rename(2)s onto the shared `<n>.part`.
+  //     On POSIX (Linux CI, macOS dev) rename-over-existing is atomic last-wins,
+  //     so the final part is exactly one whole writer's payload — no tear, no
+  //     EEXIST. (Windows rename-over is the only remaining platform caveat; the
+  //     CI runner is Linux.)
+  //   • concurrent first-time same-key PUT: ObjectWriterService now serializes
+  //     writers of the same (bucket,key) through a keyed async mutex
+  //     (`withKeyLock`, F6, commit c87ef90), so the two PUTs run strictly one
+  //     after the other — the loser's rollback can no longer unlink the winner's
+  //     committed blob. Row, blob bytes, and ETag all agree on one winner.
+  // See s3/CONCURRENCY.md §4.8.
+  it('same-partNumber concurrent UploadPart does not throw EEXIST; the part is one whole writer', async () => {
     const uploadId = 'concurrent-upload';
     const a = 'A'.repeat(4096);
     const b = 'B'.repeat(8192);
@@ -136,7 +139,7 @@ describe('concurrency invariants (TEST-0317)', () => {
     expect((await fs.readFile(blobs.paths.blobPath('b', 'seq'))).toString()).toBe('second-wins');
   });
 
-  it.skip('concurrent PUT same key: SQLite serializes the writers; row + blob agree on one winner', async () => {
+  it('concurrent PUT same key: the per-key write lock serializes the writers; row + blob agree on one winner', async () => {
     const x = 'X'.repeat(500);
     const y = 'Y'.repeat(700);
 
