@@ -6,10 +6,10 @@
 # lib/SPA build = tsc typecheck), assembles the publishable dist (lib build +
 # bundled admin SPA), then `npm publish` from dist/libs/nestjs.
 #
-# The publish gate deliberately does NOT re-run the unit suite: the lib's
-# concurrency / blob-store specs are known-flaky (race, not parallelism — they
-# fail intermittently even with --runInBand). Functional unit/e2e validation is
-# ci.yml's job; cut the release tag from a commit whose ci.yml is green.
+# The publish gate runs lint + the full unit suite + a clean lib/SPA build. (The
+# previously-flaky concurrency / request-id / scheduled-backup specs were
+# de-flaked, so the release no longer skips the suite — the tag you publish must
+# pass its own tests.)
 #
 # Requires repo secret NPM_TOKEN — an npm automation token with publish rights
 # to the @openbucket scope.
@@ -74,6 +74,9 @@ jobs:
 
       - name: Lint
         run: npx nx lint nestjs
+
+      - name: Unit tests
+        run: npx nx test nestjs
 
       - name: Build admin SPA (frontend)
         run: npx nx build openbucket-frontend
