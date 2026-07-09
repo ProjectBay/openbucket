@@ -12,7 +12,7 @@ import { AdminBootstrapService } from './admin-bootstrap.service';
  * is mocked per case; Logger is spied. argon2 is real so the temp-password
  * hashing round-trips.
  */
-function build(envHash?: string) {
+function build(envHash?: string, envPassword?: string) {
   const users = {
     findByUsername: jest.fn(),
     insert: jest.fn(),
@@ -21,7 +21,11 @@ function build(envHash?: string) {
   };
   const fork = { getRepository: jest.fn().mockReturnValue(users) };
   const em = { fork: jest.fn().mockReturnValue(fork) };
-  const config = { get: jest.fn().mockReturnValue(envHash) };
+  const config = {
+    get: jest.fn((key: string) =>
+      key === 'ADMIN_PASSWORD_HASH' ? envHash : key === 'ADMIN_PASSWORD' ? envPassword : undefined,
+    ),
+  };
   const svc = new AdminBootstrapService(
     em as unknown as EntityManager,
     config as unknown as ConfigService,
@@ -85,6 +89,25 @@ describe('AdminBootstrapService (TEST-0416)', () => {
     expect(users.insert).not.toHaveBeenCalled();
     expect(users.upsert).not.toHaveBeenCalled();
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('case 3b: ADMIN_PASSWORD (no hash), no existing user → insert(false), hashed, not logged', async () => {
+    const { users, svc } = build(undefined, 'super-secret-pw');
+    users.findByUsername.mockResolvedValue(null);
+
+    await svc.onApplicationBootstrap();
+
+    expect(users.insert).toHaveBeenCalledTimes(1);
+    expect(users.upsert).not.toHaveBeenCalled();
+    const inserted = users.insert.mock.calls[0][0];
+    expect(inserted.username).toBe('admin');
+    expect(inserted.mustChangePassword).toBe(false); // user chose it — no forced change
+    expect((inserted.passwordHash as string).startsWith('$argon2id$')).toBe(true);
+    expect(await argon2.verify(inserted.passwordHash, 'super-secret-pw')).toBe(true);
+    // the plaintext is NEVER logged (neither warn nor log)
+    expect(warnSpy).not.toHaveBeenCalled();
+    const logged = logSpy.mock.calls.map((c) => String(c[0])).join(' ');
+    expect(logged).not.toContain('super-secret-pw');
   });
 
   it('case 4: temp password is 24 chars (base64url over 18 bytes)', async () => {

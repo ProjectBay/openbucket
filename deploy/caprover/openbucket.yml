@@ -3,9 +3,8 @@ captainVersion: 4
 # OpenBucket — CapRover one-click app.
 #
 # Deploy: CapRover dashboard → Apps → One-Click Apps/Databases → paste this file's
-# raw URL, or paste the YAML directly. The JWT secret and S3 root secret are
-# generated for you; you MUST supply an argon2id admin-password hash (see the
-# instructions below).
+# raw URL, or paste the YAML directly. Choose an admin password; the JWT secret and
+# S3 root secret are generated for you. Truly one-click.
 services:
   $$cap_appname:
     image: ghcr.io/projectbay/openbucket:$$cap_openbucket_version
@@ -16,7 +15,7 @@ services:
       DATA_DIR: /data
       PORT: '9000'
       ADMIN_USERNAME: $$cap_admin_username
-      ADMIN_PASSWORD_HASH: $$cap_admin_password_hash
+      ADMIN_PASSWORD: $$cap_admin_password
       JWT_SECRET: $$cap_jwt_secret
       ROOT_ACCESS_KEY_ID: $$cap_root_access_key_id
       ROOT_SECRET_ACCESS_KEY: $$cap_root_secret_access_key
@@ -43,11 +42,11 @@ caproverOneClickApp:
       description: Username for the admin console login.
       validRegex: /^[a-zA-Z0-9._-]{1,64}$/
 
-    - id: $$cap_admin_password_hash
-      label: Admin password hash (argon2id) — REQUIRED
+    - id: $$cap_admin_password
+      label: Admin password
       defaultValue: ''
-      description: "Generate with:  npx @openbucket/nestjs hash 'your-password'  — then paste the printed $argon2id$... string here."
-      validRegex: /^\$argon2id\$.+/
+      description: The password for the admin console login (at least 8 characters). OpenBucket argon2id-hashes it on first boot — the plaintext is never stored.
+      validRegex: /^.{8,}$/
 
     - id: $$cap_jwt_secret
       label: JWT secret (auto-generated)
@@ -77,13 +76,8 @@ caproverOneClickApp:
     start: |
       OpenBucket — a self-hosted, S3-compatible object store with an admin console.
 
-      BEFORE deploying, generate an admin-password hash (the one value that is not
-      auto-generated). On any machine with Node:
-
-        npx @openbucket/nestjs hash 'your-admin-password'
-
-      Paste the printed $argon2id$... string into the "Admin password hash" field.
-      The JWT secret and S3 root secret are generated for you.
+      Just choose an admin password below (min 8 chars) — OpenBucket hashes it on
+      first boot. The JWT secret and S3 root secret are generated for you.
     end: |
       OpenBucket is deployed. The S3 API and admin console share the app's HTTP port (9000):
         • Admin console:  https://$$cap_appname.$$cap_root_domain/admin

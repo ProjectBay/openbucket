@@ -1,8 +1,8 @@
 # OpenBucket — standalone deployment.
 #
-#   1. node scripts/hash-password.mjs 'your-admin-password'   # → ADMIN_PASSWORD_HASH
-#   2. cp .env.example .env  &&  edit the secrets
-#   3. docker compose up --build
+#   1. cp .env.example .env  &&  edit the secrets (set ADMIN_PASSWORD + JWT_SECRET
+#      + the S3 root credentials; ADMIN_PASSWORD is hashed on first boot)
+#   2. docker compose up --build
 #
 # S3 API + admin console are then served on http://localhost:9000
 # (admin console at /admin).

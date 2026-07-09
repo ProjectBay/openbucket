@@ -19,6 +19,21 @@ describe('resolveOptions', () => {
     expect(r.admin?.serveUi).toBe(true);
   });
 
+  it('accepts admin.password in place of passwordHash', () => {
+    const r = resolveOptions({
+      ...base,
+      admin: { username: 'a', password: 'plaintext-admin-pw', jwtSecret: 'j' },
+    });
+    expect(r.admin?.password).toBe('plaintext-admin-pw');
+    expect(r.admin?.passwordHash).toBeUndefined();
+  });
+
+  it('throws when the admin block has neither passwordHash nor password', () => {
+    expect(() =>
+      resolveOptions({ ...base, admin: { username: 'a', jwtSecret: 'j' } }),
+    ).toThrow(/passwordHash.*password|password/);
+  });
+
   it('normalizes the mount path (leading slash, no trailing slash; root → "")', () => {
     expect(resolveOptions({ ...base, mountPath: 'storage/' }).mountPath).toBe('/storage');
     expect(resolveOptions({ ...base, mountPath: '/s3/' }).mountPath).toBe('/s3');

@@ -12,17 +12,15 @@ secrets where the platform can.
 | **Render** | [`render/render.yaml`](./render/render.yaml) | Commit as `render.yaml` and create a **Blueprint**, or use it as a reference. |
 | **Fly.io** | [`fly/fly.toml`](./fly/fly.toml) | `fly launch --copy-config --no-deploy`, set secrets, `fly deploy`. |
 
-## The one manual step: the admin password hash
+## Credentials
 
-OpenBucket stores an **argon2id hash** of the admin password, never the password
-itself — so no platform can auto-generate it. Every template above generates the
-`JWT_SECRET` and `ROOT_SECRET_ACCESS_KEY` for you, but you supply
-`ADMIN_PASSWORD_HASH`. Generate one on any machine with Node (no repo checkout):
+Every template generates the `JWT_SECRET` and `ROOT_SECRET_ACCESS_KEY` for you.
+For the **admin password**, just set `ADMIN_PASSWORD` to a value of your choice (or
+let the platform generate one) — OpenBucket argon2id-hashes it on first boot and
+never stores the plaintext. No `npx`, no hash to paste.
 
-```bash
-npx @openbucket/nestjs hash 'your-admin-password'
-# → $argon2id$v=19$m=65536,t=3,p=4$...   ← paste this into the template's hash field
-```
+> Already have an argon2id hash (e.g. from `npx @openbucket/nestjs hash`)? You can
+> still set `ADMIN_PASSWORD_HASH` instead — it takes precedence over `ADMIN_PASSWORD`.
 
 The `ROOT_ACCESS_KEY_ID` defaults to a non-secret placeholder
 (`AKIAOPENBUCKETROOT01`, like an AWS access key ID) — override it if you like. The

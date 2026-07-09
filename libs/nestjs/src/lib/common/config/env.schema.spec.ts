@@ -104,6 +104,23 @@ describe('loadEnv', () => {
     ).toThrow();
   });
 
+  it('case 6a: ADMIN_PASSWORD is accepted in place of ADMIN_PASSWORD_HASH', () => {
+    const { ADMIN_PASSWORD_HASH: _omit, ...noHash } = baseEnv;
+    const env = loadEnv({ ...noHash, ADMIN_PASSWORD: 'a-strong-admin-password' });
+    expect(env.ADMIN_PASSWORD).toBe('a-strong-admin-password');
+    expect(env.ADMIN_PASSWORD_HASH).toBeUndefined();
+  });
+
+  it('case 6b: neither ADMIN_PASSWORD_HASH nor ADMIN_PASSWORD refuses to boot', () => {
+    const { ADMIN_PASSWORD_HASH: _omit, ...noHash } = baseEnv;
+    expect(() => loadEnv({ ...noHash })).toThrow();
+  });
+
+  it('case 6c: a too-short ADMIN_PASSWORD is rejected', () => {
+    const { ADMIN_PASSWORD_HASH: _omit, ...noHash } = baseEnv;
+    expect(() => loadEnv({ ...noHash, ADMIN_PASSWORD: 'short' })).toThrow();
+  });
+
   it('case 7: malformed OPENBUCKET_ENDPOINT is rejected', () => {
     expect(() => loadEnv({ ...baseEnv, OPENBUCKET_ENDPOINT: 'INVALID_DOMAIN' })).toThrow();
   });

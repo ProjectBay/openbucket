@@ -3,7 +3,7 @@
 #   fly launch --copy-config --no-deploy          # import this file
 #   fly volumes create openbucket_data --size 10
 #   fly secrets set \
-#     ADMIN_PASSWORD_HASH="$(npx @openbucket/nestjs hash 'your-admin-password')" \
+#     ADMIN_PASSWORD='choose-a-strong-admin-password' \
 #     JWT_SECRET="$(openssl rand -hex 32)" \
 #     ROOT_SECRET_ACCESS_KEY="$(openssl rand -hex 32)"
 #   fly deploy
@@ -20,7 +20,7 @@ primary_region = "iad"
   ROOT_ACCESS_KEY_ID = "AKIAOPENBUCKETROOT01"
   OPENBUCKET_REGION = "us-east-1"
 
-# ADMIN_PASSWORD_HASH, JWT_SECRET, ROOT_SECRET_ACCESS_KEY are set via
+# ADMIN_PASSWORD, JWT_SECRET, ROOT_SECRET_ACCESS_KEY are set via
 # `fly secrets set` (see the header) — never commit them.
 
 [http_service]

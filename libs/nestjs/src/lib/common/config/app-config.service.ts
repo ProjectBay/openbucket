@@ -27,7 +27,8 @@ export class AppConfigService {
   get jwtAccessTtl(): number { return this.raw.get('JWT_ACCESS_TTL_SECONDS', { infer: true }); }
   get jwtRefreshTtl(): number { return this.raw.get('JWT_REFRESH_TTL_SECONDS', { infer: true }); }
   get adminUsername(): string { return this.raw.get('ADMIN_USERNAME', { infer: true }); }
-  get adminPasswordHash(): string { return this.raw.get('ADMIN_PASSWORD_HASH', { infer: true }); }
+  get adminPasswordHash(): string { return this.raw.get('ADMIN_PASSWORD_HASH', { infer: true }) ?? ''; }
+  get adminPassword(): string | undefined { return this.raw.get('ADMIN_PASSWORD', { infer: true }); }
   get rootAccessKeyId(): string { return this.raw.get('ROOT_ACCESS_KEY_ID', { infer: true }); }
   get rootSecretAccessKey(): string { return this.raw.get('ROOT_SECRET_ACCESS_KEY', { infer: true }); }
   get keyEncryptionSecret(): string | undefined { return this.raw.get('KEY_ENCRYPTION_SECRET', { infer: true }); }
