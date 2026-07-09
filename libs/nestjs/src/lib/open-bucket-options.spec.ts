@@ -14,6 +14,10 @@ describe('resolveOptions', () => {
     expect(r.admin).toBeUndefined();
   });
 
+  it('defaults maxObjectSizeMb to 5 GiB (matches the env schema, not the old 5 TiB footgun) (MF-3)', () => {
+    expect(resolveOptions(base).limits.maxObjectSizeMb).toBe(5_120);
+  });
+
   it('defaults admin.serveUi to true when admin is provided', () => {
     const r = resolveOptions({ ...base, admin: { username: 'a', passwordHash: 'h', jwtSecret: 'j' } });
     expect(r.admin?.serveUi).toBe(true);
@@ -62,6 +66,22 @@ describe('validateSecurityCriticalOptions', () => {
 
   it('passes on well-formed secrets (with admin)', () => {
     expect(() => validate(validBase)).not.toThrow();
+  });
+
+  it('accepts a password-only admin block (no hash) — the admin.password path (MF-1)', () => {
+    const { admin, ...rest } = validBase;
+    void admin;
+    expect(() =>
+      validate({ ...rest, admin: { username: 'admin', password: 'a-strong-admin-pw', jwtSecret: SECRET } }),
+    ).not.toThrow();
+  });
+
+  it('rejects a too-short admin.password (MF-2)', () => {
+    const { admin, ...rest } = validBase;
+    void admin;
+    expect(() =>
+      validate({ ...rest, admin: { username: 'admin', password: 'short', jwtSecret: SECRET } }),
+    ).toThrow(/password/);
   });
 
   it('passes on a headless store (no admin) with a valid secret key', () => {
