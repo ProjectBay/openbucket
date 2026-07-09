@@ -9,6 +9,8 @@ import {
 } from '@aws-sdk/client-s3';
 import { GenericContainer, StartedTestContainer, Wait } from 'testcontainers';
 
+import { step } from './report/recorder';
+
 /**
  * TEST-0503 / §5.20.3 — canonical SDK conformance sample: boot the built image
  * via testcontainers, point @aws-sdk/client-s3 at it, and round-trip a 4 MiB
@@ -56,17 +58,28 @@ describe('conformance: object roundtrip', () => {
     const key = 'fixtures/blob.bin';
     const body = randomBytes(4 * 1024 * 1024);
 
-    await s3.send(new CreateBucketCommand({ Bucket: bucket }));
+    const client = 'aws-sdk-js' as const;
 
-    const put = await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body }));
-    expect(put.ETag).toMatch(/^"[0-9a-f]{32}"$/);
+    await step(client, 'CreateBucket', () =>
+      s3.send(new CreateBucketCommand({ Bucket: bucket })),
+    );
 
-    const get = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-    const downloaded = Buffer.concat(await collect(get.Body as AsyncIterable<Uint8Array>));
-    expect(downloaded.equals(body)).toBe(true);
-    expect(get.ETag).toBe(put.ETag);
+    const put = await step(client, 'PutObject', async () => {
+      const res = await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body }));
+      expect(res.ETag).toMatch(/^"[0-9a-f]{32}"$/);
+      return res;
+    });
 
-    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    await step(client, 'GetObject', async () => {
+      const get = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      const downloaded = Buffer.concat(await collect(get.Body as AsyncIterable<Uint8Array>));
+      expect(downloaded.equals(body)).toBe(true);
+      expect(get.ETag).toBe(put.ETag);
+    });
+
+    await step(client, 'DeleteObject', () =>
+      s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })),
+    );
   });
 });
 

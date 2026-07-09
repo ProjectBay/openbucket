@@ -12,6 +12,14 @@
         "jestConfig": "apps/conformance/jest.config.ts",
         "passWithNoTests": false
       }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/apps/conformance-unit"],
+      "options": {
+        "jestConfig": "apps/conformance/jest.unit.config.ts",
+        "passWithNoTests": false
+      }
     }
   }
 }

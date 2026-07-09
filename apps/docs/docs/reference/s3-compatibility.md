@@ -27,6 +27,21 @@ The wire surface is exercised by the [conformance suite](https://github.com/Proj
 against the real `aws` CLI, MinIO's `mc`, and `s3cmd`. See how OpenBucket
 [compares to MinIO](../comparisons/vs-minio.md) if you're choosing between them.
 
+:::info[Proven, not just claimed]
+The matrix below is **hand-maintained today, but backed by a machine-generated
+conformance report.** On every pull request to `main` (and every release tag),
+the [conformance suite](https://github.com/ProjectBay/openbucket/tree/main/apps/conformance)
+boots the built image under test with [testcontainers](https://testcontainers.com/)
+and round-trips objects through each real client. As it runs, it records every
+`(client × operation)` outcome and emits a dated report — both
+`conformance-report.json` and a rendered `conformance-report.md` matrix — stamped
+with the **image sha under test**, the **run timestamp**, and each **client
+version**. The report is published as the **`conformance-report`** workflow
+artifact on the _s3 conformance suite_ CI job; download it from the run's summary
+to see the exact operations that passed against a specific image. The hand-written
+tables here are kept in sync with that generated report.
+:::
+
 ## Supported operations
 
 ### Service & buckets

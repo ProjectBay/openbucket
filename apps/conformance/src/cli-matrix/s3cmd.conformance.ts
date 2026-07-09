@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { step } from '../report/recorder';
 import { CREDS, run, startOpenbucket, type RunningOpenbucket } from './support';
 
 /**
@@ -49,12 +50,14 @@ describe('conformance: s3cmd matrix', () => {
     const c = ['-c', cfg];
     const uri = 's3://s3cmd-conf/blob.bin';
 
-    await run('s3cmd', [...c, 'mb', 's3://s3cmd-conf']);
-    await run('s3cmd', [...c, 'put', src, uri]);
-    await run('s3cmd', [...c, 'get', '--force', uri, dst]);
+    await step('s3cmd', 'CreateBucket', () => run('s3cmd', [...c, 'mb', 's3://s3cmd-conf']));
+    await step('s3cmd', 'PutObject', () => run('s3cmd', [...c, 'put', src, uri]));
 
-    expect(readFileSync(dst).equals(readFileSync(src))).toBe(true);
+    await step('s3cmd', 'GetObject', async () => {
+      await run('s3cmd', [...c, 'get', '--force', uri, dst]);
+      expect(readFileSync(dst).equals(readFileSync(src))).toBe(true);
+    });
 
-    await run('s3cmd', [...c, 'del', uri]);
+    await step('s3cmd', 'DeleteObject', () => run('s3cmd', [...c, 'del', uri]));
   });
 });

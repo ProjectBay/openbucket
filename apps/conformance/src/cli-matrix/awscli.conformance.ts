@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { step } from '../report/recorder';
 import { CREDS, run, startOpenbucket, type RunningOpenbucket } from './support';
 
 /**
@@ -39,12 +40,19 @@ describe('conformance: aws-cli matrix', () => {
     const bucket = 'awscli-conf';
     const ep = ['--endpoint-url', ob.endpoint];
 
-    await run('aws', [...ep, 's3api', 'create-bucket', '--bucket', bucket], env);
-    await run('aws', [...ep, 's3', 'cp', src, `s3://${bucket}/blob.bin`], env);
-    await run('aws', [...ep, 's3', 'cp', `s3://${bucket}/blob.bin`, dst], env);
+    await step('aws-cli', 'CreateBucket', () =>
+      run('aws', [...ep, 's3api', 'create-bucket', '--bucket', bucket], env),
+    );
+    await step('aws-cli', 'PutObject', () =>
+      run('aws', [...ep, 's3', 'cp', src, `s3://${bucket}/blob.bin`], env),
+    );
+    await step('aws-cli', 'GetObject', async () => {
+      await run('aws', [...ep, 's3', 'cp', `s3://${bucket}/blob.bin`, dst], env);
+      expect(readFileSync(dst).equals(readFileSync(src))).toBe(true);
+    });
 
-    expect(readFileSync(dst).equals(readFileSync(src))).toBe(true);
-
-    await run('aws', [...ep, 's3', 'rm', `s3://${bucket}/blob.bin`], env);
+    await step('aws-cli', 'DeleteObject', () =>
+      run('aws', [...ep, 's3', 'rm', `s3://${bucket}/blob.bin`], env),
+    );
   });
 });
