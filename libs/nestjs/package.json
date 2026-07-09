@@ -20,6 +20,10 @@
       "types": "./src/lib/adapters/multer/index.d.ts",
       "default": "./src/lib/adapters/multer/index.js"
     },
+    "./standalone": {
+      "types": "./src/standalone.d.ts",
+      "default": "./src/standalone.js"
+    },
     "./package.json": "./package.json"
   },
   "files": ["src", "assets", "README.md"],

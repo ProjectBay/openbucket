@@ -1,7 +1,7 @@
 import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
 import type { Request } from 'express';
 
-import type { ImageInfo } from '../../storage/image-info';
+import type { UploadedObject } from '../../open-bucket.service';
 // Loaded for its side-effect: the `Express.Multer.File.openBucket` global
 // augmentation this decorator reads back lives in `./open-bucket-storage`.
 import './open-bucket-storage';
@@ -11,21 +11,10 @@ import './open-bucket-storage';
  * {@link openBucketStorage}. Every field is already computed and non-secret; the
  * `contentType` is the RESOLVED (sniffed) type — never the client's claim — and
  * `url`, when present, is a short-lived presigned GET url (no long-lived secret).
+ *
+ * Alias of the canonical {@link UploadedObject}.
  */
-export interface UploadedFileInfo {
-  bucket: string;
-  key: string;
-  /** Present iff an origin was resolvable / a `presign` option was given. */
-  url?: string;
-  etag: string;
-  size: number;
-  /** The RESOLVED (sniffed) content type. */
-  contentType: string;
-  /** Present on versioning-enabled buckets. */
-  versionId?: string;
-  /** Present when the body probed as an image. */
-  image?: ImageInfo;
-}
+export type UploadedFileInfo = UploadedObject;
 
 /** Map a multer file to {@link UploadedFileInfo}, or `undefined` when it was not committed. */
 function toInfo(file: Express.Multer.File | undefined): UploadedFileInfo | undefined {

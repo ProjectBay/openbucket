@@ -19,7 +19,7 @@ import {
   OPEN_BUCKET_ORM_CONTEXT,
   normalizeMount,
   rewriteBaseHref,
-} from '@openbucket/nestjs';
+} from '@openbucket/nestjs/standalone';
 import { configureBodyParsers } from './bootstrap/body-parser';
 
 async function bootstrap(): Promise<void> {

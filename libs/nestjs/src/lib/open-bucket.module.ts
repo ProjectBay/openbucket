@@ -1,4 +1,4 @@
-import { DynamicModule, Module, type Type } from '@nestjs/common';
+import { DynamicModule, Module, type Provider, type Type } from '@nestjs/common';
 import { RouterModule } from '@nestjs/core';
 
 import { ADMIN_CONTROLLER_MODULES } from './admin/admin.module';
@@ -10,7 +10,9 @@ import {
   OPEN_BUCKET_OPTIONS,
   OpenBucketModuleAsyncOptions,
   OpenBucketModuleOptions,
+  OpenBucketOptionsFactory,
   resolveOptions,
+  ResolvedOpenBucketOptions,
   validateSecurityCriticalOptions,
 } from './open-bucket-options';
 import { OpenBucketService } from './open-bucket.service';
@@ -101,27 +103,10 @@ export class OpenBucketModule {
   static forRootAsync(options: OpenBucketModuleAsyncOptions): DynamicModule {
     // Whether the admin surface exists is a routing decision wired at module-config
     // time, so it is STATIC (default on). The admin SECRETS still come from the async
-    // factory; the factory must return an `admin` block unless `admin: false` here.
+    // provider; it must return an `admin` block unless `admin: false` here.
     const adminEnabled = options.admin ?? true;
     const coreModule = adminEnabled ? OpenBucketCoreModule : OpenBucketHeadlessCoreModule;
-    const optionsProvider = {
-      provide: OPEN_BUCKET_OPTIONS,
-      useFactory: async (...args: unknown[]) => {
-        const resolved = resolveOptions(await options.useFactory(...args));
-        if (adminEnabled && !resolved.admin) {
-          throw new Error(
-            'OpenBucketModule.forRootAsync: the admin surface is enabled but the factory ' +
-              'returned no `admin` config. Return an `admin` block, or pass `admin: false` ' +
-              'to disable the admin surface.',
-          );
-        }
-        // Fail fast on malformed secrets (bad hash, short jwt/secret) — same
-        // guarantee as the standalone env schema. See validateSecurityCriticalOptions.
-        validateSecurityCriticalOptions(resolved);
-        return resolved;
-      },
-      inject: options.inject ?? [],
-    };
+    const asyncProviders = OpenBucketModule.createAsyncProviders(options, adminEnabled);
     const serveUi = adminEnabled && (options.serveUi ?? true);
     return {
       module: OpenBucketModule,
@@ -138,8 +123,69 @@ export class OpenBucketModule {
           serveUi,
         ),
       ],
-      providers: [optionsProvider, OpenBucketService],
-      exports: [optionsProvider, OpenBucketService],
+      providers: [...asyncProviders, OpenBucketService],
+      exports: [OPEN_BUCKET_OPTIONS, OpenBucketService],
+    };
+  }
+
+  /**
+   * Build the DI providers backing `forRootAsync`: the resolved-options provider
+   * (from `useFactory` / `useClass` / `useExisting`) plus, for `useClass`, the
+   * factory class itself registered as a provider.
+   */
+  private static createAsyncProviders(
+    options: OpenBucketModuleAsyncOptions,
+    adminEnabled: boolean,
+  ): Provider[] {
+    const optionsProvider = OpenBucketModule.createAsyncOptionsProvider(options, adminEnabled);
+    // `useClass` must be instantiable by Nest, so register it as a provider too.
+    if (options.useClass) {
+      return [optionsProvider, { provide: options.useClass, useClass: options.useClass }];
+    }
+    return [optionsProvider];
+  }
+
+  /** The `OPEN_BUCKET_OPTIONS` provider, resolving + validating whatever the caller supplied. */
+  private static createAsyncOptionsProvider(
+    options: OpenBucketModuleAsyncOptions,
+    adminEnabled: boolean,
+  ): Provider {
+    // Shared post-processing: apply defaults, enforce the admin invariant, and
+    // fail fast on malformed secrets — identical to the sync `forRoot` guarantee.
+    const finalize = (raw: OpenBucketModuleOptions): ResolvedOpenBucketOptions => {
+      const resolved = resolveOptions(raw);
+      if (adminEnabled && !resolved.admin) {
+        throw new Error(
+          'OpenBucketModule.forRootAsync: the admin surface is enabled but the options ' +
+            'provider returned no `admin` config. Return an `admin` block, or pass ' +
+            '`admin: false` to disable the admin surface.',
+        );
+      }
+      validateSecurityCriticalOptions(resolved);
+      return resolved;
+    };
+
+    if (options.useFactory) {
+      return {
+        provide: OPEN_BUCKET_OPTIONS,
+        useFactory: async (...args: unknown[]) => finalize(await options.useFactory!(...args)),
+        inject: options.inject ?? [],
+      };
+    }
+
+    // useClass / useExisting: inject the factory provider and call its hook.
+    const factoryToken = options.useExisting ?? options.useClass;
+    if (!factoryToken) {
+      throw new Error(
+        'OpenBucketModule.forRootAsync: provide exactly one of `useFactory`, `useClass`, ' +
+          'or `useExisting`.',
+      );
+    }
+    return {
+      provide: OPEN_BUCKET_OPTIONS,
+      useFactory: async (factory: OpenBucketOptionsFactory) =>
+        finalize(await factory.createOpenBucketOptions()),
+      inject: [factoryToken],
     };
   }
 }

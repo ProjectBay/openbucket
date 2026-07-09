@@ -6,8 +6,12 @@ import {
   EntityTooSmallError,
   MalformedPolicyError,
 } from '../errors/s3-error';
+import type { PostPolicyCondition } from '../../open-bucket.service';
+
 import { awsUriEncode } from './canonical-request';
 import { constantTimeEquals, deriveSigningKey } from './sigv4.verifier';
+
+export type { PostPolicyCondition };
 
 /**
  * POST-policy crypto core for S3 browser uploads (WHITEPAPER §2.5.1), symmetric
@@ -18,13 +22,6 @@ import { constantTimeEquals, deriveSigningKey } from './sigv4.verifier';
  * `conditions` against the submitted form fields, and re-derives + constant-time
  * compares the signature.
  */
-
-/** A single S3 POST-policy condition (AWS-compatible forms). */
-export type PostPolicyCondition =
-  | Record<string, string> // exact match: { key: 'uploads/a.png' }
-  | ['eq', string, string] // ['eq', '$key', 'uploads/a.png']
-  | ['starts-with', string, string] // ['starts-with', '$key', 'uploads/']
-  | ['content-length-range', number, number];
 
 /** An S3 POST policy document. */
 export interface PostPolicy {

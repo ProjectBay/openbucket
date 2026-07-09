@@ -1,34 +1,27 @@
 import type { Request } from 'express';
 import type { StorageEngine } from 'multer';
 
-import type { OpenBucketService, PresignOptions } from '../../open-bucket.service';
+import type {
+  OpenBucketService,
+  PresignOptions,
+  UploadedObject,
+} from '../../open-bucket.service';
 import type {
   KeyStrategy,
   KeyStrategyName,
   UploadValidateOptions,
 } from '../../open-bucket-upload';
-import type { ImageInfo } from '../../storage/image-info';
 
 /**
  * The OpenBucket commit result the storage engine merges onto the multer file
  * object after a successful write. Read it via `@UploadedToBucket()` (or
  * `file.openBucket` directly). Carries no secret — `url`, when present, is a
  * short-lived presigned GET url.
+ *
+ * Alias of the canonical {@link UploadedObject} — the one shape `uploadFrom`,
+ * the storage engine, and `@UploadedToBucket()` all speak.
  */
-export interface OpenBucketMulterInfo {
-  bucket: string;
-  key: string;
-  /** Present iff an origin was resolvable / a `presign` option was given. */
-  url?: string;
-  etag: string;
-  /** The RESOLVED (sniffed) content type — never the client's unverified claim. */
-  contentType: string;
-  size: number;
-  /** Present on versioning-enabled buckets. */
-  versionId?: string;
-  /** Present when the body probed as an image. */
-  image?: ImageInfo;
-}
+export type OpenBucketMulterInfo = UploadedObject;
 
 // Augment the multer file shape so both the engine (which merges `openBucket`
 // onto the committed file) and `@UploadedToBucket()` (which reads it back) are

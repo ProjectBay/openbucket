@@ -391,9 +391,10 @@ export class ObjectService {
     body: Readable,
     contentType?: string,
     maxSize?: number,
+    userMetadata?: Record<string, string>,
   ): Promise<{ etag: string; versionId?: string; size: number; sha256?: string }> {
     if (!(await this.buckets.exists(bucket))) throw new NoSuchBucketError(bucket);
-    const row = await this.writer.put({ bucket, key, body, contentType, maxSize });
+    const row = await this.writer.put({ bucket, key, body, contentType, maxSize, userMetadata });
     return {
       etag: row.etag,
       versionId: row.currentVersionId,

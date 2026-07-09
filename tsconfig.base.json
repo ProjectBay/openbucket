@@ -17,6 +17,7 @@
     "paths": {
       "@openbucket/api-client": ["libs/api-client/src/index.ts"],
       "@openbucket/nestjs": ["libs/nestjs/src/index.ts"],
+      "@openbucket/nestjs/standalone": ["libs/nestjs/src/standalone.ts"],
       "@openbucket/spartan-ui/accordion": [
         "libs/ui/spartan/accordion/src/index.ts"
       ],

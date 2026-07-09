@@ -188,7 +188,26 @@ export interface OpenBucketModuleOptions {
   tracing?: { enabled?: boolean };
 }
 
-/** Async variant for DI'd secrets (e.g. from the host's ConfigService). */
+/**
+ * Implement this and pass the class via `useClass`/`useExisting` in
+ * {@link OpenBucketModuleAsyncOptions} to produce {@link OpenBucketModuleOptions}
+ * from an injectable provider (the idiomatic Nest alternative to an inline
+ * `useFactory`).
+ */
+export interface OpenBucketOptionsFactory {
+  createOpenBucketOptions(): Promise<OpenBucketModuleOptions> | OpenBucketModuleOptions;
+}
+
+/**
+ * Async variant for DI'd secrets (e.g. from the host's ConfigService). Provide
+ * the options one of three idiomatic ways — exactly one of `useFactory`,
+ * `useClass`, or `useExisting`:
+ *  - `useFactory` (+ `inject`): an inline factory function;
+ *  - `useClass`: a class implementing {@link OpenBucketOptionsFactory} — OpenBucket
+ *    registers it as a provider and calls `createOpenBucketOptions()`;
+ *  - `useExisting`: reuse an already-provided {@link OpenBucketOptionsFactory}
+ *    (e.g. exported by a module listed in `imports`).
+ */
 export interface OpenBucketModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
   /**
    * Route prefix — must be STATIC (known at module-config time, before the async
@@ -207,8 +226,20 @@ export interface OpenBucketModuleAsyncOptions extends Pick<ModuleMetadata, 'impo
    * `false` to run a headless, S3-only store.
    */
   admin?: boolean;
-  useFactory: (...args: unknown[]) => Promise<OpenBucketModuleOptions> | OpenBucketModuleOptions;
+  /** Inline factory that returns the options (optionally async). */
+  useFactory?: (...args: unknown[]) => Promise<OpenBucketModuleOptions> | OpenBucketModuleOptions;
+  /** DI dependencies injected into `useFactory` (positional). */
   inject?: Array<Type<unknown> | string | symbol>;
+  /**
+   * A class implementing {@link OpenBucketOptionsFactory}. OpenBucket registers it
+   * as a provider and calls `createOpenBucketOptions()` to build the options.
+   */
+  useClass?: Type<OpenBucketOptionsFactory>;
+  /**
+   * An existing provider implementing {@link OpenBucketOptionsFactory} (already
+   * provided by a module in `imports`, or elsewhere in the app).
+   */
+  useExisting?: Type<OpenBucketOptionsFactory>;
 }
 
 /** DI token carrying the fully-resolved (defaults-applied) options. */
