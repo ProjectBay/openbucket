@@ -176,3 +176,16 @@ jobs:
           # object-roundtrip suite fails with ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING_FLAG.
           NODE_OPTIONS: --experimental-vm-modules
         run: npx nx run conformance:e2e --ci
+
+      # The run's globalTeardown emits a dated, machine-generated report
+      # (JSON + Markdown) of every (client x operation) outcome against the image
+      # sha under test. Upload it even when the suite fails so the artifact
+      # captures which operation regressed. Not committed back to the repo.
+      - name: Upload conformance report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: conformance-report
+          path: apps/conformance/report/
+          if-no-files-found: warn
+          retention-days: 30

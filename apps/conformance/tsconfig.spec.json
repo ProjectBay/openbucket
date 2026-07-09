@@ -6,5 +6,5 @@
     "moduleResolution": "node10",
     "types": ["jest", "node"]
   },
-  "include": ["src/**/*.conformance.ts", "src/**/*.ts", "jest.config.ts"]
+  "include": ["src/**/*.conformance.ts", "src/**/*.ts", "jest.config.ts", "jest.unit.config.ts"]
 }

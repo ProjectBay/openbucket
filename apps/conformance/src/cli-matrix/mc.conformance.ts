@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { step } from '../report/recorder';
 import { CREDS, run, runBinary, startOpenbucket, type RunningOpenbucket } from './support';
 
 /**
@@ -45,12 +46,14 @@ describe('conformance: mc matrix', () => {
   it('mb, cp, cat (byte-equal), rm', async () => {
     const target = `${alias}/mc-conf/blob.bin`;
 
-    await run('mc', ['mb', `${alias}/mc-conf`]);
-    await run('mc', ['cp', src, target]);
+    await step('mc', 'CreateBucket', () => run('mc', ['mb', `${alias}/mc-conf`]));
+    await step('mc', 'PutObject', () => run('mc', ['cp', src, target]));
 
-    const downloaded = await runBinary('mc', ['cat', target]);
-    expect(downloaded.equals(readFileSync(src))).toBe(true);
+    await step('mc', 'GetObject', async () => {
+      const downloaded = await runBinary('mc', ['cat', target]);
+      expect(downloaded.equals(readFileSync(src))).toBe(true);
+    });
 
-    await run('mc', ['rm', target]);
+    await step('mc', 'DeleteObject', () => run('mc', ['rm', target]));
   });
 });
