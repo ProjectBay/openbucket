@@ -66,9 +66,9 @@ export function resolveScheduledBackupConfig(config: AppConfigService): Schedule
 
   if (config.scheduledBackupPushToReplication && !config.replicationEnabled) {
     new Logger('ScheduledBackupConfig').warn(
-      'OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION=true but replication is disabled — ' +
+      'OPENBUCKET_SCHEDULED_BACKUP_PUSH_TO_REPLICATION=true but replication is disabled — ' +
         'snapshots will be written locally only (the push is a no-op). Enable ' +
-        'OB_REPLICATION_* to push snapshots off-box.',
+        'OPENBUCKET_REPLICATION_* to push snapshots off-box.',
     );
   }
 

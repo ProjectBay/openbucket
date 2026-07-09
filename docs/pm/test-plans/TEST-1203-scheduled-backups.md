@@ -18,7 +18,7 @@ leaking paths, keys, or secrets.
 - Jest unit/integration harness (as `scheduled-backup.*.spec.ts`, `backup.service.spec.ts`).
 - A fake `Clock` (the injectable `Clock` used by `trash-purge` / `usage-rollup`) so
   retention windows and cron/interval due-times are fast-forwarded deterministically.
-- A temp `DATA_DIR` per test; `OB_SCHEDULED_BACKUP_DIR` under it (or defaulted).
+- A temp `DATA_DIR` per test; `OPENBUCKET_SCHEDULED_BACKUP_DIR` under it (or defaulted).
 - A stub `ReplicationTargetService` capturing `putObject({ key, contentLength, contentType })`
   and toggleable to throw, plus a `.enabled` toggle.
 - Seed a bucket + a few objects via the domain services so `writeSnapshot` has real
@@ -28,7 +28,7 @@ leaking paths, keys, or secrets.
 
 ## Cases
 1. **Snapshot parity (TASK-3630)** — given seeded objects, when `writeSnapshot(sink, 'instance', names)` writes to a file sink, then the resulting `.zip`'s `manifest.json` + `data/…` entries are byte-identical to `streamInstanceBackup`'s download, and the returned `{ bytes, objectCount }` matches the archive.
-2. **Config resolution + fail-fast (TASK-3631)** — given `OB_SCHEDULED_BACKUP_ENABLED=true` with neither interval nor cron, boot fails; with both set, boot fails; with a malformed `OB_SCHEDULED_BACKUP_CRON`, boot fails; with a valid cron only, `resolveScheduledBackupConfig` returns the defaulted shape and `dir` = `<dataDir>/backups`.
+2. **Config resolution + fail-fast (TASK-3631)** — given `OPENBUCKET_SCHEDULED_BACKUP_ENABLED=true` with neither interval nor cron, boot fails; with both set, boot fails; with a malformed `OPENBUCKET_SCHEDULED_BACKUP_CRON`, boot fails; with a valid cron only, `resolveScheduledBackupConfig` returns the defaulted shape and `dir` = `<dataDir>/backups`.
 3. **Disabled = no-op (TASK-3632)** — given `enabled: false`, when the runner ticks, then no file is written and `state.json` is absent.
 4. **Interval due + atomic write (TASK-3632)** — given `intervalMinutes: 60` and last-run 61 min ago (fake clock), when the runner ticks, then one `.zip` + `.json` sidecar exist, the file mode is `0o600`, no `.part` remains, and `state.json.lastStatus === 'ok'` with a fresh `lastRunAt`; ticking again 1 min later writes nothing (not yet due).
 5. **Per-bucket scope + failure isolation (TASK-3632/3633)** — given `scope: 'buckets'` with 3 buckets where one object read throws, when a cycle runs, then the other two buckets produce snapshots and the failure is logged (cycle not aborted); retention is applied per bucket.

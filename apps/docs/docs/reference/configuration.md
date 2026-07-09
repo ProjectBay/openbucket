@@ -134,24 +134,24 @@ The URL must be `https` unless the host is loopback; the secret is then required
 ### Async replication
 
 Mirror every object mutation to an external S3-compatible target. When
-`OB_REPLICATION_ENABLED=true`, the bucket and both credentials are **required
+`OPENBUCKET_REPLICATION_ENABLED=true`, the bucket and both credentials are **required
 together** — a partial config refuses to boot.
 
 | Variable | Required* | Default | Notes |
 | --- | :-: | --- | --- |
-| `OB_REPLICATION_ENABLED` | | `false` | Master switch. Off ⇒ zero cost, outbox stays empty. |
-| `OB_REPLICATION_ENDPOINT` | | — | S3-compatible endpoint (R2/B2/MinIO). Omit for real AWS S3. `http://` warns at boot (plaintext). |
-| `OB_REPLICATION_REGION` | | `us-east-1` | Target region. |
-| `OB_REPLICATION_BUCKET` | ✅ | — | Remote target bucket (must already exist). |
-| `OB_REPLICATION_ACCESS_KEY_ID` | ✅ | — | Target credential. |
-| `OB_REPLICATION_SECRET_ACCESS_KEY` | ✅ | — | Target credential (never logged). |
-| `OB_REPLICATION_FORCE_PATH_STYLE` | | `true` | `true` for MinIO/S3-compat; `false` for AWS. |
-| `OB_REPLICATION_MAX_ATTEMPTS` | | `12` | Dead-letter cap (1–50). |
-| `OB_REPLICATION_DRAIN_INTERVAL_MS` | | `5000` | Drain tick interval (1000–300000). |
-| `OB_REPLICATION_BATCH_KEYS` | | `50` | Distinct keys drained per tick (1–1000). |
-| `OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES` | | `67108864` | Stream via multipart above this (64 MiB). |
+| `OPENBUCKET_REPLICATION_ENABLED` | | `false` | Master switch. Off ⇒ zero cost, outbox stays empty. |
+| `OPENBUCKET_REPLICATION_ENDPOINT` | | — | S3-compatible endpoint (R2/B2/MinIO). Omit for real AWS S3. `http://` warns at boot (plaintext). |
+| `OPENBUCKET_REPLICATION_REGION` | | `us-east-1` | Target region. |
+| `OPENBUCKET_REPLICATION_BUCKET` | ✅ | — | Remote target bucket (must already exist). |
+| `OPENBUCKET_REPLICATION_ACCESS_KEY_ID` | ✅ | — | Target credential. |
+| `OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY` | ✅ | — | Target credential (never logged). |
+| `OPENBUCKET_REPLICATION_FORCE_PATH_STYLE` | | `true` | `true` for MinIO/S3-compat; `false` for AWS. |
+| `OPENBUCKET_REPLICATION_MAX_ATTEMPTS` | | `12` | Dead-letter cap (1–50). |
+| `OPENBUCKET_REPLICATION_DRAIN_INTERVAL_MS` | | `5000` | Drain tick interval (1000–300000). |
+| `OPENBUCKET_REPLICATION_BATCH_KEYS` | | `50` | Distinct keys drained per tick (1–1000). |
+| `OPENBUCKET_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES` | | `67108864` | Stream via multipart above this (64 MiB). |
 
-\* Required only when `OB_REPLICATION_ENABLED=true`.
+\* Required only when `OPENBUCKET_REPLICATION_ENABLED=true`.
 
 ### Cold-object tiering
 
@@ -169,20 +169,20 @@ read. A no-op unless a replication target is also configured.
 ### Scheduled backups
 
 Write a `.zip` snapshot on a schedule with union retention. When
-`OB_SCHEDULED_BACKUP_ENABLED=true`, **exactly one** of `INTERVAL_MINUTES` /
+`OPENBUCKET_SCHEDULED_BACKUP_ENABLED=true`, **exactly one** of `INTERVAL_MINUTES` /
 `CRON` must be set.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `OB_SCHEDULED_BACKUP_ENABLED` | `false` | Master switch. |
-| `OB_SCHEDULED_BACKUP_SCOPE` | `instance` | `instance` = one snapshot; `buckets` = one per bucket. |
-| `OB_SCHEDULED_BACKUP_INTERVAL_MINUTES` | — | Fixed interval (5–43200). Mutually exclusive with `CRON`. |
-| `OB_SCHEDULED_BACKUP_CRON` | — | 5-field cron. Mutually exclusive with `INTERVAL_MINUTES`. |
-| `OB_SCHEDULED_BACKUP_DIR` | `<DATA_DIR>/backups` | Absolute snapshot directory. |
-| `OB_SCHEDULED_BACKUP_KEEP_LAST` | `7` | Keep the newest N snapshots (hard floor, 1–1000). |
-| `OB_SCHEDULED_BACKUP_MAX_AGE_DAYS` | `30` | Also keep anything younger than this (union, 1–3650). |
-| `OB_SCHEDULED_BACKUP_CHECK_INTERVAL_MS` | `60000` | "Is a snapshot due?" wake tick (10000–3600000). |
-| `OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION` | `false` | Also push each `.zip` to the replication target. |
+| `OPENBUCKET_SCHEDULED_BACKUP_ENABLED` | `false` | Master switch. |
+| `OPENBUCKET_SCHEDULED_BACKUP_SCOPE` | `instance` | `instance` = one snapshot; `buckets` = one per bucket. |
+| `OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES` | — | Fixed interval (5–43200). Mutually exclusive with `CRON`. |
+| `OPENBUCKET_SCHEDULED_BACKUP_CRON` | — | 5-field cron. Mutually exclusive with `INTERVAL_MINUTES`. |
+| `OPENBUCKET_SCHEDULED_BACKUP_DIR` | `<DATA_DIR>/backups` | Absolute snapshot directory. |
+| `OPENBUCKET_SCHEDULED_BACKUP_KEEP_LAST` | `7` | Keep the newest N snapshots (hard floor, 1–1000). |
+| `OPENBUCKET_SCHEDULED_BACKUP_MAX_AGE_DAYS` | `30` | Also keep anything younger than this (union, 1–3650). |
+| `OPENBUCKET_SCHEDULED_BACKUP_CHECK_INTERVAL_MS` | `60000` | "Is a snapshot due?" wake tick (10000–3600000). |
+| `OPENBUCKET_SCHEDULED_BACKUP_PUSH_TO_REPLICATION` | `false` | Also push each `.zip` to the replication target. |
 
 ### Integrity scrubbing
 
@@ -191,10 +191,10 @@ detect bit-rot. Strictly rate-limited so it never starves request traffic.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `OB_INTEGRITY_SCRUB_ENABLED` | `false` | Master switch. A fresh install does zero extra I/O. |
-| `OB_INTEGRITY_SCRUB_INTERVAL_MS` | `60000` | Tick interval (floor `1000`). |
-| `OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK` | `1000` | Hard per-tick object cap (min `1`). |
-| `OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK` | `1073741824` | Per-tick byte budget (1 GiB). |
+| `OPENBUCKET_INTEGRITY_SCRUB_ENABLED` | `false` | Master switch. A fresh install does zero extra I/O. |
+| `OPENBUCKET_INTEGRITY_SCRUB_INTERVAL_MS` | `60000` | Tick interval (floor `1000`). |
+| `OPENBUCKET_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK` | `1000` | Hard per-tick object cap (min `1`). |
+| `OPENBUCKET_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK` | `1073741824` | Per-tick byte budget (1 GiB). |
 
 ### Restore caps & shutdown
 
@@ -213,6 +213,18 @@ detect bit-rot. Strictly rate-limited so it never starves request traffic.
 
 When you embed OpenBucket, pass these to `OpenBucketModule.forRoot(...)` instead
 of environment variables. Only `dataDir` and `rootCredentials` are required.
+
+:::note[Some standalone env features are env-only]
+The `forRoot` options are a deliberate subset of the standalone environment
+variables — a few features are configurable **only** via the environment and have
+no `forRoot` option counterpart:
+
+- `KEY_ENCRYPTION_SECRET` — KEK material for scoped sub-key secrets at rest.
+- the cold-object tiering family (`OPENBUCKET_TIER_*`).
+
+When embedding, set these through `process.env` (or your app's config) even though
+they are not part of the `forRoot` options object.
+:::
 
 ```ts
 OpenBucketModule.forRoot({

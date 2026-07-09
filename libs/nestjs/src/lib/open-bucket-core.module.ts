@@ -86,12 +86,12 @@ function buildCoreImports(adminEnabled: boolean): Array<Type | DynamicModule> {
               // Replication target secret (STORY-0900). Same defence-in-depth: it
               // lives only in config / the S3Client credentials closure and is
               // never intentionally logged, but redact any `secretAccessKey` /
-              // `OB_REPLICATION_SECRET_ACCESS_KEY` field so a stray config or SDK
+              // `OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY` field so a stray config or SDK
               // request dump can't leak it, along with the SDK `authorization` header.
               'secretAccessKey',
               '*.secretAccessKey',
-              'OB_REPLICATION_SECRET_ACCESS_KEY',
-              '*.OB_REPLICATION_SECRET_ACCESS_KEY',
+              'OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY',
+              '*.OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY',
               // Scoped sub-key at-rest secret + KEK material (EPIC-11 / TASK-3001).
               // The blob is ciphertext and the KEK lives only in config, but redact
               // any `secretEncrypted` / `KEY_ENCRYPTION_SECRET` field so a stray

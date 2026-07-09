@@ -322,6 +322,14 @@ Notes:
 `forRootAsync` adds two **static** options alongside `useFactory`/`inject`:
 `serveUi?` (default `true`) and `admin?` (default `true` — set `false` for headless).
 
+:::note[Env-only features]
+These options are a deliberate subset of the standalone environment variables. A
+few features are configurable **only** through the environment and have no
+`forRoot` counterpart — notably `KEY_ENCRYPTION_SECRET` and the cold-object
+tiering family (`OPENBUCKET_TIER_*`). Set those via `process.env` even when
+embedding. See the [configuration reference](./configuration.md).
+:::
+
 ## How it coexists with your app
 
 - **Mounting.** Everything mounts under `mountPath`, so OpenBucket's greedy S3

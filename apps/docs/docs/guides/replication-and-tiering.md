@@ -23,16 +23,16 @@ target is a durable copy.
 ### Standalone (env)
 
 ```bash
-OB_REPLICATION_ENABLED=true
-OB_REPLICATION_BUCKET=openbucket-mirror
-OB_REPLICATION_ACCESS_KEY_ID=...
-OB_REPLICATION_SECRET_ACCESS_KEY=...
-OB_REPLICATION_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com  # omit for AWS S3
-OB_REPLICATION_REGION=us-east-1
-OB_REPLICATION_FORCE_PATH_STYLE=true   # true for MinIO/R2/B2; false for AWS S3
+OPENBUCKET_REPLICATION_ENABLED=true
+OPENBUCKET_REPLICATION_BUCKET=openbucket-mirror
+OPENBUCKET_REPLICATION_ACCESS_KEY_ID=...
+OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY=...
+OPENBUCKET_REPLICATION_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com  # omit for AWS S3
+OPENBUCKET_REPLICATION_REGION=us-east-1
+OPENBUCKET_REPLICATION_FORCE_PATH_STYLE=true   # true for MinIO/R2/B2; false for AWS S3
 ```
 
-`OB_REPLICATION_BUCKET` and both credentials are required when replication is on —
+`OPENBUCKET_REPLICATION_BUCKET` and both credentials are required when replication is on —
 a partial config fails at boot. The target bucket must already exist.
 
 ### Embedded (`forRoot`)
@@ -44,8 +44,8 @@ OpenBucketModule.forRoot({
   replication: {
     bucket: 'openbucket-mirror',
     credentials: {
-      accessKeyId: process.env.OB_REPLICATION_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.OB_REPLICATION_SECRET_ACCESS_KEY!,
+      accessKeyId: process.env.OPENBUCKET_REPLICATION_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY!,
     },
     endpoint: 'https://<accountid>.r2.cloudflarestorage.com', // omit for AWS S3
     forcePathStyle: true,
@@ -66,14 +66,14 @@ background drain worker then mirrors those intents to the remote:
 - **Last-writer-wins coalescing** — a burst of writes to one key collapses to the
   latest state.
 - **Retry with exponential backoff** — a transient remote failure is retried up
-  to a **dead-letter cap** (`OB_REPLICATION_MAX_ATTEMPTS`, default 12).
+  to a **dead-letter cap** (`OPENBUCKET_REPLICATION_MAX_ATTEMPTS`, default 12).
 - **Resume on boot** — the worker picks up pending intents after a restart and
   survives remote outages: nothing is lost, it just backs up in the outbox and
   drains when the remote returns.
 
-Tuning knobs: `OB_REPLICATION_DRAIN_INTERVAL_MS` (default 5000),
-`OB_REPLICATION_BATCH_KEYS` (distinct keys per tick, default 50), and
-`OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES` (switch to multipart streaming above
+Tuning knobs: `OPENBUCKET_REPLICATION_DRAIN_INTERVAL_MS` (default 5000),
+`OPENBUCKET_REPLICATION_BATCH_KEYS` (distinct keys per tick, default 50), and
+`OPENBUCKET_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES` (switch to multipart streaming above
 this size, default 64 MiB).
 
 :::warning[The wire carries plaintext]

@@ -18,7 +18,7 @@ constructed and `enabled` is `false` so the rest of [STORY-0900] short-circuits.
 ## Files to create / modify
 
 - `package.json` — modify (add `@aws-sdk/client-s3`; optionally `@aws-sdk/lib-storage`)
-- `libs/nestjs/src/lib/common/config/env.schema.ts` — modify (add `OB_REPLICATION_*` keys)
+- `libs/nestjs/src/lib/common/config/env.schema.ts` — modify (add `OPENBUCKET_REPLICATION_*` keys)
 - `libs/nestjs/src/lib/common/config/app-config.service.ts` — modify (typed getters)
 - `libs/nestjs/src/lib/open-bucket-options.ts` — modify (`replication?` in options + `ResolvedOpenBucketOptions` + `resolveOptions` defaults + validation)
 - `libs/nestjs/src/lib/storage/replication/replication-config.ts` — new (`ReplicationConfig` shape + `REPLICATION_CONFIG` token + factory reading either source)
@@ -44,18 +44,18 @@ constructed and `enabled` is `false` so the rest of [STORY-0900] short-circuits.
   }
   ```
 - Env (standalone) — add to `EnvSchema`, all optional so absence ⇒ disabled;
-  `OB_REPLICATION_ENABLED` gates them and, when true, the endpoint/bucket/creds
+  `OPENBUCKET_REPLICATION_ENABLED` gates them and, when true, the endpoint/bucket/creds
   are `.refine`-required together (a partial config must refuse to boot, mirroring
   the `admin`-block footgun guard in `resolveOptions`):
-  - `OB_REPLICATION_ENABLED` (bool, default false)
-  - `OB_REPLICATION_ENDPOINT` (DNS-safe URL; **warn if `http://`** — see security)
-  - `OB_REPLICATION_REGION` (default 'us-east-1')
-  - `OB_REPLICATION_BUCKET`
-  - `OB_REPLICATION_ACCESS_KEY_ID`, `OB_REPLICATION_SECRET_ACCESS_KEY`
-  - `OB_REPLICATION_FORCE_PATH_STYLE` (bool, default true)
-  - `OB_REPLICATION_MAX_ATTEMPTS` (int, default 12)
-  - `OB_REPLICATION_DRAIN_INTERVAL_MS` (int ≥ 1000, default 5000)
-  - `OB_REPLICATION_BATCH_KEYS` (int, default 50)
+  - `OPENBUCKET_REPLICATION_ENABLED` (bool, default false)
+  - `OPENBUCKET_REPLICATION_ENDPOINT` (DNS-safe URL; **warn if `http://`** — see security)
+  - `OPENBUCKET_REPLICATION_REGION` (default 'us-east-1')
+  - `OPENBUCKET_REPLICATION_BUCKET`
+  - `OPENBUCKET_REPLICATION_ACCESS_KEY_ID`, `OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY`
+  - `OPENBUCKET_REPLICATION_FORCE_PATH_STYLE` (bool, default true)
+  - `OPENBUCKET_REPLICATION_MAX_ATTEMPTS` (int, default 12)
+  - `OPENBUCKET_REPLICATION_DRAIN_INTERVAL_MS` (int ≥ 1000, default 5000)
+  - `OPENBUCKET_REPLICATION_BATCH_KEYS` (int, default 50)
 - Library `OpenBucketModuleOptions.replication?`: same fields (`credentials: { accessKeyId, secretAccessKey }`).
   Extend `ResolvedOpenBucketOptions` and apply defaults in `resolveOptions`. The
   dual-mode `ConfigModule` already chooses env vs options; the
@@ -78,7 +78,7 @@ constructed and `enabled` is `false` so the rest of [STORY-0900] short-circuits.
   double retry loops.
 - Security / DoS considerations:
   - **Secrets never logged** — do not log the resolved config; add
-    `OB_REPLICATION_SECRET_ACCESS_KEY` (and the SDK's `authorization`) to the
+    `OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY` (and the SDK's `authorization`) to the
     pino `redact` paths pattern established in `open-bucket-core.module.ts`.
     `secretAccessKey` is held only in the `S3Client` credentials closure.
   - **Plaintext transport** — replicated bytes are the object *plaintext*

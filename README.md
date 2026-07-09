@@ -395,27 +395,27 @@ full admin. See the
 
 ### Async replication
 
-Set `OB_REPLICATION_ENABLED=true` to asynchronously mirror every object
+Set `OPENBUCKET_REPLICATION_ENABLED=true` to asynchronously mirror every object
 mutation to an external S3-compatible bucket (see the embedded
 [library README](./libs/nestjs/README.md#async-replication-to-an-external-s3-target)
-for how it works). When enabled, `OB_REPLICATION_BUCKET` and both credentials are
+for how it works). When enabled, `OPENBUCKET_REPLICATION_BUCKET` and both credentials are
 required together (a partial config refuses to boot).
 
 | Variable                                | Required\* | Default       | Notes                                                     |
 | --------------------------------------- | ---------- | ------------- | --------------------------------------------------------- |
-| `OB_REPLICATION_ENABLED`                |            | `false`       | Master switch. Off ⇒ zero cost, outbox stays empty.       |
-| `OB_REPLICATION_ENDPOINT`               |            | —             | S3-compatible endpoint (R2/B2/MinIO). Omit for real AWS S3. `http://` warns (plaintext). |
-| `OB_REPLICATION_REGION`                 |            | `us-east-1`   | Target region.                                            |
-| `OB_REPLICATION_BUCKET`                 | ✅         | —             | Remote target bucket (must already exist).                |
-| `OB_REPLICATION_ACCESS_KEY_ID`          | ✅         | —             | Target credential.                                        |
-| `OB_REPLICATION_SECRET_ACCESS_KEY`      | ✅         | —             | Target credential (never logged; redacted).               |
-| `OB_REPLICATION_FORCE_PATH_STYLE`       |            | `true`        | `true` for MinIO/S3-compat; `false` for AWS.              |
-| `OB_REPLICATION_MAX_ATTEMPTS`           |            | `12`          | Dead-letter cap before an intent → `failed`.              |
-| `OB_REPLICATION_DRAIN_INTERVAL_MS`      |            | `5000`        | Background drain tick interval (≥ 1000).                  |
-| `OB_REPLICATION_BATCH_KEYS`             |            | `50`          | Distinct keys drained per tick.                           |
-| `OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES` |      | `67108864`    | Stream via multipart above this (64 MiB).                 |
+| `OPENBUCKET_REPLICATION_ENABLED`                |            | `false`       | Master switch. Off ⇒ zero cost, outbox stays empty.       |
+| `OPENBUCKET_REPLICATION_ENDPOINT`               |            | —             | S3-compatible endpoint (R2/B2/MinIO). Omit for real AWS S3. `http://` warns (plaintext). |
+| `OPENBUCKET_REPLICATION_REGION`                 |            | `us-east-1`   | Target region.                                            |
+| `OPENBUCKET_REPLICATION_BUCKET`                 | ✅         | —             | Remote target bucket (must already exist).                |
+| `OPENBUCKET_REPLICATION_ACCESS_KEY_ID`          | ✅         | —             | Target credential.                                        |
+| `OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY`      | ✅         | —             | Target credential (never logged; redacted).               |
+| `OPENBUCKET_REPLICATION_FORCE_PATH_STYLE`       |            | `true`        | `true` for MinIO/S3-compat; `false` for AWS.              |
+| `OPENBUCKET_REPLICATION_MAX_ATTEMPTS`           |            | `12`          | Dead-letter cap before an intent → `failed`.              |
+| `OPENBUCKET_REPLICATION_DRAIN_INTERVAL_MS`      |            | `5000`        | Background drain tick interval (≥ 1000).                  |
+| `OPENBUCKET_REPLICATION_BATCH_KEYS`             |            | `50`          | Distinct keys drained per tick.                           |
+| `OPENBUCKET_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES` |      | `67108864`    | Stream via multipart above this (64 MiB).                 |
 
-\* Required only when `OB_REPLICATION_ENABLED=true`.
+\* Required only when `OPENBUCKET_REPLICATION_ENABLED=true`.
 
 The admin console's **Replication** page (and the `/api/admin/replication` API)
 shows replication health — pending/failed depth and lag — and offers a

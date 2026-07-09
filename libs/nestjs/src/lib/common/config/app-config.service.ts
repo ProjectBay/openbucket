@@ -81,28 +81,28 @@ export class AppConfigService {
   }
 
   // --- async replication to external S3 target (STORY-0900) ---
-  get replicationEnabled(): boolean { return this.raw.get('OB_REPLICATION_ENABLED', { infer: true }); }
-  get replicationEndpoint(): string | undefined { return this.raw.get('OB_REPLICATION_ENDPOINT', { infer: true }); }
-  get replicationRegion(): string { return this.raw.get('OB_REPLICATION_REGION', { infer: true }); }
-  get replicationBucket(): string | undefined { return this.raw.get('OB_REPLICATION_BUCKET', { infer: true }); }
-  get replicationAccessKeyId(): string | undefined { return this.raw.get('OB_REPLICATION_ACCESS_KEY_ID', { infer: true }); }
-  get replicationSecretAccessKey(): string | undefined { return this.raw.get('OB_REPLICATION_SECRET_ACCESS_KEY', { infer: true }); }
-  get replicationForcePathStyle(): boolean { return this.raw.get('OB_REPLICATION_FORCE_PATH_STYLE', { infer: true }); }
-  get replicationMaxAttempts(): number { return this.raw.get('OB_REPLICATION_MAX_ATTEMPTS', { infer: true }); }
-  get replicationDrainIntervalMs(): number { return this.raw.get('OB_REPLICATION_DRAIN_INTERVAL_MS', { infer: true }); }
-  get replicationBatchKeys(): number { return this.raw.get('OB_REPLICATION_BATCH_KEYS', { infer: true }); }
-  get replicationLargeObjectThresholdBytes(): number { return this.raw.get('OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES', { infer: true }); }
+  get replicationEnabled(): boolean { return this.raw.get('OPENBUCKET_REPLICATION_ENABLED', { infer: true }); }
+  get replicationEndpoint(): string | undefined { return this.raw.get('OPENBUCKET_REPLICATION_ENDPOINT', { infer: true }); }
+  get replicationRegion(): string { return this.raw.get('OPENBUCKET_REPLICATION_REGION', { infer: true }); }
+  get replicationBucket(): string | undefined { return this.raw.get('OPENBUCKET_REPLICATION_BUCKET', { infer: true }); }
+  get replicationAccessKeyId(): string | undefined { return this.raw.get('OPENBUCKET_REPLICATION_ACCESS_KEY_ID', { infer: true }); }
+  get replicationSecretAccessKey(): string | undefined { return this.raw.get('OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY', { infer: true }); }
+  get replicationForcePathStyle(): boolean { return this.raw.get('OPENBUCKET_REPLICATION_FORCE_PATH_STYLE', { infer: true }); }
+  get replicationMaxAttempts(): number { return this.raw.get('OPENBUCKET_REPLICATION_MAX_ATTEMPTS', { infer: true }); }
+  get replicationDrainIntervalMs(): number { return this.raw.get('OPENBUCKET_REPLICATION_DRAIN_INTERVAL_MS', { infer: true }); }
+  get replicationBatchKeys(): number { return this.raw.get('OPENBUCKET_REPLICATION_BATCH_KEYS', { infer: true }); }
+  get replicationLargeObjectThresholdBytes(): number { return this.raw.get('OPENBUCKET_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES', { infer: true }); }
 
   // --- scheduled backups & retention (STORY-1203) ---
-  get scheduledBackupEnabled(): boolean { return this.raw.get('OB_SCHEDULED_BACKUP_ENABLED', { infer: true }); }
-  get scheduledBackupScope(): Env['OB_SCHEDULED_BACKUP_SCOPE'] { return this.raw.get('OB_SCHEDULED_BACKUP_SCOPE', { infer: true }); }
-  get scheduledBackupIntervalMinutes(): number | undefined { return this.raw.get('OB_SCHEDULED_BACKUP_INTERVAL_MINUTES', { infer: true }); }
-  get scheduledBackupCron(): string | undefined { return this.raw.get('OB_SCHEDULED_BACKUP_CRON', { infer: true }); }
-  get scheduledBackupDir(): string | undefined { return this.raw.get('OB_SCHEDULED_BACKUP_DIR', { infer: true }); }
-  get scheduledBackupKeepLast(): number { return this.raw.get('OB_SCHEDULED_BACKUP_KEEP_LAST', { infer: true }); }
-  get scheduledBackupMaxAgeDays(): number { return this.raw.get('OB_SCHEDULED_BACKUP_MAX_AGE_DAYS', { infer: true }); }
-  get scheduledBackupCheckIntervalMs(): number { return this.raw.get('OB_SCHEDULED_BACKUP_CHECK_INTERVAL_MS', { infer: true }); }
-  get scheduledBackupPushToReplication(): boolean { return this.raw.get('OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION', { infer: true }); }
+  get scheduledBackupEnabled(): boolean { return this.raw.get('OPENBUCKET_SCHEDULED_BACKUP_ENABLED', { infer: true }); }
+  get scheduledBackupScope(): Env['OPENBUCKET_SCHEDULED_BACKUP_SCOPE'] { return this.raw.get('OPENBUCKET_SCHEDULED_BACKUP_SCOPE', { infer: true }); }
+  get scheduledBackupIntervalMinutes(): number | undefined { return this.raw.get('OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES', { infer: true }); }
+  get scheduledBackupCron(): string | undefined { return this.raw.get('OPENBUCKET_SCHEDULED_BACKUP_CRON', { infer: true }); }
+  get scheduledBackupDir(): string | undefined { return this.raw.get('OPENBUCKET_SCHEDULED_BACKUP_DIR', { infer: true }); }
+  get scheduledBackupKeepLast(): number { return this.raw.get('OPENBUCKET_SCHEDULED_BACKUP_KEEP_LAST', { infer: true }); }
+  get scheduledBackupMaxAgeDays(): number { return this.raw.get('OPENBUCKET_SCHEDULED_BACKUP_MAX_AGE_DAYS', { infer: true }); }
+  get scheduledBackupCheckIntervalMs(): number { return this.raw.get('OPENBUCKET_SCHEDULED_BACKUP_CHECK_INTERVAL_MS', { infer: true }); }
+  get scheduledBackupPushToReplication(): boolean { return this.raw.get('OPENBUCKET_SCHEDULED_BACKUP_PUSH_TO_REPLICATION', { infer: true }); }
 
   // --- Prometheus /metrics + OpenTelemetry (STORY-1202) ---
   get metricsMode(): Env['METRICS_MODE'] { return this.raw.get('METRICS_MODE', { infer: true }); }
@@ -117,8 +117,8 @@ export class AppConfigService {
   get tierPresignTtlSeconds(): number { return this.raw.get('OPENBUCKET_TIER_PRESIGN_TTL_SECONDS', { infer: true }); }
 
   // --- background integrity scrubbing (STORY-1204) ---
-  get integrityScrubEnabled(): boolean { return this.raw.get('OB_INTEGRITY_SCRUB_ENABLED', { infer: true }); }
-  get integrityScrubIntervalMs(): number { return this.raw.get('OB_INTEGRITY_SCRUB_INTERVAL_MS', { infer: true }); }
-  get integrityScrubMaxObjectsPerTick(): number { return this.raw.get('OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK', { infer: true }); }
-  get integrityScrubMaxBytesPerTick(): number { return this.raw.get('OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK', { infer: true }); }
+  get integrityScrubEnabled(): boolean { return this.raw.get('OPENBUCKET_INTEGRITY_SCRUB_ENABLED', { infer: true }); }
+  get integrityScrubIntervalMs(): number { return this.raw.get('OPENBUCKET_INTEGRITY_SCRUB_INTERVAL_MS', { infer: true }); }
+  get integrityScrubMaxObjectsPerTick(): number { return this.raw.get('OPENBUCKET_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK', { infer: true }); }
+  get integrityScrubMaxBytesPerTick(): number { return this.raw.get('OPENBUCKET_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK', { infer: true }); }
 }

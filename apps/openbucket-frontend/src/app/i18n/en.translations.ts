@@ -165,7 +165,7 @@ export default {
       runStarted: 'Backup started',
       runJoined: 'A backup is already running',
       runFailed: 'Could not start backup',
-      offHint: 'Scheduled backups are disabled. Set OB_SCHEDULED_BACKUP_* to enable.',
+      offHint: 'Scheduled backups are disabled. Set OPENBUCKET_SCHEDULED_BACKUP_* to enable.',
     },
   },
   breadcrumb: {

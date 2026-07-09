@@ -15,7 +15,7 @@ as replication does (`resolveReplicationConfig` / `REPLICATION_CONFIG`). This is
 knob surface the runner (TASK-3632) and controller (TASK-3634) read.
 
 ## Files to create / modify
-- `libs/nestjs/src/lib/common/config/env.schema.ts` — modify (new `OB_SCHEDULED_BACKUP_*` vars + cross-field refine)
+- `libs/nestjs/src/lib/common/config/env.schema.ts` — modify (new `OPENBUCKET_SCHEDULED_BACKUP_*` vars + cross-field refine)
 - `libs/nestjs/src/lib/common/config/app-config.service.ts` — modify (typed accessors)
 - `libs/nestjs/src/lib/open-bucket-options.ts` — modify (`backups?` block on `OpenBucketModuleOptions` + `ResolvedOpenBucketOptions`, `resolveOptions`, `validateSecurityCriticalOptions`)
 - `libs/nestjs/src/lib/common/config/config-source.ts` — modify (map resolved options → env-shaped config, apply numeric defaults)
@@ -23,20 +23,20 @@ knob surface the runner (TASK-3632) and controller (TASK-3634) read.
 - `libs/nestjs/package.json`, `apps/openbucket-backend/package.json`, root `package.json` — modify (add `cron-parser`)
 
 ## Implementation notes
-- Env vars (mirror the `OB_REPLICATION_*` block, `z.coerce.number().int().min().max().default()`):
-  - `OB_SCHEDULED_BACKUP_ENABLED` — `envBoolean(false)`
-  - `OB_SCHEDULED_BACKUP_SCOPE` — `z.enum(['instance','buckets']).default('instance')` (`buckets` = one snapshot per bucket)
-  - `OB_SCHEDULED_BACKUP_INTERVAL_MINUTES` — `z.coerce.number().int().min(5).max(43200).optional()`
-  - `OB_SCHEDULED_BACKUP_CRON` — `z.string().optional()` (5-field cron; validated below)
-  - `OB_SCHEDULED_BACKUP_DIR` — `z.string().optional()` (default `<DATA_DIR>/backups` applied at resolve time)
-  - `OB_SCHEDULED_BACKUP_KEEP_LAST` — `z.coerce.number().int().min(1).max(1000).default(7)`
-  - `OB_SCHEDULED_BACKUP_MAX_AGE_DAYS` — `z.coerce.number().int().min(1).max(3650).default(30)`
-  - `OB_SCHEDULED_BACKUP_CHECK_INTERVAL_MS` — `z.coerce.number().int().min(10_000).max(3_600_000).default(60_000)` (the fixed wake tick)
-  - `OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION` — `envBoolean(false)`
-- Cross-field `superRefine` when `OB_SCHEDULED_BACKUP_ENABLED`:
+- Env vars (mirror the `OPENBUCKET_REPLICATION_*` block, `z.coerce.number().int().min().max().default()`):
+  - `OPENBUCKET_SCHEDULED_BACKUP_ENABLED` — `envBoolean(false)`
+  - `OPENBUCKET_SCHEDULED_BACKUP_SCOPE` — `z.enum(['instance','buckets']).default('instance')` (`buckets` = one snapshot per bucket)
+  - `OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES` — `z.coerce.number().int().min(5).max(43200).optional()`
+  - `OPENBUCKET_SCHEDULED_BACKUP_CRON` — `z.string().optional()` (5-field cron; validated below)
+  - `OPENBUCKET_SCHEDULED_BACKUP_DIR` — `z.string().optional()` (default `<DATA_DIR>/backups` applied at resolve time)
+  - `OPENBUCKET_SCHEDULED_BACKUP_KEEP_LAST` — `z.coerce.number().int().min(1).max(1000).default(7)`
+  - `OPENBUCKET_SCHEDULED_BACKUP_MAX_AGE_DAYS` — `z.coerce.number().int().min(1).max(3650).default(30)`
+  - `OPENBUCKET_SCHEDULED_BACKUP_CHECK_INTERVAL_MS` — `z.coerce.number().int().min(10_000).max(3_600_000).default(60_000)` (the fixed wake tick)
+  - `OPENBUCKET_SCHEDULED_BACKUP_PUSH_TO_REPLICATION` — `envBoolean(false)`
+- Cross-field `superRefine` when `OPENBUCKET_SCHEDULED_BACKUP_ENABLED`:
   - exactly one of `INTERVAL_MINUTES` / `CRON` must be set (mutually exclusive; error otherwise);
   - if `CRON` is set, parse it with `cron-parser` (`CronExpressionParser.parse(cron)` in a try/catch) and add a Zod issue on failure — **fail fast at boot**, never mid-tick;
-  - if `PUSH_TO_REPLICATION` is true but `OB_REPLICATION_ENABLED` is false, do **not** hard-fail — log a boot WARNING (the flag is a no-op) so an operator toggling replication later isn't blocked.
+  - if `PUSH_TO_REPLICATION` is true but `OPENBUCKET_REPLICATION_ENABLED` is false, do **not** hard-fail — log a boot WARNING (the flag is a no-op) so an operator toggling replication later isn't blocked.
 - `ScheduledBackupConfig` (resolved shape both sources funnel through), plus a
   `DISABLED` const like `replication-config.ts`:
 
@@ -76,8 +76,8 @@ knob surface the runner (TASK-3632) and controller (TASK-3634) read.
   hostile-tiny value can't busy-loop the scheduler.
 
 ## Acceptance criteria
-- [ ] `OB_SCHEDULED_BACKUP_*` vars parse with defaults; enabling with neither/both of interval+cron fails boot with a clear message.
-- [ ] A malformed `OB_SCHEDULED_BACKUP_CRON` fails `env.schema` parsing (and `validateSecurityCriticalOptions` for the library path).
+- [ ] `OPENBUCKET_SCHEDULED_BACKUP_*` vars parse with defaults; enabling with neither/both of interval+cron fails boot with a clear message.
+- [ ] A malformed `OPENBUCKET_SCHEDULED_BACKUP_CRON` fails `env.schema` parsing (and `validateSecurityCriticalOptions` for the library path).
 - [ ] `resolveScheduledBackupConfig` returns `{ enabled: false, … }` when unset and a fully-defaulted shape when enabled; `dir` defaults to `<dataDir>/backups`.
 - [ ] `cron-parser` appears in all three package.json files and is `external` in the backend webpack bundle (`nx build openbucket-backend` succeeds, bundle does not inline it).
 - [ ] `nx test nestjs --testPathPattern='env.schema|open-bucket-options'` passes with the new cases.

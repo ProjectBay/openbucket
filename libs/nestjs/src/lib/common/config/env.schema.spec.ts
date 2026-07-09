@@ -253,63 +253,63 @@ describe('loadEnv', () => {
   // --- async replication to external S3 target (STORY-0900) ---
   it('case 22: replication off by default with documented drain/dead-letter defaults', () => {
     const env = loadEnv({ ...baseEnv });
-    expect(env.OB_REPLICATION_ENABLED).toBe(false);
-    expect(env.OB_REPLICATION_REGION).toBe('us-east-1');
-    expect(env.OB_REPLICATION_FORCE_PATH_STYLE).toBe(true);
-    expect(env.OB_REPLICATION_MAX_ATTEMPTS).toBe(12);
-    expect(env.OB_REPLICATION_DRAIN_INTERVAL_MS).toBe(5_000);
-    expect(env.OB_REPLICATION_BATCH_KEYS).toBe(50);
-    expect(env.OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES).toBe(64 * 1024 * 1024);
+    expect(env.OPENBUCKET_REPLICATION_ENABLED).toBe(false);
+    expect(env.OPENBUCKET_REPLICATION_REGION).toBe('us-east-1');
+    expect(env.OPENBUCKET_REPLICATION_FORCE_PATH_STYLE).toBe(true);
+    expect(env.OPENBUCKET_REPLICATION_MAX_ATTEMPTS).toBe(12);
+    expect(env.OPENBUCKET_REPLICATION_DRAIN_INTERVAL_MS).toBe(5_000);
+    expect(env.OPENBUCKET_REPLICATION_BATCH_KEYS).toBe(50);
+    expect(env.OPENBUCKET_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES).toBe(64 * 1024 * 1024);
   });
 
   it('case 23: a full replication config boots and enables replication', () => {
     const env = loadEnv({
       ...baseEnv,
-      OB_REPLICATION_ENABLED: 'true',
-      OB_REPLICATION_ENDPOINT: 'https://s3.example.com',
-      OB_REPLICATION_BUCKET: 'remote-mirror',
-      OB_REPLICATION_ACCESS_KEY_ID: 'AKIAEXAMPLE1234567890',
-      OB_REPLICATION_SECRET_ACCESS_KEY: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
+      OPENBUCKET_REPLICATION_ENABLED: 'true',
+      OPENBUCKET_REPLICATION_ENDPOINT: 'https://s3.example.com',
+      OPENBUCKET_REPLICATION_BUCKET: 'remote-mirror',
+      OPENBUCKET_REPLICATION_ACCESS_KEY_ID: 'AKIAEXAMPLE1234567890',
+      OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
     });
-    expect(env.OB_REPLICATION_ENABLED).toBe(true);
-    expect(env.OB_REPLICATION_BUCKET).toBe('remote-mirror');
+    expect(env.OPENBUCKET_REPLICATION_ENABLED).toBe(true);
+    expect(env.OPENBUCKET_REPLICATION_BUCKET).toBe('remote-mirror');
   });
 
   it('case 24: ENABLED=true but missing bucket/creds refuses to boot (fail-closed)', () => {
-    expect(() => loadEnv({ ...baseEnv, OB_REPLICATION_ENABLED: 'true' })).toThrow(
+    expect(() => loadEnv({ ...baseEnv, OPENBUCKET_REPLICATION_ENABLED: 'true' })).toThrow(
       'Refusing to boot: invalid environment.',
     );
     const joined = errSpy.mock.calls[0][0] as string;
-    expect(joined).toContain('OB_REPLICATION_BUCKET');
-    expect(joined).toContain('OB_REPLICATION_ACCESS_KEY_ID');
-    expect(joined).toContain('OB_REPLICATION_SECRET_ACCESS_KEY');
+    expect(joined).toContain('OPENBUCKET_REPLICATION_BUCKET');
+    expect(joined).toContain('OPENBUCKET_REPLICATION_ACCESS_KEY_ID');
+    expect(joined).toContain('OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY');
   });
 
   it('case 25: ENABLED=true with a malformed remote bucket name is rejected', () => {
     expect(() =>
       loadEnv({
         ...baseEnv,
-        OB_REPLICATION_ENABLED: 'true',
-        OB_REPLICATION_BUCKET: 'Invalid_Bucket_NAME',
-        OB_REPLICATION_ACCESS_KEY_ID: 'AKIAEXAMPLE1234567890',
-        OB_REPLICATION_SECRET_ACCESS_KEY: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
+        OPENBUCKET_REPLICATION_ENABLED: 'true',
+        OPENBUCKET_REPLICATION_BUCKET: 'Invalid_Bucket_NAME',
+        OPENBUCKET_REPLICATION_ACCESS_KEY_ID: 'AKIAEXAMPLE1234567890',
+        OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
       }),
     ).toThrow('Refusing to boot: invalid environment.');
-    expect(errSpy.mock.calls[0][0]).toContain('OB_REPLICATION_BUCKET must be a valid S3 bucket name');
+    expect(errSpy.mock.calls[0][0]).toContain('OPENBUCKET_REPLICATION_BUCKET must be a valid S3 bucket name');
   });
 
   it('case 26: ENABLED=true with a malformed endpoint URL is rejected', () => {
     expect(() =>
       loadEnv({
         ...baseEnv,
-        OB_REPLICATION_ENABLED: 'true',
-        OB_REPLICATION_ENDPOINT: 'not-a-url',
-        OB_REPLICATION_BUCKET: 'remote-mirror',
-        OB_REPLICATION_ACCESS_KEY_ID: 'AKIAEXAMPLE1234567890',
-        OB_REPLICATION_SECRET_ACCESS_KEY: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
+        OPENBUCKET_REPLICATION_ENABLED: 'true',
+        OPENBUCKET_REPLICATION_ENDPOINT: 'not-a-url',
+        OPENBUCKET_REPLICATION_BUCKET: 'remote-mirror',
+        OPENBUCKET_REPLICATION_ACCESS_KEY_ID: 'AKIAEXAMPLE1234567890',
+        OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY: 'k7Jf2pQrwStN9vB3zX1cM4dL0eR6yU2h7gK3nP5s',
       }),
     ).toThrow('Refusing to boot: invalid environment.');
-    expect(errSpy.mock.calls[0][0]).toContain('OB_REPLICATION_ENDPOINT');
+    expect(errSpy.mock.calls[0][0]).toContain('OPENBUCKET_REPLICATION_ENDPOINT');
   });
 
   it('case 27: cold-object tiering knobs apply their documented defaults (STORY-0901)', () => {
@@ -449,47 +449,47 @@ describe('loadEnv scheduled backups (STORY-1203)', () => {
 
   it('defaults: disabled with the documented retention defaults', () => {
     const env = loadEnv({ ...baseEnv });
-    expect(env.OB_SCHEDULED_BACKUP_ENABLED).toBe(false);
-    expect(env.OB_SCHEDULED_BACKUP_SCOPE).toBe('instance');
-    expect(env.OB_SCHEDULED_BACKUP_KEEP_LAST).toBe(7);
-    expect(env.OB_SCHEDULED_BACKUP_MAX_AGE_DAYS).toBe(30);
-    expect(env.OB_SCHEDULED_BACKUP_CHECK_INTERVAL_MS).toBe(60_000);
-    expect(env.OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION).toBe(false);
+    expect(env.OPENBUCKET_SCHEDULED_BACKUP_ENABLED).toBe(false);
+    expect(env.OPENBUCKET_SCHEDULED_BACKUP_SCOPE).toBe('instance');
+    expect(env.OPENBUCKET_SCHEDULED_BACKUP_KEEP_LAST).toBe(7);
+    expect(env.OPENBUCKET_SCHEDULED_BACKUP_MAX_AGE_DAYS).toBe(30);
+    expect(env.OPENBUCKET_SCHEDULED_BACKUP_CHECK_INTERVAL_MS).toBe(60_000);
+    expect(env.OPENBUCKET_SCHEDULED_BACKUP_PUSH_TO_REPLICATION).toBe(false);
   });
 
   it('enabled with an interval parses', () => {
     const env = loadEnv({
       ...baseEnv,
-      OB_SCHEDULED_BACKUP_ENABLED: 'true',
-      OB_SCHEDULED_BACKUP_INTERVAL_MINUTES: '60',
+      OPENBUCKET_SCHEDULED_BACKUP_ENABLED: 'true',
+      OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES: '60',
     });
-    expect(env.OB_SCHEDULED_BACKUP_ENABLED).toBe(true);
-    expect(env.OB_SCHEDULED_BACKUP_INTERVAL_MINUTES).toBe(60);
+    expect(env.OPENBUCKET_SCHEDULED_BACKUP_ENABLED).toBe(true);
+    expect(env.OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES).toBe(60);
   });
 
   it('enabled with a valid cron parses', () => {
     const env = loadEnv({
       ...baseEnv,
-      OB_SCHEDULED_BACKUP_ENABLED: 'true',
-      OB_SCHEDULED_BACKUP_CRON: '0 3 * * *',
+      OPENBUCKET_SCHEDULED_BACKUP_ENABLED: 'true',
+      OPENBUCKET_SCHEDULED_BACKUP_CRON: '0 3 * * *',
     });
-    expect(env.OB_SCHEDULED_BACKUP_CRON).toBe('0 3 * * *');
+    expect(env.OPENBUCKET_SCHEDULED_BACKUP_CRON).toBe('0 3 * * *');
   });
 
   it('enabled with NEITHER interval nor cron refuses to boot', () => {
-    expect(() => loadEnv({ ...baseEnv, OB_SCHEDULED_BACKUP_ENABLED: 'true' })).toThrow(
+    expect(() => loadEnv({ ...baseEnv, OPENBUCKET_SCHEDULED_BACKUP_ENABLED: 'true' })).toThrow(
       'Refusing to boot: invalid environment.',
     );
-    expect(errSpy.mock.calls[0][0]).toContain('exactly one of OB_SCHEDULED_BACKUP_INTERVAL_MINUTES');
+    expect(errSpy.mock.calls[0][0]).toContain('exactly one of OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES');
   });
 
   it('enabled with BOTH interval and cron refuses to boot', () => {
     expect(() =>
       loadEnv({
         ...baseEnv,
-        OB_SCHEDULED_BACKUP_ENABLED: 'true',
-        OB_SCHEDULED_BACKUP_INTERVAL_MINUTES: '60',
-        OB_SCHEDULED_BACKUP_CRON: '0 3 * * *',
+        OPENBUCKET_SCHEDULED_BACKUP_ENABLED: 'true',
+        OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES: '60',
+        OPENBUCKET_SCHEDULED_BACKUP_CRON: '0 3 * * *',
       }),
     ).toThrow('Refusing to boot: invalid environment.');
   });
@@ -498,11 +498,11 @@ describe('loadEnv scheduled backups (STORY-1203)', () => {
     expect(() =>
       loadEnv({
         ...baseEnv,
-        OB_SCHEDULED_BACKUP_ENABLED: 'true',
-        OB_SCHEDULED_BACKUP_CRON: 'not a cron',
+        OPENBUCKET_SCHEDULED_BACKUP_ENABLED: 'true',
+        OPENBUCKET_SCHEDULED_BACKUP_CRON: 'not a cron',
       }),
     ).toThrow('Refusing to boot: invalid environment.');
-    expect(errSpy.mock.calls[0][0]).toContain('OB_SCHEDULED_BACKUP_CRON is not a valid cron');
+    expect(errSpy.mock.calls[0][0]).toContain('OPENBUCKET_SCHEDULED_BACKUP_CRON is not a valid cron');
   });
 });
 
