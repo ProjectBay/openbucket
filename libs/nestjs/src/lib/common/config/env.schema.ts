@@ -110,7 +110,7 @@ export const validateCronExpression = (cron: string): string | null => {
     CronExpressionParser.parse(cron);
     return null;
   } catch (err) {
-    return `OB_SCHEDULED_BACKUP_CRON is not a valid cron expression: ${(err as Error).message}`;
+    return `OPENBUCKET_SCHEDULED_BACKUP_CRON is not a valid cron expression: ${(err as Error).message}`;
   }
 };
 
@@ -142,10 +142,10 @@ export const validateReplicationEndpoint = (
   try {
     parsed = new URL(endpoint);
   } catch {
-    return { error: 'OB_REPLICATION_ENDPOINT must be a valid URL' };
+    return { error: 'OPENBUCKET_REPLICATION_ENDPOINT must be a valid URL' };
   }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    return { error: 'OB_REPLICATION_ENDPOINT must be an http(s) URL' };
+    return { error: 'OPENBUCKET_REPLICATION_ENDPOINT must be an http(s) URL' };
   }
   return { insecure: parsed.protocol === 'http:' };
 };
@@ -319,24 +319,24 @@ export const EnvSchema = z
     // Off by default: absence ⇒ disabled, so pure local deployments pay nothing.
     // When ENABLED=true the endpoint/bucket/creds are required together (a
     // partial config must refuse to boot) — enforced by the superRefine below.
-    OB_REPLICATION_ENABLED: envBoolean(false),
+    OPENBUCKET_REPLICATION_ENABLED: envBoolean(false),
     // S3-compatible endpoint (R2/B2/MinIO). Omit for real AWS S3 (the SDK derives
     // it from the region). http:// is accepted (warned at boot) for LAN dev.
-    OB_REPLICATION_ENDPOINT: z.string().optional(),
-    OB_REPLICATION_REGION: z.string().default('us-east-1'),
-    OB_REPLICATION_BUCKET: z.string().optional(),
-    OB_REPLICATION_ACCESS_KEY_ID: z.string().optional(),
-    OB_REPLICATION_SECRET_ACCESS_KEY: z.string().optional(),
+    OPENBUCKET_REPLICATION_ENDPOINT: z.string().optional(),
+    OPENBUCKET_REPLICATION_REGION: z.string().default('us-east-1'),
+    OPENBUCKET_REPLICATION_BUCKET: z.string().optional(),
+    OPENBUCKET_REPLICATION_ACCESS_KEY_ID: z.string().optional(),
+    OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY: z.string().optional(),
     // path-style addressing — true for MinIO / other S3-compat; false for AWS.
-    OB_REPLICATION_FORCE_PATH_STYLE: envBoolean(true),
+    OPENBUCKET_REPLICATION_FORCE_PATH_STYLE: envBoolean(true),
     // Dead-letter cap: after this many failed attempts an intent → `failed`.
-    OB_REPLICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(50).default(12),
+    OPENBUCKET_REPLICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(50).default(12),
     // Drain tick interval (ms). Floor 1000 so the drain can't hot-loop.
-    OB_REPLICATION_DRAIN_INTERVAL_MS: z.coerce.number().int().min(1_000).max(300_000).default(5_000),
+    OPENBUCKET_REPLICATION_DRAIN_INTERVAL_MS: z.coerce.number().int().min(1_000).max(300_000).default(5_000),
     // Distinct keys drained per tick — bounds per-tick work (CWE-770).
-    OB_REPLICATION_BATCH_KEYS: z.coerce.number().int().min(1).max(1_000).default(50),
+    OPENBUCKET_REPLICATION_BATCH_KEYS: z.coerce.number().int().min(1).max(1_000).default(50),
     // Objects larger than this stream via lib-storage multipart. Default 64 MiB.
-    OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES: z.coerce
+    OPENBUCKET_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES: z.coerce
       .number()
       .int()
       .positive()
@@ -346,26 +346,26 @@ export const EnvSchema = z
     // Off by default: absence ⇒ disabled, so deployments that don't want an
     // automatic snapshot pay nothing. When ENABLED=true exactly one of
     // INTERVAL_MINUTES / CRON must be set (enforced by the superRefine below).
-    OB_SCHEDULED_BACKUP_ENABLED: envBoolean(false),
+    OPENBUCKET_SCHEDULED_BACKUP_ENABLED: envBoolean(false),
     // `instance` = one whole-instance snapshot; `buckets` = one snapshot per bucket.
-    OB_SCHEDULED_BACKUP_SCOPE: z.enum(['instance', 'buckets']).default('instance'),
+    OPENBUCKET_SCHEDULED_BACKUP_SCOPE: z.enum(['instance', 'buckets']).default('instance'),
     // Fixed interval between snapshots (minutes). Floor 5m so a misconfig can't
     // hammer the disk; ceiling 30d. Mutually exclusive with CRON.
-    OB_SCHEDULED_BACKUP_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(43_200).optional(),
+    OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(43_200).optional(),
     // 5-field cron schedule (validated by the superRefine below). Mutually
     // exclusive with INTERVAL_MINUTES.
-    OB_SCHEDULED_BACKUP_CRON: z.string().optional(),
+    OPENBUCKET_SCHEDULED_BACKUP_CRON: z.string().optional(),
     // Absolute snapshot directory. Defaults to `<DATA_DIR>/backups` at resolve time.
-    OB_SCHEDULED_BACKUP_DIR: z.string().optional(),
+    OPENBUCKET_SCHEDULED_BACKUP_DIR: z.string().optional(),
     // Retention: keep the newest N snapshots (a hard floor — an old-but-within-N
     // snapshot is retained regardless of age).
-    OB_SCHEDULED_BACKUP_KEEP_LAST: z.coerce.number().int().min(1).max(1_000).default(7),
+    OPENBUCKET_SCHEDULED_BACKUP_KEEP_LAST: z.coerce.number().int().min(1).max(1_000).default(7),
     // Retention: also keep anything younger than this many days (union with
     // keep-last: a fresh snapshot is never deleted by the age rule).
-    OB_SCHEDULED_BACKUP_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(3_650).default(30),
+    OPENBUCKET_SCHEDULED_BACKUP_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(3_650).default(30),
     // Fixed wake tick: how often the runner checks whether a snapshot is due.
     // Floor 10s so a hostile-tiny value can't busy-loop the scheduler.
-    OB_SCHEDULED_BACKUP_CHECK_INTERVAL_MS: z.coerce
+    OPENBUCKET_SCHEDULED_BACKUP_CHECK_INTERVAL_MS: z.coerce
       .number()
       .int()
       .min(10_000)
@@ -373,7 +373,7 @@ export const EnvSchema = z
       .default(60_000),
     // Also push each finished snapshot .zip to the replication target under a
     // reserved prefix. A no-op (with a boot warning) when replication is disabled.
-    OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION: envBoolean(false),
+    OPENBUCKET_SCHEDULED_BACKUP_PUSH_TO_REPLICATION: envBoolean(false),
 
     // --- cold-object tiering (STORY-0901) ---
     // Master switch; still a no-op unless a STORY-0900 remote target is configured.
@@ -396,14 +396,14 @@ export const EnvSchema = z
     // The scrubber walks current/local objects, re-hashes each blob vs the stored
     // sha256, and marks a per-object verdict — strictly rate-limited so it never
     // starves request traffic.
-    OB_INTEGRITY_SCRUB_ENABLED: envBoolean(false),
+    OPENBUCKET_INTEGRITY_SCRUB_ENABLED: envBoolean(false),
     // Tick interval (ms). Floor 1s so a misconfig can't hot-loop the scheduler.
-    OB_INTEGRITY_SCRUB_INTERVAL_MS: z.coerce.number().int().min(1_000).default(60_000),
+    OPENBUCKET_INTEGRITY_SCRUB_INTERVAL_MS: z.coerce.number().int().min(1_000).default(60_000),
     // Hard per-tick object cap — bounds detection work regardless of blob sizes.
-    OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK: z.coerce.number().int().min(1).default(1_000),
+    OPENBUCKET_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK: z.coerce.number().int().min(1).default(1_000),
     // Per-tick byte budget: stop the tick once this many bytes have been hashed
     // (disk-read amplification throttle). Default 1 GiB/tick.
-    OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK: z.coerce
+    OPENBUCKET_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK: z.coerce
       .number()
       .int()
       .positive()
@@ -455,30 +455,30 @@ export const EnvSchema = z
     // AWS but validated when present), bucket, and both credentials are required
     // together — a partial config must refuse to boot (mirrors the webhook /
     // admin-block footgun guards, fail-closed).
-    if (env.OB_REPLICATION_ENABLED) {
+    if (env.OPENBUCKET_REPLICATION_ENABLED) {
       const requireField = (key: keyof typeof env, label: string) => {
         if (!env[key]) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: [key as string],
-            message: `${label} is required when OB_REPLICATION_ENABLED=true`,
+            message: `${label} is required when OPENBUCKET_REPLICATION_ENABLED=true`,
           });
         }
       };
-      requireField('OB_REPLICATION_BUCKET', 'OB_REPLICATION_BUCKET');
-      requireField('OB_REPLICATION_ACCESS_KEY_ID', 'OB_REPLICATION_ACCESS_KEY_ID');
-      requireField('OB_REPLICATION_SECRET_ACCESS_KEY', 'OB_REPLICATION_SECRET_ACCESS_KEY');
-      if (env.OB_REPLICATION_BUCKET && !S3_BUCKET_RE.test(env.OB_REPLICATION_BUCKET)) {
+      requireField('OPENBUCKET_REPLICATION_BUCKET', 'OPENBUCKET_REPLICATION_BUCKET');
+      requireField('OPENBUCKET_REPLICATION_ACCESS_KEY_ID', 'OPENBUCKET_REPLICATION_ACCESS_KEY_ID');
+      requireField('OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY', 'OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY');
+      if (env.OPENBUCKET_REPLICATION_BUCKET && !S3_BUCKET_RE.test(env.OPENBUCKET_REPLICATION_BUCKET)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['OB_REPLICATION_BUCKET'],
-          message: 'OB_REPLICATION_BUCKET must be a valid S3 bucket name (3-63 chars)',
+          path: ['OPENBUCKET_REPLICATION_BUCKET'],
+          message: 'OPENBUCKET_REPLICATION_BUCKET must be a valid S3 bucket name (3-63 chars)',
         });
       }
-      if (env.OB_REPLICATION_ENDPOINT) {
-        const { error } = validateReplicationEndpoint(env.OB_REPLICATION_ENDPOINT);
+      if (env.OPENBUCKET_REPLICATION_ENDPOINT) {
+        const { error } = validateReplicationEndpoint(env.OPENBUCKET_REPLICATION_ENDPOINT);
         if (error) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['OB_REPLICATION_ENDPOINT'], message: error });
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['OPENBUCKET_REPLICATION_ENDPOINT'], message: error });
         }
       }
     }
@@ -489,22 +489,22 @@ export const EnvSchema = z
     // push-to-replication with replication OFF is NOT a hard failure (the flag is
     // a no-op) — the runtime factory logs a boot WARNING so an operator can toggle
     // replication on later without being blocked here.
-    if (env.OB_SCHEDULED_BACKUP_ENABLED) {
-      const hasInterval = env.OB_SCHEDULED_BACKUP_INTERVAL_MINUTES != null;
-      const hasCron = env.OB_SCHEDULED_BACKUP_CRON != null && env.OB_SCHEDULED_BACKUP_CRON !== '';
+    if (env.OPENBUCKET_SCHEDULED_BACKUP_ENABLED) {
+      const hasInterval = env.OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES != null;
+      const hasCron = env.OPENBUCKET_SCHEDULED_BACKUP_CRON != null && env.OPENBUCKET_SCHEDULED_BACKUP_CRON !== '';
       if (hasInterval === hasCron) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['OB_SCHEDULED_BACKUP_CRON'],
+          path: ['OPENBUCKET_SCHEDULED_BACKUP_CRON'],
           message:
-            'exactly one of OB_SCHEDULED_BACKUP_INTERVAL_MINUTES or OB_SCHEDULED_BACKUP_CRON ' +
-            'must be set when OB_SCHEDULED_BACKUP_ENABLED=true',
+            'exactly one of OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES or OPENBUCKET_SCHEDULED_BACKUP_CRON ' +
+            'must be set when OPENBUCKET_SCHEDULED_BACKUP_ENABLED=true',
         });
       }
       if (hasCron) {
-        const cronError = validateCronExpression(env.OB_SCHEDULED_BACKUP_CRON as string);
+        const cronError = validateCronExpression(env.OPENBUCKET_SCHEDULED_BACKUP_CRON as string);
         if (cronError) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['OB_SCHEDULED_BACKUP_CRON'], message: cronError });
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['OPENBUCKET_SCHEDULED_BACKUP_CRON'], message: cronError });
         }
       }
     }

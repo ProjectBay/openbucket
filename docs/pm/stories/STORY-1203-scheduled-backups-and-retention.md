@@ -34,14 +34,14 @@ secrets in `/metrics` or logs, and JWT-guarded admin endpoints.
 
 ## Acceptance criteria
 - [ ] `BackupService` exposes a sink-based snapshot method (`writeSnapshot(sink, kind, bucketNames)` returning `{ bytes, objectCount }`); `streamBucketBackup` / `streamInstanceBackup` are refactored to call it so the streamed-download and scheduled-file paths share one code path and one `BackupManifest` writer.
-- [ ] With `OB_SCHEDULED_BACKUP_ENABLED=false` (default) no snapshot is written and the runner is a no-op (registered unconditionally, mirrors `ReplicationWorkerRunner.run`'s `if (!enabled) return`).
-- [ ] With scheduling enabled and `OB_SCHEDULED_BACKUP_INTERVAL_MINUTES` (or `OB_SCHEDULED_BACKUP_CRON`) set, a snapshot `.zip` + sidecar `.json` metadata appears under `<OB_SCHEDULED_BACKUP_DIR>/<scope>/` on the configured cadence, written atomically (`.part` → `fsync` → `rename`) with mode `0o600`.
+- [ ] With `OPENBUCKET_SCHEDULED_BACKUP_ENABLED=false` (default) no snapshot is written and the runner is a no-op (registered unconditionally, mirrors `ReplicationWorkerRunner.run`'s `if (!enabled) return`).
+- [ ] With scheduling enabled and `OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES` (or `OPENBUCKET_SCHEDULED_BACKUP_CRON`) set, a snapshot `.zip` + sidecar `.json` metadata appears under `<OPENBUCKET_SCHEDULED_BACKUP_DIR>/<scope>/` on the configured cadence, written atomically (`.part` → `fsync` → `rename`) with mode `0o600`.
 - [ ] Retention prunes snapshots: an entry is retained iff it is among the newest `keepLast` **or** younger than `maxAgeDays`; it is deleted only when it fails both — so keep-last-N never deletes below the floor even for old entries, and max-age never deletes a fresh entry.
-- [ ] When `OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION=true` **and** replication is enabled, each new snapshot `.zip` is uploaded via `ReplicationTargetService.putObject` under the reserved `_ob_backups/` prefix (multipart for large archives); when replication is disabled the flag is ignored with a boot-time warning.
+- [ ] When `OPENBUCKET_SCHEDULED_BACKUP_PUSH_TO_REPLICATION=true` **and** replication is enabled, each new snapshot `.zip` is uploaded via `ReplicationTargetService.putObject` under the reserved `_ob_backups/` prefix (multipart for large archives); when replication is disabled the flag is ignored with a boot-time warning.
 - [ ] `GET /api/admin/backup/schedule` returns `{ enabled, scope, schedule, lastRunAt, nextRunAt, lastStatus, lastError, lastDurationMs, lastBytes, lastObjectCount, keepLast, maxAgeDays, snapshotCount }` — no directory paths, credentials, or object keys in the payload.
 - [ ] `POST /api/admin/backup/schedule/run-now` triggers exactly one snapshot + prune, guarded by an in-flight lock so it can neither overlap a scheduled tick nor be flooded into N concurrent snapshots; both endpoints are behind the global admin JWT guard.
 - [ ] The Angular `backup-restore.component.ts` shows last-run / next-run and a "Run now" button (signals-based, `OnPush`), refreshing status after the run resolves.
-- [ ] A malformed `OB_SCHEDULED_BACKUP_CRON` fails fast at boot (env schema / `validateSecurityCriticalOptions`), never mid-tick; a snapshot is skipped (with a warning, not a crash) when free space is below `DATA_DIR_MIN_FREE_BYTES`.
+- [ ] A malformed `OPENBUCKET_SCHEDULED_BACKUP_CRON` fails fast at boot (env schema / `validateSecurityCriticalOptions`), never mid-tick; a snapshot is skipped (with a warning, not a crash) when free space is below `DATA_DIR_MIN_FREE_BYTES`.
 - [ ] `/metrics` (STORY-1202) exposes only a last-success timestamp / last-bytes / snapshot-count gauge for backups — never a path, key, or secret — consistent with `RequestMetricsService`'s counts-only posture.
 
 ## Tasks
@@ -71,4 +71,4 @@ secrets in `/metrics` or logs, and JWT-guarded admin endpoints.
 - `libs/nestjs/src/lib/common/config/env.schema.ts`, `app-config.service.ts`, `config-source.ts`
 - `apps/openbucket-frontend/src/app/backup-restore/backup-restore.component.ts`
 - `apps/openbucket-backend/webpack.config.js` (`externalDependencies`) — 3-place externalization for the new `cron-parser` dep (also `libs/nestjs/package.json` + `apps/openbucket-backend/package.json`)
-- New dep: `cron-parser` (pure-JS cron expression → next-run computation; only required when `OB_SCHEDULED_BACKUP_CRON` is used)
+- New dep: `cron-parser` (pure-JS cron expression → next-run computation; only required when `OPENBUCKET_SCHEDULED_BACKUP_CRON` is used)

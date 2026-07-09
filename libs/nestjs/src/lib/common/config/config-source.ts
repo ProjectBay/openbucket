@@ -95,32 +95,32 @@ export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
     // Async replication (STORY-0900). Off unless the host passes a `replication`
     // block; resolved defaults mirror the env schema. `enabled` is derived from
     // the block's presence (the library caller never sets it explicitly).
-    OB_REPLICATION_ENABLED: !!opts.replication,
-    OB_REPLICATION_ENDPOINT: opts.replication?.endpoint,
-    OB_REPLICATION_REGION: opts.replication?.region ?? 'us-east-1',
-    OB_REPLICATION_BUCKET: opts.replication?.bucket,
-    OB_REPLICATION_ACCESS_KEY_ID: opts.replication?.credentials.accessKeyId,
-    OB_REPLICATION_SECRET_ACCESS_KEY: opts.replication?.credentials.secretAccessKey,
-    OB_REPLICATION_FORCE_PATH_STYLE: opts.replication?.forcePathStyle ?? true,
-    OB_REPLICATION_MAX_ATTEMPTS: opts.replication?.maxAttempts ?? 12,
-    OB_REPLICATION_DRAIN_INTERVAL_MS: opts.replication?.drainIntervalMs ?? 5_000,
-    OB_REPLICATION_BATCH_KEYS: opts.replication?.batchKeys ?? 50,
-    OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES:
+    OPENBUCKET_REPLICATION_ENABLED: !!opts.replication,
+    OPENBUCKET_REPLICATION_ENDPOINT: opts.replication?.endpoint,
+    OPENBUCKET_REPLICATION_REGION: opts.replication?.region ?? 'us-east-1',
+    OPENBUCKET_REPLICATION_BUCKET: opts.replication?.bucket,
+    OPENBUCKET_REPLICATION_ACCESS_KEY_ID: opts.replication?.credentials.accessKeyId,
+    OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY: opts.replication?.credentials.secretAccessKey,
+    OPENBUCKET_REPLICATION_FORCE_PATH_STYLE: opts.replication?.forcePathStyle ?? true,
+    OPENBUCKET_REPLICATION_MAX_ATTEMPTS: opts.replication?.maxAttempts ?? 12,
+    OPENBUCKET_REPLICATION_DRAIN_INTERVAL_MS: opts.replication?.drainIntervalMs ?? 5_000,
+    OPENBUCKET_REPLICATION_BATCH_KEYS: opts.replication?.batchKeys ?? 50,
+    OPENBUCKET_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES:
       opts.replication?.largeObjectThresholdBytes ?? 64 * 1024 * 1024,
     // Scheduled backups (STORY-1203). Off unless the host passes a `backups`
     // block; `enabled` is derived from its presence (the library caller never
     // sets it explicitly). Numeric defaults mirror the env schema; the default
     // `dir` (`<dataDir>/backups`) is applied at resolve time in
     // `resolveScheduledBackupConfig`, so an unset `dir` maps to `undefined` here.
-    OB_SCHEDULED_BACKUP_ENABLED: !!opts.backups,
-    OB_SCHEDULED_BACKUP_SCOPE: opts.backups?.scope ?? 'instance',
-    OB_SCHEDULED_BACKUP_INTERVAL_MINUTES: opts.backups?.intervalMinutes,
-    OB_SCHEDULED_BACKUP_CRON: opts.backups?.cron,
-    OB_SCHEDULED_BACKUP_DIR: opts.backups?.dir,
-    OB_SCHEDULED_BACKUP_KEEP_LAST: opts.backups?.keepLast ?? 7,
-    OB_SCHEDULED_BACKUP_MAX_AGE_DAYS: opts.backups?.maxAgeDays ?? 30,
-    OB_SCHEDULED_BACKUP_CHECK_INTERVAL_MS: opts.backups?.checkIntervalMs ?? 60_000,
-    OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION: opts.backups?.pushToReplication ?? false,
+    OPENBUCKET_SCHEDULED_BACKUP_ENABLED: !!opts.backups,
+    OPENBUCKET_SCHEDULED_BACKUP_SCOPE: opts.backups?.scope ?? 'instance',
+    OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES: opts.backups?.intervalMinutes,
+    OPENBUCKET_SCHEDULED_BACKUP_CRON: opts.backups?.cron,
+    OPENBUCKET_SCHEDULED_BACKUP_DIR: opts.backups?.dir,
+    OPENBUCKET_SCHEDULED_BACKUP_KEEP_LAST: opts.backups?.keepLast ?? 7,
+    OPENBUCKET_SCHEDULED_BACKUP_MAX_AGE_DAYS: opts.backups?.maxAgeDays ?? 30,
+    OPENBUCKET_SCHEDULED_BACKUP_CHECK_INTERVAL_MS: opts.backups?.checkIntervalMs ?? 60_000,
+    OPENBUCKET_SCHEDULED_BACKUP_PUSH_TO_REPLICATION: opts.backups?.pushToReplication ?? false,
     // Cold-object tiering (STORY-0901). Off by default; a library host enables it
     // via the env-driven standalone path. Defaults mirror the env schema.
     OPENBUCKET_TIER_ENABLED: false,
@@ -130,10 +130,10 @@ export function buildConfig(opts?: ResolvedOpenBucketOptions): Env {
     OPENBUCKET_TIER_PRESIGN_TTL_SECONDS: 300,
     // Background integrity scrubbing (STORY-1204). Off by default; a library host
     // enables it via the env-driven standalone path. Defaults mirror the env schema.
-    OB_INTEGRITY_SCRUB_ENABLED: false,
-    OB_INTEGRITY_SCRUB_INTERVAL_MS: 60_000,
-    OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK: 1_000,
-    OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK: 1_073_741_824,
+    OPENBUCKET_INTEGRITY_SCRUB_ENABLED: false,
+    OPENBUCKET_INTEGRITY_SCRUB_INTERVAL_MS: 60_000,
+    OPENBUCKET_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK: 1_000,
+    OPENBUCKET_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK: 1_073_741_824,
     // Prometheus /metrics + OpenTelemetry (STORY-1202). Off by default; a library
     // host opts in via the `metrics` / `tracing` option blocks. `resolveOptions`
     // already defaulted the mode to 'off'.

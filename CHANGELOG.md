@@ -9,6 +9,23 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (pre-1.0): standalone env-var prefix unified onto `OPENBUCKET_`.**
+  The replication, scheduled-backup, and integrity-scrub feature blocks used an
+  `OB_` prefix while every other feature block (tiering, endpoint, region, SSE)
+  used `OPENBUCKET_`. They are now consistent. Rename in your `.env` / compose /
+  deploy config:
+  - `OB_REPLICATION_*` → `OPENBUCKET_REPLICATION_*`
+  - `OB_SCHEDULED_BACKUP_*` → `OPENBUCKET_SCHEDULED_BACKUP_*`
+  - `OB_INTEGRITY_*` → `OPENBUCKET_INTEGRITY_*`
+
+  This is a hard rename with **no backward-compatible aliases** — the old names
+  are no longer read. The bare core vars (`DATA_DIR`, `JWT_SECRET`,
+  `ROOT_ACCESS_KEY_ID`, `PORT`, …) and the already-bare feature knobs
+  (`WEBHOOK_*`, `METRICS_*`, `RESTORE_*`, …) are unchanged. The programmatic
+  `OpenBucketModule.forRoot` API is unaffected.
+
 ## [0.1.0-alpha.18] — 2026-07-08
 
 ### Added
@@ -168,7 +185,7 @@ Feature release — durability & cloud replication (EPIC-10).
   **transactional outbox** and mirrored by a background worker with per-key
   ordering, last-writer-wins coalescing, exponential-backoff retry, and a
   dead-letter cap — resuming on boot and surviving remote outages. Configure via
-  `OB_REPLICATION_*` env vars or the `replication` module option.
+  `OPENBUCKET_REPLICATION_*` env vars or the `replication` module option.
 - **Cold-object tiering** — objects not accessed within a policy window are
   offloaded to the replication target to free local disk; a `GET` transparently
   rehydrates them (read-through). Lifecycle `<Transition>` rules now drive tiering.

@@ -74,8 +74,8 @@ so it never starves request traffic.
 
 ```bash
 # Enable the scrubber (standalone):
-OB_INTEGRITY_SCRUB_ENABLED=true
-OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK=1073741824   # 1 GiB/tick (default)
+OPENBUCKET_INTEGRITY_SCRUB_ENABLED=true
+OPENBUCKET_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK=1073741824   # 1 GiB/tick (default)
 ```
 
 When a blob is `corrupt` **and** a replication target is configured, the scrubber
@@ -97,11 +97,11 @@ resumes on boot after a crash or a remote outage — local reads and writes keep
 working while the remote is unreachable, and the backlog drains on recovery.
 
 ```bash
-OB_REPLICATION_ENABLED=true
-OB_REPLICATION_BUCKET=my-remote-mirror       # must already exist
-OB_REPLICATION_ACCESS_KEY_ID=…
-OB_REPLICATION_SECRET_ACCESS_KEY=…
-# Omit OB_REPLICATION_ENDPOINT for real AWS S3; set it for R2/B2/MinIO.
+OPENBUCKET_REPLICATION_ENABLED=true
+OPENBUCKET_REPLICATION_BUCKET=my-remote-mirror       # must already exist
+OPENBUCKET_REPLICATION_ACCESS_KEY_ID=…
+OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY=…
+# Omit OPENBUCKET_REPLICATION_ENDPOINT for real AWS S3; set it for R2/B2/MinIO.
 ```
 
 :::note[Plaintext over the wire]
@@ -132,11 +132,11 @@ Beyond the on-demand backup/restore endpoints, OpenBucket can write **`.zip`
 snapshots on a schedule** and prune them by a retention policy:
 
 ```bash
-OB_SCHEDULED_BACKUP_ENABLED=true
-OB_SCHEDULED_BACKUP_SCOPE=instance           # or 'buckets' (one .zip per bucket)
-OB_SCHEDULED_BACKUP_CRON='0 3 * * *'         # OR OB_SCHEDULED_BACKUP_INTERVAL_MINUTES
-OB_SCHEDULED_BACKUP_KEEP_LAST=7              # retention floor
-OB_SCHEDULED_BACKUP_MAX_AGE_DAYS=30          # union with keep-last
+OPENBUCKET_SCHEDULED_BACKUP_ENABLED=true
+OPENBUCKET_SCHEDULED_BACKUP_SCOPE=instance           # or 'buckets' (one .zip per bucket)
+OPENBUCKET_SCHEDULED_BACKUP_CRON='0 3 * * *'         # OR OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES
+OPENBUCKET_SCHEDULED_BACKUP_KEEP_LAST=7              # retention floor
+OPENBUCKET_SCHEDULED_BACKUP_MAX_AGE_DAYS=30          # union with keep-last
 ```
 
 Each snapshot is written **atomically** (stream to `<final>.part`, fsync, rename)

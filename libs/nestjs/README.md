@@ -813,7 +813,7 @@ OpenBucketModule.forRoot({
 })
 ```
 
-Standalone (env-configured) deployments use the equivalent `OB_REPLICATION_*`
+Standalone (env-configured) deployments use the equivalent `OPENBUCKET_REPLICATION_*`
 variables — see the [root README](../../README.md#async-replication).
 
 - **A present-but-partial `replication` block refuses to boot** (you must supply
@@ -909,7 +909,7 @@ OpenAPI doc so the generated client has a typed `BackupScheduleService`):
 The admin console's **Settings → Backup & Restore** tab shows last-run / next-run
 + a snapshot count and a **Run now** button.
 
-Standalone (env) equivalents: `OB_SCHEDULED_BACKUP_ENABLED`, `_SCOPE`,
+Standalone (env) equivalents: `OPENBUCKET_SCHEDULED_BACKUP_ENABLED`, `_SCOPE`,
 `_INTERVAL_MINUTES` / `_CRON`, `_DIR`, `_KEEP_LAST`, `_MAX_AGE_DAYS`,
 `_CHECK_INTERVAL_MS`, `_PUSH_TO_REPLICATION` — see `.env.example`.
 
@@ -998,15 +998,15 @@ between batches (the same throttling shape as the tiering/reconcile runners).
 Tiered objects (`location !== 'local'`) and pre-F1 rows without a stored
 `contentSha256` are skipped, never marked corrupt.
 
-Standalone deployments configure it via `OB_INTEGRITY_SCRUB_*` environment
+Standalone deployments configure it via `OPENBUCKET_INTEGRITY_SCRUB_*` environment
 variables (defaults shown):
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OB_INTEGRITY_SCRUB_ENABLED` | `false` | Master switch. A fresh install performs zero extra disk reads / DB writes. |
-| `OB_INTEGRITY_SCRUB_INTERVAL_MS` | `60000` | Tick interval (floor 1s). |
-| `OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK` | `1000` | Hard per-tick object cap — bounds detection work regardless of blob sizes. |
-| `OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK` | `1073741824` (1 GiB) | Per-tick byte budget: the tick stops once this many bytes have been hashed. |
+| `OPENBUCKET_INTEGRITY_SCRUB_ENABLED` | `false` | Master switch. A fresh install performs zero extra disk reads / DB writes. |
+| `OPENBUCKET_INTEGRITY_SCRUB_INTERVAL_MS` | `60000` | Tick interval (floor 1s). |
+| `OPENBUCKET_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK` | `1000` | Hard per-tick object cap — bounds detection work regardless of blob sizes. |
+| `OPENBUCKET_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK` | `1073741824` (1 GiB) | Per-tick byte budget: the tick stops once this many bytes have been hashed. |
 
 The admin API exposes a read model + a manual trigger under `/api/admin/integrity`
 (JWT-guarded, in the OpenAPI doc so the generated client has a typed

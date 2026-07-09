@@ -65,7 +65,7 @@ export function resolveReplicationConfig(config: AppConfigService): ReplicationC
     const { insecure } = validateReplicationEndpoint(endpoint);
     if (insecure) {
       new Logger('ReplicationConfig').warn(
-        `OB_REPLICATION_ENDPOINT uses plaintext http:// — replicated object bytes ` +
+        `OPENBUCKET_REPLICATION_ENDPOINT uses plaintext http:// — replicated object bytes ` +
           `(decrypted plaintext) will traverse the network unencrypted. Use https:// ` +
           `unless the target is on a trusted LAN (e.g. MinIO).`,
       );

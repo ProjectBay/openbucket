@@ -144,10 +144,10 @@ catch bit-rot or tampering at rest. It's **off by default** and strictly rate
 limited so it never starves request traffic:
 
 ```bash
-OB_INTEGRITY_SCRUB_ENABLED=true
-OB_INTEGRITY_SCRUB_INTERVAL_MS=60000          # tick cadence
-OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK=1000  # per-tick object budget
-OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK=...     # per-tick byte budget
+OPENBUCKET_INTEGRITY_SCRUB_ENABLED=true
+OPENBUCKET_INTEGRITY_SCRUB_INTERVAL_MS=60000          # tick cadence
+OPENBUCKET_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK=1000  # per-tick object budget
+OPENBUCKET_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK=...     # per-tick byte budget
 ```
 
 Each object gets a verdict (`unchecked` / `ok` / `corrupt`). When a

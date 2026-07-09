@@ -78,14 +78,14 @@ snapshot to your replication target.
 ### Standalone (env)
 
 ```bash
-OB_SCHEDULED_BACKUP_ENABLED=true
-OB_SCHEDULED_BACKUP_SCOPE=instance          # or `buckets` (one .zip per bucket)
-OB_SCHEDULED_BACKUP_CRON="0 3 * * *"        # 03:00 daily — XOR with INTERVAL_MINUTES
-OB_SCHEDULED_BACKUP_KEEP_LAST=7             # keep the newest N (default 7)
-OB_SCHEDULED_BACKUP_MAX_AGE_DAYS=30         # also keep anything younger (default 30)
-OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION=false
-# OB_SCHEDULED_BACKUP_DIR=/var/lib/openbucket/backups   # default <dataDir>/backups
-# OB_SCHEDULED_BACKUP_INTERVAL_MINUTES=1440             # instead of a cron
+OPENBUCKET_SCHEDULED_BACKUP_ENABLED=true
+OPENBUCKET_SCHEDULED_BACKUP_SCOPE=instance          # or `buckets` (one .zip per bucket)
+OPENBUCKET_SCHEDULED_BACKUP_CRON="0 3 * * *"        # 03:00 daily — XOR with INTERVAL_MINUTES
+OPENBUCKET_SCHEDULED_BACKUP_KEEP_LAST=7             # keep the newest N (default 7)
+OPENBUCKET_SCHEDULED_BACKUP_MAX_AGE_DAYS=30         # also keep anything younger (default 30)
+OPENBUCKET_SCHEDULED_BACKUP_PUSH_TO_REPLICATION=false
+# OPENBUCKET_SCHEDULED_BACKUP_DIR=/var/lib/openbucket/backups   # default <dataDir>/backups
+# OPENBUCKET_SCHEDULED_BACKUP_INTERVAL_MINUTES=1440             # instead of a cron
 ```
 
 ### Embedded (`forRoot`)
@@ -136,7 +136,7 @@ it can never launch a second overlapping snapshot — a concurrent request retur
 
 ## Push snapshots off-box
 
-Set `pushToReplication` (env `OB_SCHEDULED_BACKUP_PUSH_TO_REPLICATION=true`) to
+Set `pushToReplication` (env `OPENBUCKET_SCHEDULED_BACKUP_PUSH_TO_REPLICATION=true`) to
 copy each finished snapshot to your configured [replication
 target](./replication-and-tiering.md) under a reserved prefix — so a lost data
 volume doesn't take your backups with it.
@@ -144,7 +144,7 @@ volume doesn't take your backups with it.
 :::note[Enable replication first]
 If you set the push flag but replication is off, the runner logs a boot-time
 warning and writes snapshots locally only — the push is a no-op until you
-configure `OB_REPLICATION_*`.
+configure `OPENBUCKET_REPLICATION_*`.
 :::
 
 :::warning[Snapshots are plaintext]

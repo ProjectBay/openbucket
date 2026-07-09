@@ -97,17 +97,17 @@ scripts were removed at close; the cases were promoted into the unit specs):
 - **Large objects** — the object size is always known (from the object row), so
   a plain `PutObjectCommand` with `ContentLength` is used below the threshold and
   `@aws-sdk/lib-storage` `Upload` (streaming multipart) above it. Threshold:
-  `largeObjectThresholdBytes = 64 MiB` (`OB_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES`).
+  `largeObjectThresholdBytes = 64 MiB` (`OPENBUCKET_REPLICATION_LARGE_OBJECT_THRESHOLD_BYTES`).
 - **Crash-resume / idempotency** — no persisted `inflight` state is needed
   (single process + the scheduler's no-pileup guard). A crash mid-send leaves the
   intent `pending`; the first tick after boot re-sends it. PUT is idempotent by
   key, DELETE is idempotent (a remote 404 is success), so a re-send is safe.
 - **Retry realism** — full-jitter exponential backoff `min(1s * 2^(n-1), 5min)
   * rand(0.5..1.5)`; dead-letter to `status='failed'` after
-  `maxAttempts = 12` (`OB_REPLICATION_MAX_ATTEMPTS`). The SDK's own retry is
+  `maxAttempts = 12` (`OPENBUCKET_REPLICATION_MAX_ATTEMPTS`). The SDK's own retry is
   disabled (`maxAttempts: 1`) so the worker owns the single retry budget.
 - **Security** — an `http://` endpoint logs a boot-time warning (replicated
-  bytes are object plaintext); `OB_REPLICATION_SECRET_ACCESS_KEY` /
+  bytes are object plaintext); `OPENBUCKET_REPLICATION_SECRET_ACCESS_KEY` /
   `secretAccessKey` / `authorization` are in the pino redact paths.
 
 ## References

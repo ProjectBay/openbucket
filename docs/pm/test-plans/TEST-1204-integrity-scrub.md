@@ -23,11 +23,11 @@ through the admin API and console indicator — all without leaking any target c
 - Replication: a fake S3 target (e.g. an in-process `@aws-sdk/client-s3` mock or a local S3
   double) preloaded with the GOOD copy of the object under its raw key; plus a run with the
   target disabled and a run where the remote copy is ALSO corrupt.
-- Env toggles: `OB_INTEGRITY_SCRUB_ENABLED`, `OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK`,
-  `OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK`, `OB_REPLICATION_ENABLED`.
+- Env toggles: `OPENBUCKET_INTEGRITY_SCRUB_ENABLED`, `OPENBUCKET_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK`,
+  `OPENBUCKET_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK`, `OPENBUCKET_REPLICATION_ENABLED`.
 
 ## Cases
-1. Default-off: with `OB_INTEGRITY_SCRUB_ENABLED` unset, invoking `run()` performs zero
+1. Default-off: with `OPENBUCKET_INTEGRITY_SCRUB_ENABLED` unset, invoking `run()` performs zero
    `scanForScrub`/`getBlob` calls (asserted via spies) and writes nothing to the DB.
 2. Verifier ok/corrupt/SSE: `IntegrityVerifier.verify` returns `ok:true` for an intact blob,
    `ok:false` with the recomputed digest for a byte-flipped blob, and correctly decrypts +

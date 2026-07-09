@@ -61,11 +61,11 @@ follows the `TieringSweepRunner` / `ReconcileRunner` throttling shape exactly.
   the admin `status` endpoint reads durable numbers. When `scanForScrub` returns empty, reset
   the cursor to null (full pass complete) and stamp `lastRunAt`.
 - Config knobs (`env.schema.ts`, follow the `envBoolean` / `z.coerce.number` pattern used by
-  `USAGE_ROLLUP_INTERVAL_MS` and `OB_REPLICATION_ENABLED`):
-  - `OB_INTEGRITY_SCRUB_ENABLED` → `envBoolean(false)`
-  - `OB_INTEGRITY_SCRUB_INTERVAL_MS` → `z.coerce.number().int().min(1_000).default(60_000)`
-  - `OB_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK` → `z.coerce.number().int().min(1).default(1000)`
-  - `OB_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK` → `z.coerce.number().int().positive().default(1_073_741_824)` (1 GiB/tick throttle)
+  `USAGE_ROLLUP_INTERVAL_MS` and `OPENBUCKET_REPLICATION_ENABLED`):
+  - `OPENBUCKET_INTEGRITY_SCRUB_ENABLED` → `envBoolean(false)`
+  - `OPENBUCKET_INTEGRITY_SCRUB_INTERVAL_MS` → `z.coerce.number().int().min(1_000).default(60_000)`
+  - `OPENBUCKET_INTEGRITY_SCRUB_MAX_OBJECTS_PER_TICK` → `z.coerce.number().int().min(1).default(1000)`
+  - `OPENBUCKET_INTEGRITY_SCRUB_MAX_BYTES_PER_TICK` → `z.coerce.number().int().positive().default(1_073_741_824)` (1 GiB/tick throttle)
 - Registration: add `IntegrityScrubRunner` BOTH to `providers` and to the `SCHEDULED_TASKS`
   factory `inject` array in `background.module.ts` (NestJS has no `multi` flag — see the
   module's own doc comment).
@@ -80,7 +80,7 @@ follows the `TieringSweepRunner` / `ReconcileRunner` throttling shape exactly.
   configured target coordinates, bounded to 255). The byte budget bounds disk read amplification.
 
 ## Acceptance criteria
-- [ ] With `OB_INTEGRITY_SCRUB_ENABLED` unset, `run()` returns before any repository/blob access (asserted via mocks).
+- [ ] With `OPENBUCKET_INTEGRITY_SCRUB_ENABLED` unset, `run()` returns before any repository/blob access (asserted via mocks).
 - [ ] A tick hashing enough to hit `MAX_OBJECTS_PER_TICK` or `MAX_BYTES_PER_TICK` persists the cursor and stops; the next tick resumes from it.
 - [ ] A blob whose bytes are flipped on disk is marked `integrityStatus='corrupt'` with `integrityCheckedAt` set; an intact blob is marked `ok`.
 - [ ] `IntegrityScrubRunner` appears in `background.module.ts` providers and the `SCHEDULED_TASKS` inject list; `nx test nestjs --testPathPattern=integrity-scrub.runner` passes.

@@ -167,7 +167,7 @@ export default {
       runStarted: 'Sicherung gestartet',
       runJoined: 'Eine Sicherung läuft bereits',
       runFailed: 'Sicherung konnte nicht gestartet werden',
-      offHint: 'Geplante Sicherungen sind deaktiviert. Setze OB_SCHEDULED_BACKUP_*, um sie zu aktivieren.',
+      offHint: 'Geplante Sicherungen sind deaktiviert. Setze OPENBUCKET_SCHEDULED_BACKUP_*, um sie zu aktivieren.',
     },
   },
   breadcrumb: {
