@@ -1,0 +1,34 @@
+# OpenBucket — Fly.io config. https://fly.io/docs/reference/configuration/
+#
+#   fly launch --copy-config --no-deploy          # import this file
+#   fly volumes create openbucket_data --size 10
+#   fly secrets set \
+#     ADMIN_PASSWORD_HASH="$(npx @openbucket/nestjs hash 'your-admin-password')" \
+#     JWT_SECRET="$(openssl rand -hex 32)" \
+#     ROOT_SECRET_ACCESS_KEY="$(openssl rand -hex 32)"
+#   fly deploy
+app = "openbucket"
+primary_region = "iad"
+
+[build]
+  image = "ghcr.io/projectbay/openbucket:0.1.0-alpha.18"
+
+[env]
+  DATA_DIR = "/data"
+  PORT = "9000"
+  ADMIN_USERNAME = "admin"
+  ROOT_ACCESS_KEY_ID = "AKIAOPENBUCKETROOT01"
+  OPENBUCKET_REGION = "us-east-1"
+
+# ADMIN_PASSWORD_HASH, JWT_SECRET, ROOT_SECRET_ACCESS_KEY are set via
+# `fly secrets set` (see the header) — never commit them.
+
+[http_service]
+  internal_port = 9000
+  force_https = true
+  auto_stop_machines = false
+  min_machines_running = 1
+
+[[mounts]]
+  source = "openbucket_data"
+  destination = "/data"
