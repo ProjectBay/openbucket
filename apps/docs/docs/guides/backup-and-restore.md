@@ -63,6 +63,14 @@ the archive is gone. Restore into a fresh instance, or be certain you mean to
 overwrite.
 :::
 
+A restore rebuilds full fidelity (backup manifest **v2**): every object's **prior
+versions** (whole history, in order — not just the current one), each bucket's
+**default encryption**, **lifecycle**, **CORS**, and **policy**. The per-bucket
+config is applied **before** any object bytes, so restored objects are
+**re-encrypted at rest under the target instance's own SSE key** — encryption is
+preserved, never silently downgraded to plaintext. Older **v1** archives still
+restore (they carry current-version bytes only, with no per-bucket config).
+
 Uploads stream straight to disk (the global body parser is off on these routes),
 so multi-hundred-megabyte archives don't buffer in memory. Restore is also
 bounded by guard rails against a hostile archive: total bytes, per-entry bytes,

@@ -446,6 +446,46 @@ export class ObjectService {
   }
 
   /**
+   * HTTP-agnostic read of a SPECIFIC stored version's DECRYPTED bytes — the backup
+   * snapshot's version-capture seam (mirrors {@link openObjectStream} for the
+   * current pointer). Resolves whether the bytes live at the pointer path (this
+   * version IS the current one — demote-on-write only copies a version under
+   * `<key>.v/` once superseded) or under `<key>.v/<versionId>`, decrypts SSE-S3 on
+   * the fly against that version's own IV, and returns `null` for a missing blob or
+   * a delete-marker (no payload). The stream is a plain fs/transform stream; reading
+   * it needs no MikroORM context.
+   */
+  async openVersionStream(
+    bucket: string,
+    key: string,
+    versionId: string,
+  ): Promise<{ stream: Readable; size: number } | null> {
+    const ver = await this.versions.getVersion(bucket, key, versionId);
+    if (!ver || ver.isDeleteMarker) return null;
+    const current = await this.objects.findCurrentVersion(bucket, key);
+    const isCurrent = current?.currentVersionId === versionId;
+
+    let blob: { stream: import('node:fs').ReadStream };
+    try {
+      blob = isCurrent
+        ? await this.blobs.getBlob(bucket, key)
+        : await this.blobs.getVersionBlob(bucket, key, versionId);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw err;
+    }
+
+    let stream: Readable = blob.stream;
+    if (ver.encryption) {
+      const sk = this.sseKey.key();
+      const iv = Buffer.from(ver.encryption.iv, 'base64');
+      stream = blob.stream.pipe(createSseDecipher(sk, iv));
+      stream.on('error', () => blob.stream.destroy());
+    }
+    return { stream, size: Number(ver.size) };
+  }
+
+  /**
    * POST /:bucket — browser-form direct upload (WHITEPAPER §2.5.1, STORY-0802).
    * Bucket-scope: the key arrives as a form field, not a path segment. The
    * `PostObjectInterceptor` has already streaming-parsed the multipart body,

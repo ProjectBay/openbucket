@@ -18,27 +18,24 @@ import { SpawnedApp, spawnApp } from './support/spawn-app';
  *   generated SSE key, same root creds/admin) → restore into B →
  *   assert rich fidelity on B, not just bytes.
  *
- * It asserts the ACTUAL restore behavior for every dimension. Where a dimension
- * does NOT survive by design (the backup manifest v1 is deliberately narrow —
- * see `admin/backup/backup.service.ts` `BackupManifest`), the test documents the
- * gap with an explicit assertion + comment rather than faking a pass. Those gaps
- * are the report's headline: they are candidate 1.0 data-loss surfaces.
+ * It asserts the ACTUAL restore behavior for every dimension. The backup manifest
+ * is now **v2** (see `admin/backup/backup.service.ts` `BackupManifest`), which
+ * closed the v1 data-loss gaps this drill originally documented: it captures the
+ * full per-key version history plus per-bucket default-encryption / lifecycle /
+ * CORS / policy, and on restore reapplies the bucket config (encryption FIRST)
+ * BEFORE writing object bytes, so restored objects re-encrypt under B's own key.
  *
- * Fidelity matrix (what v1 backup carries, per `BackupManifest`):
- *   SURVIVES:  object bytes (current version), Content-Type, user-metadata,
- *              object tags, bucket versioning status, at-rest SSE round-trip
- *              (backup stores DECRYPTED bytes, so B reads plaintext even though
- *              B's generated SSE key differs from A's).
- *   DROPPED:   prior object versions (only the current pointer row is backed up),
- *              per-bucket default-encryption config, lifecycle, CORS, policy.
+ * Fidelity matrix (what the v2 backup carries + restores):
+ *   SURVIVES:  object bytes (current + ALL prior versions), Content-Type,
+ *              user-metadata, object tags, bucket versioning status, per-bucket
+ *              default-encryption config WITH at-rest re-encryption on B (the blob
+ *              is ciphertext under B's key, not plaintext), lifecycle, CORS, policy.
  *
- * Two S3 read-path fixes surfaced by this drill (NOT backup defects) have since
- * landed, and this spec now asserts the fixed behavior: (#5) S3 `HEAD` emits the
- * stored `x-amz-meta-*` response headers, and (#2) GET/HEAD honour `?versionId`,
- * so a prior version's bytes are retrievable over the wire on instance A (which
- * still holds the version blobs). The backup manifest itself is unchanged — the
- * "prior versions DROPPED on B" gap below is a backup-scope limitation, distinct
- * from the read path.
+ * Two S3 read-path fixes surfaced by this drill (NOT backup defects) also landed
+ * and are asserted: (#5) S3 `HEAD` emits the stored `x-amz-meta-*` response
+ * headers, and (#2) GET/HEAD honour `?versionId`, so a specific version's bytes
+ * are retrievable over the wire — on A (which holds the original version blobs)
+ * AND on B (whose version history was rebuilt by the v2 restore).
  */
 
 const PORT_A = 9280;
@@ -252,8 +249,9 @@ describe('Backup → fresh-instance restore full-fidelity drill (e2e)', () => {
     expect([200, 201]).toContain(restore.status);
     const summary = JSON.parse(restore.body);
     expect(summary.bucketsRestored).toBe(2);
-    // Only CURRENT pointer rows are backed up → 3 objects (doc.txt, rich.json, secret.bin), NOT 5.
-    expect(summary.objectsRestored).toBe(3);
+    // v2 restores every version write: doc.txt ×3 + rich.json ×1 (vault, versioned)
+    // + secret.bin ×1 (crypt, unversioned) = 5 object writes.
+    expect(summary.objectsRestored).toBe(5);
   }, 120_000);
 
   afterAll(async () => {
@@ -336,65 +334,80 @@ describe('Backup → fresh-instance restore full-fidelity drill (e2e)', () => {
   }, 30_000);
 
   // ===================================================================
-  // GAPS — dimensions the v1 backup manifest does NOT carry. These assert
-  // the ACTUAL (lossy) behavior. Each is a candidate 1.0 data-loss surface.
+  // FORMERLY GAPS — dimensions the v1 manifest dropped that the v2 manifest
+  // now PRESERVES on restore. Each assertion is the flipped (now-survives)
+  // proof of the fidelity fix.
   // ===================================================================
 
-  it('GAP: prior object versions are DROPPED — only the current version survives on B', async () => {
-    // A had 3 versions of doc.txt; the backup only captures the current pointer
-    // row (`objectRepo.listByPrefix` returns one row per key), so B has exactly 1.
-    // *** DATA-LOSS GAP: version history does not survive a backup/restore. ***
+  it('SURVIVES: all prior object versions are restored on B (was DROPPED in v1)', async () => {
+    // A had 3 versions of doc.txt. The v2 backup captures the full version history
+    // and the restore replays every version in order into B's (versioning-enabled)
+    // `vault`, so B's version listing shows all 3 — not just the current pointer.
     const list = await s3(PORT_B, 'GET', '/vault?versions&prefix=doc.txt');
     expect(list.status).toBe(200);
-    expect(countVersions(list.body)).toBe(1); // was 3 on A
+    expect(countVersions(list.body)).toBe(3); // was 1 under v1
   }, 30_000);
 
-  it('SURVIVES: GET ?versionId retrieves a specific prior version on A (read-path fix #2)', async () => {
-    // Read-path fix (issue #2): the S3 read path now honours `?versionId`, so on the
-    // ORIGINAL instance A (which still has all 3 version blobs under `<key>.v/`) each
-    // stored version's bytes are retrievable over the wire, and the response carries
-    // its `x-amz-version-id`. (The backup GAP below is unaffected — B only has 1.)
-    const versionsXml = (await s3(PORT_A, 'GET', '/vault?versions&prefix=doc.txt')).body;
-    const ids = [...versionsXml.matchAll(/<VersionId>([^<]+)<\/VersionId>/g)].map((m) => m[1]);
-    expect(ids.length).toBe(3);
-    const oldest = ids[ids.length - 1]; // uuidv7 sorts newest-first in the listing
-    const got = await s3(PORT_A, 'GET', `/vault/doc.txt?versionId=${oldest}`);
-    expect(got.body).toBe('version-1'); // the requested prior version, not the current
-    expect(got.headers['x-amz-version-id']).toBe(oldest);
-    // Current read (no versionId) still serves the newest version.
+  it('SURVIVES: GET ?versionId retrieves a specific prior version on BOTH A and B', async () => {
+    // Read-path fix (issue #2): the S3 read path honours `?versionId`. On A (original
+    // version blobs) the oldest version reads back its bytes; and now on B — whose
+    // version history was rebuilt by the v2 restore — the oldest of B's OWN
+    // (regenerated) version ids also serves `version-1`, proving history survived.
+    const versionsA = (await s3(PORT_A, 'GET', '/vault?versions&prefix=doc.txt')).body;
+    const idsA = [...versionsA.matchAll(/<VersionId>([^<]+)<\/VersionId>/g)].map((m) => m[1]);
+    expect(idsA.length).toBe(3);
+    const oldestA = idsA[idsA.length - 1]; // uuidv7 sorts newest-first in the listing
+    const gotA = await s3(PORT_A, 'GET', `/vault/doc.txt?versionId=${oldestA}`);
+    expect(gotA.body).toBe('version-1');
+    expect(gotA.headers['x-amz-version-id']).toBe(oldestA);
     expect((await s3(PORT_A, 'GET', '/vault/doc.txt')).body).toBe('version-3-current');
+
+    // B: same property against B's regenerated version ids.
+    const versionsB = (await s3(PORT_B, 'GET', '/vault?versions&prefix=doc.txt')).body;
+    const idsB = [...versionsB.matchAll(/<VersionId>([^<]+)<\/VersionId>/g)].map((m) => m[1]);
+    expect(idsB.length).toBe(3);
+    const oldestB = idsB[idsB.length - 1];
+    const gotB = await s3(PORT_B, 'GET', `/vault/doc.txt?versionId=${oldestB}`);
+    expect(gotB.body).toBe('version-1'); // the requested prior version survived the restore
+    expect(gotB.headers['x-amz-version-id']).toBe(oldestB);
+    expect((await s3(PORT_B, 'GET', '/vault/doc.txt')).body).toBe('version-3-current');
   }, 30_000);
 
-  it('GAP: per-bucket default-encryption config is DROPPED on B (object stored as PLAINTEXT)', async () => {
-    // The manifest never captures `bucket.encryption`, so B's `crypt` bucket has NO
-    // default encryption after restore...
+  it('SURVIVES: per-bucket default-encryption config + at-rest RE-ENCRYPTION on B (was DROPPED in v1)', async () => {
+    // The v2 manifest captures `bucket.encryption`, and the restore applies it
+    // BEFORE writing object bytes — so B's `crypt` bucket reports its default SSE...
     const enc = await s3(PORT_B, 'GET', '/crypt?encryption');
-    expect(enc.status).toBe(404);
-    expect(enc.body).toContain('ServerSideEncryptionConfigurationNotFoundError');
+    expect(enc.status).toBe(200);
+    expect(enc.body).toContain('<SSEAlgorithm>AES256</SSEAlgorithm>');
 
-    // ...and because the writer keys off the (now-missing) bucket config, the
-    // restored blob is written as PLAINTEXT on B — the at-rest-encryption PROPERTY
-    // is lost even though the bytes survive.
-    // *** GAP: an object encrypted-at-rest on A is stored UNENCRYPTED on B. ***
+    // ...and the restored blob is written ENCRYPTED at rest under B's OWN SSE key
+    // (which differs from A's — asserted in beforeAll). The at-rest-encryption
+    // PROPERTY is preserved, not silently downgraded to plaintext.
     const diskB = readFileSync(join(appB.dataDir, 'blobs', 'crypt', 'secret.bin'));
-    expect(diskB.toString('latin1')).toContain('SUPER-SECRET-PLAINTEXT'); // NOT re-encrypted on B
+    expect(diskB.toString('latin1')).not.toContain('SUPER-SECRET-PLAINTEXT'); // ciphertext on B
+    // And it still decrypts correctly on read (round-trip under B's key).
+    expect((await s3(PORT_B, 'GET', '/crypt/secret.bin')).body).toBe(SSE_PLAINTEXT);
   }, 30_000);
 
-  it('GAP: bucket lifecycle config is DROPPED on B', async () => {
+  it('SURVIVES: bucket lifecycle config round-trips on B (was DROPPED in v1)', async () => {
     const lc = await s3(PORT_B, 'GET', '/vault?lifecycle');
-    expect(lc.status).toBe(404);
-    expect(lc.body).toContain('NoSuchLifecycleConfiguration');
+    expect(lc.status).toBe(200);
+    expect(lc.body).toContain('<ID>expire-tmp</ID>');
+    expect(lc.body).toContain('<Prefix>tmp/</Prefix>');
+    expect(lc.body).toContain('<Days>30</Days>');
   }, 30_000);
 
-  it('GAP: bucket CORS config is DROPPED on B', async () => {
+  it('SURVIVES: bucket CORS config round-trips on B (was DROPPED in v1)', async () => {
     const cors = await s3(PORT_B, 'GET', '/vault?cors');
-    expect(cors.status).toBe(404);
-    expect(cors.body).toContain('NoSuchCORSConfiguration');
+    expect(cors.status).toBe(200);
+    expect(cors.body).toContain('<AllowedOrigin>https://example.com</AllowedOrigin>');
+    expect(cors.body).toContain('<MaxAgeSeconds>3000</MaxAgeSeconds>');
   }, 30_000);
 
-  it('GAP: bucket policy is DROPPED on B', async () => {
+  it('SURVIVES: bucket policy round-trips on B (was DROPPED in v1)', async () => {
     const pol = await s3(PORT_B, 'GET', '/vault?policy');
-    expect(pol.status).toBe(404);
-    expect(pol.body).toContain('NoSuchBucketPolicy');
+    expect(pol.status).toBe(200);
+    expect(pol.body).toContain('"Sid":"PublicRead"');
+    expect(pol.body).toContain('arn:aws:s3:::vault/*');
   }, 30_000);
 });

@@ -300,6 +300,43 @@ export class ObjectRepository extends EntityRepository<ObjectEntity> {
     return { rows, total };
   }
 
+  /**
+   * Keyset-paged scan of EVERY version row for a bucket, ordered `(key ASC,
+   * versionId ASC)` — i.e. oldest→newest per key, since `versionId` is a
+   * time-sortable UUIDv7. Backs the v2 backup snapshot, which replays each key's
+   * versions in creation order to rebuild its history + current pointer. Includes
+   * delete-marker rows (which carry no blob) so restore can reconstruct the exact
+   * sequence of writes and deletes. Requests `limit + 1` to detect truncation the
+   * same way {@link listByPrefix} does; the caller advances the cursor from the
+   * last returned row's `(key, versionId)`.
+   */
+  async listVersionsForBackup(
+    bucket: string,
+    afterKey: string | undefined,
+    afterVersionId: string | undefined,
+    limit: number,
+  ): Promise<{ rows: ObjectVersion[]; truncated: boolean }> {
+    const em = this.getEntityManager();
+    const qb = em
+      .createQueryBuilder(ObjectVersion, 'v')
+      .select('*')
+      .where({ bucket: { name: bucket } });
+
+    if (afterKey !== undefined && afterVersionId !== undefined) {
+      // Row strictly after (afterKey, afterVersionId) in (key, versionId) order.
+      qb.andWhere({
+        $or: [
+          { key: { $gt: afterKey } },
+          { $and: [{ key: afterKey }, { versionId: { $gt: afterVersionId } }] },
+        ],
+      });
+    }
+
+    qb.orderBy({ key: 'ASC', versionId: 'ASC' }).limit(limit + 1);
+    const all = await qb.getResult();
+    return { rows: all.slice(0, limit), truncated: all.length > limit };
+  }
+
   /** Returns the most recent version row for (bucket, key). */
   async findLatestVersion(bucket: string, key: string): Promise<ObjectVersion | null> {
     const em = this.getEntityManager();
