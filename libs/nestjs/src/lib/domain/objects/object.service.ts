@@ -38,6 +38,7 @@ import {
   NoSuchBucketError,
   NoSuchKeyError,
   NoSuchObjectLockConfigurationError,
+  NoSuchVersionError,
   PreconditionFailedError,
 } from '../../s3/errors/s3-error';
 import { evaluatePolicy } from '../../s3/authz/policy-evaluator';
@@ -628,6 +629,14 @@ export class ObjectService {
    * through.
    */
   async getObject(req: Request, res: Response, bucket: string, key: string): Promise<undefined> {
+    // Versioned read (§3.11): `?versionId=` serves that specific stored version's
+    // bytes + metadata rather than the current pointer. Delegated so the current
+    // path (integrity gate, tiering, lastAccessed) stays untouched.
+    const versionId = readVersionId(req);
+    if (versionId !== undefined) {
+      return this.getObjectVersion(req, res, bucket, key, versionId);
+    }
+
     const obj = await this.objects.findCurrentVersion(bucket, key);
     if (!obj) throw new NoSuchKeyError(key);
     const size = Number(obj.size);
@@ -701,6 +710,11 @@ export class ObjectService {
     res.setHeader('ETag', `"${obj.etag}"`);
     res.setHeader('Last-Modified', obj.modifiedAt.toUTCString());
     res.setHeader('Accept-Ranges', 'bytes');
+    // User metadata round-trips as x-amz-meta-<k> on the read path (standard S3);
+    // mirrors HEAD so a GET and a HEAD advertise the same metadata.
+    for (const [name, value] of Object.entries(obj.userMetadata ?? {})) {
+      res.setHeader(`x-amz-meta-${name}`, value);
+    }
     if (obj.currentVersionId) res.setHeader('x-amz-version-id', obj.currentVersionId);
     // S3 emits x-amz-storage-class only for non-STANDARD classes (STORY-0901).
     if (obj.storageClass && obj.storageClass !== StorageClass.Standard) {
@@ -802,7 +816,14 @@ export class ObjectService {
    * GetObject's headers without streaming. NoSuchKey when absent/soft-deleted
    * (the exception filter renders HEAD errors body-less).
    */
-  async headObject(_req: Request, res: Response, bucket: string, key: string): Promise<undefined> {
+  async headObject(req: Request, res: Response, bucket: string, key: string): Promise<undefined> {
+    // Versioned read (§3.11): `?versionId=` reports that specific version's
+    // metadata headers instead of the current pointer's.
+    const versionId = readVersionId(req);
+    if (versionId !== undefined) {
+      return this.headObjectVersion(req, res, bucket, key, versionId);
+    }
+
     const obj = await this.objects.findCurrentVersion(bucket, key);
     if (!obj) throw new NoSuchKeyError(key);
     // Same active-content neutralization as GET (TASK-2110): a HEAD must advertise
@@ -823,6 +844,129 @@ export class ObjectService {
     }
     res.status(200);
     this.touchLastAccessed(obj);
+    return undefined;
+  }
+
+  /**
+   * GET /:bucket/:key?versionId= — stream a SPECIFIC stored version's bytes
+   * (§3.11). The version row carries its own etag/size/contentType/userMetadata
+   * and its own at-rest encryption IV, so a versioned read decrypts against that
+   * version, not the current pointer. The bytes live at the pointer path when the
+   * requested version IS the current one (demote-on-write only copies a version
+   * under `<key>.v/` once it's superseded); otherwise under `<key>.v/<versionId>`.
+   * Unknown/`delete-marker` versions → `NoSuchVersion` (404).
+   */
+  private async getObjectVersion(
+    req: Request,
+    res: Response,
+    bucket: string,
+    key: string,
+    versionId: string,
+  ): Promise<undefined> {
+    const ver = await this.versions.getVersion(bucket, key, versionId);
+    if (!ver || ver.isDeleteMarker) {
+      throw new NoSuchVersionError('The specified version does not exist.');
+    }
+    const current = await this.objects.findCurrentVersion(bucket, key);
+    const isCurrent = current?.currentVersionId === versionId;
+    const size = Number(ver.size);
+
+    let range: RangeSpec | undefined;
+    const rangeHeader = req.headers['range'];
+    if (typeof rangeHeader === 'string' && rangeHeader.length > 0) {
+      const parsed = parseRange(rangeHeader, size);
+      if (parsed === 'invalid') {
+        res.setHeader('Content-Range', `bytes */${size}`);
+        res.status(416);
+        res.end();
+        return undefined;
+      }
+      range = parsed;
+    }
+
+    // For an encrypted Range read, fetch from the block-aligned offset so the CTR
+    // keystream lines up; drop the intra-block prefix after decrypt (mirrors GET).
+    const readRange =
+      ver.encryption && range ? { start: alignedStart(range.start), end: range.end } : range;
+
+    let blob: { stream: import('node:fs').ReadStream };
+    try {
+      blob = isCurrent
+        ? await this.blobs.getBlob(bucket, key, readRange)
+        : await this.blobs.getVersionBlob(bucket, key, versionId, readRange);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new NoSuchVersionError('The specified version does not exist.');
+      }
+      throw err;
+    }
+
+    res.setHeader('Content-Type', applySafeObjectResponseHeaders(res, ver.contentType));
+    res.setHeader('ETag', `"${ver.etag}"`);
+    res.setHeader('Last-Modified', ver.createdAt.toUTCString());
+    res.setHeader('Accept-Ranges', 'bytes');
+    for (const [name, value] of Object.entries(ver.userMetadata ?? {})) {
+      res.setHeader(`x-amz-meta-${name}`, value);
+    }
+    res.setHeader('x-amz-version-id', ver.versionId);
+    if (range) {
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
+      res.setHeader('Content-Length', String(range.end - range.start + 1));
+    } else {
+      res.status(200);
+      res.setHeader('Content-Length', String(size));
+    }
+
+    const source = blob.stream;
+    let outStream: NodeJS.ReadableStream = source;
+    if (ver.encryption) {
+      const sk = this.sseKey.key();
+      const iv = Buffer.from(ver.encryption.iv, 'base64');
+      outStream = range
+        ? source
+            .pipe(createRangeDecipher(sk, iv, range.start))
+            .pipe(skipBytes(range.start - alignedStart(range.start)))
+        : source.pipe(createSseDecipher(sk, iv));
+    }
+    const onErr = (err: unknown): void => {
+      if (!res.headersSent) res.status(500).end();
+      else req.socket.destroy(err as Error);
+    };
+    res.once('close', () => {
+      if (!source.destroyed) source.destroy();
+    });
+    source.on('error', onErr);
+    if (outStream !== source) outStream.on('error', onErr);
+    outStream.pipe(res);
+    return undefined;
+  }
+
+  /**
+   * HEAD /:bucket/:key?versionId= — metadata headers for a specific version, no
+   * body (§3.11). Mirrors {@link getObjectVersion}'s header set without streaming.
+   */
+  private async headObjectVersion(
+    _req: Request,
+    res: Response,
+    bucket: string,
+    key: string,
+    versionId: string,
+  ): Promise<undefined> {
+    const ver = await this.versions.getVersion(bucket, key, versionId);
+    if (!ver || ver.isDeleteMarker) {
+      throw new NoSuchVersionError('The specified version does not exist.');
+    }
+    res.setHeader('Content-Type', applySafeObjectResponseHeaders(res, ver.contentType));
+    res.setHeader('ETag', `"${ver.etag}"`);
+    res.setHeader('Last-Modified', ver.createdAt.toUTCString());
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Length', String(Number(ver.size)));
+    for (const [name, value] of Object.entries(ver.userMetadata ?? {})) {
+      res.setHeader(`x-amz-meta-${name}`, value);
+    }
+    res.setHeader('x-amz-version-id', ver.versionId);
+    res.status(200);
     return undefined;
   }
 
@@ -1347,6 +1491,17 @@ export function decodeSearchCursor(
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Read a non-empty `?versionId=` query param off the request (§3.11). Returns
+ * `undefined` when absent or blank so the read path serves the current version
+ * unchanged. Only the first value is honoured if the param repeats.
+ */
+function readVersionId(req: Request): string | undefined {
+  const raw = (req.query as Record<string, unknown> | undefined)?.['versionId'];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 /** Collect `x-amz-meta-*` request headers into the object's user metadata. */

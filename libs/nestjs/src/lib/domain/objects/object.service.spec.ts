@@ -307,6 +307,88 @@ describe('ObjectService.headObject safe headers (TASK-2110)', () => {
   });
 });
 
+// --- versioned reads: GET/HEAD ?versionId (§3.11) ---
+describe('ObjectService versioned reads (?versionId)', () => {
+  const mkVerReq = (versionId: string, headers: Record<string, string> = {}): Request =>
+    ({ headers, query: { versionId }, socket: {} as unknown } as unknown as Request);
+
+  const makeSvc = (opts: {
+    version?: unknown;
+    current?: unknown;
+    blob?: unknown;
+    versionBlob?: unknown;
+  }) => {
+    const versions = {
+      getVersion: jest.fn().mockResolvedValue(opts.version ?? null),
+    } as unknown as VersionStoreService;
+    const repo = {
+      findCurrentVersion: jest.fn().mockResolvedValue(opts.current ?? null),
+    } as unknown as ObjectRepository;
+    const blobs = {
+      getBlob: jest.fn().mockResolvedValue(opts.blob),
+      getVersionBlob: jest.fn().mockResolvedValue(opts.versionBlob),
+    } as unknown as BlobStore;
+    return {
+      svc: new ObjectService(
+        {} as ObjectWriterService,
+        {} as BucketRepository,
+        repo,
+        blobs,
+        versions,
+        SERIALIZER,
+        SSE,
+      ),
+      versions,
+      blobs,
+    };
+  };
+
+  it('HEAD ?versionId throws NoSuchVersion for an unknown version', async () => {
+    const { svc } = makeSvc({ version: null });
+    await expect(svc.headObject(mkVerReq('nope'), mkRes(), 'b', 'k')).rejects.toMatchObject({
+      code: 'NoSuchVersion',
+      httpStatus: 404,
+    });
+  });
+
+  it('GET ?versionId throws NoSuchVersion for an unknown version', async () => {
+    const { svc } = makeSvc({ version: null });
+    await expect(svc.getObject(mkVerReq('nope'), mkRes(), 'b', 'k')).rejects.toMatchObject({
+      code: 'NoSuchVersion',
+      httpStatus: 404,
+    });
+  });
+
+  it('HEAD ?versionId of a delete-marker version → NoSuchVersion', async () => {
+    const { svc } = makeSvc({ version: { isDeleteMarker: true } });
+    await expect(svc.headObject(mkVerReq('dm'), mkRes(), 'b', 'k')).rejects.toMatchObject({
+      code: 'NoSuchVersion',
+    });
+  });
+
+  it('HEAD ?versionId emits that version metadata + x-amz-version-id + x-amz-meta-*', async () => {
+    const { svc } = makeSvc({
+      version: {
+        versionId: 'v-old',
+        size: 42n,
+        etag: 'oldetag',
+        contentType: 'text/plain',
+        userMetadata: { foo: 'bar', color: 'blue' },
+        createdAt: new Date('2026-01-02T03:04:05Z'),
+        isDeleteMarker: false,
+      },
+    });
+    const res = mkRes();
+    await svc.headObject(mkVerReq('v-old'), res, 'b', 'k');
+    expect(res._status).toBe(200);
+    expect(res._headers['etag']).toBe('"oldetag"');
+    expect(res._headers['content-length']).toBe('42');
+    expect(res._headers['x-amz-version-id']).toBe('v-old');
+    expect(res._headers['x-amz-meta-foo']).toBe('bar');
+    expect(res._headers['x-amz-meta-color']).toBe('blue');
+  });
+});
+
 // --- deleteOne object.deleted events (STORY-0801) ---
 describe('ObjectService.deleteOne events (STORY-0801)', () => {
   interface Emitted {

@@ -133,6 +133,21 @@ export class VersionStoreService {
   }
 
   /**
+   * Look up a single stored version row by its `versionId`. Backs versioned
+   * reads (GET/HEAD `?versionId=`, §3.11): the caller uses the returned row's
+   * metadata (etag, size, contentType, userMetadata, encryption) and decides
+   * whether the bytes live at the current pointer path or under `<key>.v/`.
+   * Returns null when no such version exists (caller → `NoSuchVersion`).
+   */
+  async getVersion(bucket: string, key: string, versionId: string): Promise<ObjectVersion | null> {
+    return this.em.findOne(ObjectVersion, {
+      bucket: { name: bucket },
+      key,
+      versionId,
+    });
+  }
+
+  /**
    * List all versions for keys with `prefix`, newest first per key. Backs the
    * S3 ListObjectVersions operation. Delegates to the repo's range-scan
    * implementation (§3.4.2).
