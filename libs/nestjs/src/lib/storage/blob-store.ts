@@ -209,6 +209,33 @@ export class BlobStore {
     return { stream, size: BigInt(stat.size) };
   }
 
+  /**
+   * Open a read stream for a specific stored version's blob, living under
+   * `<key>.v/<versionId>` (the demote-on-write layout, §3.11.3). Used by
+   * versioned reads (GET/HEAD `?versionId=`) for a NON-current version — the
+   * current version's bytes live at the pointer path and are served via
+   * {@link getBlob}. Throws ENOENT if the version blob is missing — the caller
+   * maps that to `NoSuchVersion`.
+   */
+  async getVersionBlob(
+    bucket: string,
+    key: string,
+    versionId: string,
+    range?: RangeSpec,
+  ): Promise<{ stream: ReadStream; size: bigint }> {
+    const path = this.paths.versionPath(bucket, key, versionId);
+    const stat = await fs.stat(path);
+    const opts: { start?: number; end?: number; highWaterMark: number } = {
+      highWaterMark: 256 * 1024,
+    };
+    if (range) {
+      opts.start = range.start;
+      if (range.end !== undefined) opts.end = range.end;
+    }
+    const stream = createReadStream(path, opts);
+    return { stream, size: BigInt(stat.size) };
+  }
+
   /** Stat-only — returns null on ENOENT so HEAD callers don't have to catch. */
   async headBlob(bucket: string, key: string): Promise<HeadResult | null> {
     try {

@@ -32,11 +32,13 @@ import { SpawnedApp, spawnApp } from './support/spawn-app';
  *   DROPPED:   prior object versions (only the current pointer row is backed up),
  *              per-bucket default-encryption config, lifecycle, CORS, policy.
  *
- * One INCIDENTAL bug surfaced while writing this (NOT a backup defect, but it
- * shapes an assertion): S3 `HEAD` never emits `x-amz-meta-*` response headers,
- * even though the metadata is stored and returned by the admin metadata endpoint.
- * So user-metadata fidelity is asserted through that admin endpoint, and the HEAD
- * omission is pinned down in its own clearly-labelled caveat test.
+ * Two S3 read-path fixes surfaced by this drill (NOT backup defects) have since
+ * landed, and this spec now asserts the fixed behavior: (#5) S3 `HEAD` emits the
+ * stored `x-amz-meta-*` response headers, and (#2) GET/HEAD honour `?versionId`,
+ * so a prior version's bytes are retrievable over the wire on instance A (which
+ * still holds the version blobs). The backup manifest itself is unchanged — the
+ * "prior versions DROPPED on B" gap below is a backup-scope limitation, distinct
+ * from the read path.
  */
 
 const PORT_A = 9280;
@@ -298,17 +300,17 @@ describe('Backup → fresh-instance restore full-fidelity drill (e2e)', () => {
     expect(meta.contentType).toContain('application/json');
   }, 30_000);
 
-  it('CAVEAT (pre-existing, NOT a backup bug): S3 HEAD does not emit x-amz-meta-* headers', async () => {
-    // Independent read-path defect: even on a freshly-written object, `headObject`
-    // sets `res.setHeader('x-amz-meta-*', …)` yet the headers never reach the wire,
-    // while the metadata IS in the DB and IS returned by the admin metadata endpoint
-    // (asserted above). Reproduces on BOTH instance A and instance B — so it is a
-    // property of the S3 HEAD response serializer, not of backup/restore. Asserting
-    // the ACTUAL behavior here so a future fix trips this test and it gets tightened.
+  it('SURVIVES: S3 HEAD emits x-amz-meta-* headers (read-path fix #5)', async () => {
+    // Read-path fix (issue #5): `headObject` now emits the stored user-metadata as
+    // `x-amz-meta-<k>` response headers (standard S3), matching what the admin
+    // metadata endpoint returns. Holds on BOTH instance A (freshly written) and
+    // instance B (restored — user-metadata survives the backup manifest), so it is
+    // a property of the S3 HEAD serializer, independent of backup/restore.
     const headA = await s3(PORT_A, 'HEAD', '/vault/rich.json');
     const headB = await s3(PORT_B, 'HEAD', '/vault/rich.json');
-    expect(headA.headers['x-amz-meta-author']).toBeUndefined();
-    expect(headB.headers['x-amz-meta-author']).toBeUndefined();
+    expect(headA.headers['x-amz-meta-author']).toBe('ada');
+    expect(headA.headers['x-amz-meta-purpose']).toBe('fidelity-drill');
+    expect(headB.headers['x-amz-meta-author']).toBe('ada');
   }, 30_000);
 
   it('SURVIVES: object tags are preserved on B', async () => {
@@ -347,16 +349,20 @@ describe('Backup → fresh-instance restore full-fidelity drill (e2e)', () => {
     expect(countVersions(list.body)).toBe(1); // was 3 on A
   }, 30_000);
 
-  it('GAP: GET ?versionId is ignored on read (unsupported) — cannot retrieve an old version', async () => {
-    // Even on the ORIGINAL instance A, the read path ignores ?versionId and always
-    // serves the current version (`getObject` → `findCurrentVersion`). So there is
-    // no way to fetch an old version's bytes over the wire, backup aside.
+  it('SURVIVES: GET ?versionId retrieves a specific prior version on A (read-path fix #2)', async () => {
+    // Read-path fix (issue #2): the S3 read path now honours `?versionId`, so on the
+    // ORIGINAL instance A (which still has all 3 version blobs under `<key>.v/`) each
+    // stored version's bytes are retrievable over the wire, and the response carries
+    // its `x-amz-version-id`. (The backup GAP below is unaffected — B only has 1.)
     const versionsXml = (await s3(PORT_A, 'GET', '/vault?versions&prefix=doc.txt')).body;
     const ids = [...versionsXml.matchAll(/<VersionId>([^<]+)<\/VersionId>/g)].map((m) => m[1]);
     expect(ids.length).toBe(3);
     const oldest = ids[ids.length - 1]; // uuidv7 sorts newest-first in the listing
     const got = await s3(PORT_A, 'GET', `/vault/doc.txt?versionId=${oldest}`);
-    expect(got.body).toBe('version-3-current'); // versionId ignored → current version returned
+    expect(got.body).toBe('version-1'); // the requested prior version, not the current
+    expect(got.headers['x-amz-version-id']).toBe(oldest);
+    // Current read (no versionId) still serves the newest version.
+    expect((await s3(PORT_A, 'GET', '/vault/doc.txt')).body).toBe('version-3-current');
   }, 30_000);
 
   it('GAP: per-bucket default-encryption config is DROPPED on B (object stored as PLAINTEXT)', async () => {
