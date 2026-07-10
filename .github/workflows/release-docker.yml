@@ -28,6 +28,10 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# Least-privilege default; the publish job elevates (contents:read, packages:write).
+permissions:
+  contents: read
+
 concurrency:
   group: release-docker-${{ github.ref }}
   cancel-in-progress: false
