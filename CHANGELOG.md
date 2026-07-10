@@ -9,6 +9,21 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Backup manifest v2 — full-fidelity restore.** Backups now capture, and
+  restore now reapplies, every dimension a fidelity drill found the v1 manifest
+  silently dropping: **all prior object versions** (whole per-key history, not just
+  the current pointer), **per-bucket default encryption**, **lifecycle**, **CORS**,
+  and **bucket policy**. On restore the per-bucket config is applied **before** any
+  object bytes are written — so restored objects are **re-encrypted at rest under
+  the new instance's key** instead of being silently downgraded to plaintext — and
+  version history is replayed in order to rebuild the correct current pointer. The
+  manifest gains additive fields only; **v1 archives still restore** (missing
+  fields fall back to the old behavior: current-version-only, no per-bucket config).
+  Not a breaking change, but note that restore now **preserves encryption and
+  version history** where it previously lost them.
+
 ## [0.1.0-alpha.19] — 2026-07-09
 
 ### Added
