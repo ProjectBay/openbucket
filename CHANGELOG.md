@@ -9,8 +9,14 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.20] — 2026-07-10
+
 ### Added
 
+- **Versioned reads.** `GET`/`HEAD` now honour `?versionId` — retrieve a specific
+  prior version's bytes + metadata (response carries `x-amz-version-id`; an unknown
+  version → `404 NoSuchVersion`), with `Range` and per-version SSE decryption. `GET`
+  now also emits `x-amz-meta-*` response headers, matching `HEAD`.
 - **Backup manifest v2 — full-fidelity restore.** Backups now capture, and
   restore now reapplies, every dimension a fidelity drill found the v1 manifest
   silently dropping: **all prior object versions** (whole per-key history, not just
@@ -23,6 +29,19 @@ versions may include breaking changes.
   fields fall back to the old behavior: current-version-only, no per-bucket config).
   Not a breaking change, but note that restore now **preserves encryption and
   version history** where it previously lost them.
+
+### Security
+
+- **Restore no longer silently downgrades encrypted objects to plaintext.** A
+  backup→fresh-instance fidelity drill found that v1 restore dropped the per-bucket
+  default-encryption config, so restored objects were written unencrypted at rest.
+  Manifest v2 re-applies that config before writing bytes, so restored objects are
+  re-encrypted under the new instance's key.
+
+### Internal
+
+- Least-privilege top-level `permissions:` added to the CodeQL and release
+  workflows (OpenSSF Scorecard hardening).
 
 ## [0.1.0-alpha.19] — 2026-07-09
 

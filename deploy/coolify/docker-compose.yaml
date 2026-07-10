@@ -10,7 +10,7 @@
 # Set OPENBUCKET_ADMIN_PASSWORD there and it overrides the generated one.
 services:
   openbucket:
-    image: ghcr.io/projectbay/openbucket:0.1.0-alpha.19
+    image: ghcr.io/projectbay/openbucket:0.1.0-alpha.20
     environment:
       - DATA_DIR=/data
       - PORT=9000

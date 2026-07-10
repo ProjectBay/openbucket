@@ -9,7 +9,7 @@
 
 services:
   openbucket:
-    image: ghcr.io/projectbay/openbucket:0.1.0-alpha.19
+    image: ghcr.io/projectbay/openbucket:0.1.0-alpha.20
     restart: unless-stopped
     ports:
       - "9000:9000"

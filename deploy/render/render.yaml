@@ -8,7 +8,7 @@ services:
     name: openbucket
     runtime: image
     image:
-      url: ghcr.io/projectbay/openbucket:0.1.0-alpha.19
+      url: ghcr.io/projectbay/openbucket:0.1.0-alpha.20
     envVars:
       - key: DATA_DIR
         value: /data
