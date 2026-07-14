@@ -37,6 +37,11 @@ jobs:
           cache-dependency-path: apps/docs/package-lock.json
       - run: npm ci
       - run: npm run build
+        # Activates the cookieless first-party pageview beacon (apps/docs-analytics).
+        # No-op until the DOCS_ANALYTICS_URL repository variable is set to the
+        # collector's /collect endpoint (Settings → Secrets and variables → Actions).
+        env:
+          DOCS_ANALYTICS_URL: ${{ vars.DOCS_ANALYTICS_URL }}
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

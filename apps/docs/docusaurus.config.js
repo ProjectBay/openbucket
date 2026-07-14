@@ -4,6 +4,16 @@
 // See: https://docusaurus.io/docs/api/docusaurus-config
 
 import {themes as prismThemes} from 'prism-react-renderer';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// First-party, cookieless pageview analytics (self-hosted collector — see
+// apps/docs-analytics). The beacon activates only when the docs are built with
+// DOCS_ANALYTICS_URL pointing at the collector's /collect endpoint; otherwise it
+// is a complete no-op, so local dev and PR/preview builds never phone home.
+const analyticsUrl = process.env.DOCS_ANALYTICS_URL;
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -37,6 +47,28 @@ const config = {
   baseUrl: '/openbucket/',
   organizationName: 'ProjectBay',
   projectName: 'openbucket',
+
+  // Cookieless, first-party pageview beacon (no-op unless DOCS_ANALYTICS_URL is set).
+  clientModules: [path.resolve(dirname, 'src/analytics-beacon.js')],
+
+  plugins: [
+    // Expose the collector URL to the beacon as a runtime global, but only when
+    // DOCS_ANALYTICS_URL was set at build time.
+    function docsAnalyticsPlugin() {
+      return {
+        name: 'openbucket-docs-analytics',
+        injectHtmlTags() {
+          if (!analyticsUrl) return {};
+          const json = JSON.stringify({url: analyticsUrl}).replace(/</g, '\\u003c');
+          return {
+            headTags: [
+              {tagName: 'script', innerHTML: `window.__OB_DOCS_ANALYTICS__=${json};`},
+            ],
+          };
+        },
+      };
+    },
+  ],
 
   // 'warn' (not 'throw') because the ported whitepaper carries repo-relative
   // links (source paths, sibling design docs) that don't all resolve in-site.

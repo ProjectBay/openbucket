@@ -1,0 +1,26 @@
+# docs-analytics collector — run on your own VPS (no third-party services).
+#
+#   1. export STATS_TOKEN=$(node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))")
+#   2. docker compose up --build -d
+#   3. put it behind your TLS reverse proxy (nginx/Caddy) and point the docs
+#      build at it:  DOCS_ANALYTICS_URL=https://analytics.example.com/collect
+#
+# View stats:  https://analytics.example.com/stats?token=$STATS_TOKEN
+
+services:
+  docs-analytics:
+    build: .
+    image: openbucket-docs-analytics:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:8787" # bind to loopback; expose via your reverse proxy
+    volumes:
+      - docs-analytics-data:/data
+    environment:
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-https://projectbay.github.io}
+      STATS_TOKEN: ${STATS_TOKEN:?set STATS_TOKEN in your environment}
+      RETENTION_DAYS: "365"
+      TRUST_PROXY: "true"
+
+volumes:
+  docs-analytics-data:
