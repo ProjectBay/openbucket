@@ -137,6 +137,13 @@ const config = {
             'S3-compatible, object store, self-hosted, NestJS, S3 API, SigV4, presigned URLs, MinIO alternative, self-hosted S3, Docker, Node.js, TypeScript',
         },
         {name: 'author', content: 'OpenBucket contributors'},
+        // Google Search Console ownership verification for the URL-prefix
+        // property https://projectbay.github.io/openbucket/ — must stay in
+        // place permanently (Google rechecks it periodically).
+        {
+          name: 'google-site-verification',
+          content: '385QXR-SSO8L38WaH39K5Su1q3j0_B0ZcK-LHq0CCeY',
+        },
       ],
       colorMode: {
         respectPrefersColorScheme: true,
