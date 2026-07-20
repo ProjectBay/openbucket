@@ -62,7 +62,7 @@
     "embla-carousel-angular": "^16.0.0",
     "fast-xml-parser": "^5.9.3",
     "helmet": "^8.2.0",
-    "image-size": "^1.2.0",
+    "image-size": "^2.0.2",
     "nestjs-pino": "^4.6.1",
     "nestjs-zod": "^5.4.0",
     "ngx-pagination": "^6.0.3",
