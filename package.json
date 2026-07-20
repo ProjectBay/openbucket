@@ -144,7 +144,7 @@
     "tsx": "^4.22.4",
     "typescript": "5.9.3",
     "typescript-eslint": "^8.59.4",
-    "webpack-cli": "^5.1.4"
+    "webpack-cli": "^7.2.1"
   },
   "overrides": {
     "shell-quote": "^1.9.0",
