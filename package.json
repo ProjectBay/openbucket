@@ -98,7 +98,7 @@
     "@nx/js": "22.7.2",
     "@nx/nest": "22.7.2",
     "@nx/node": "22.7.2",
-    "@nx/web": "22.7.2",
+    "@nx/web": "23.1.0",
     "@nx/webpack": "22.7.2",
     "@nx/workspace": "22.7.2",
     "@openapitools/openapi-generator-cli": "^2.39.1",
