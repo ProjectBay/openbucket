@@ -60,7 +60,7 @@
     "cron-parser": "^5.6.1",
     "date-fns": "^4.1.0",
     "embla-carousel-angular": "^16.0.0",
-    "fast-xml-parser": "^5.9.3",
+    "fast-xml-parser": "^5.10.1",
     "helmet": "^8.2.0",
     "image-size": "^1.2.0",
     "nestjs-pino": "^4.6.1",
